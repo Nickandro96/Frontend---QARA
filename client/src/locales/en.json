@@ -1,0 +1,738 @@
+{
+  "common": {
+    "login": "Log in",
+    "logout": "Log out",
+    "pricing": "Pricing",
+    "dashboard": "Dashboard",
+    "subscription": "My subscription",
+    "access": "Access",
+    "learnMore": "Learn more",
+    "getStarted": "Get started",
+    "contact": "Contact",
+    "free": "Free",
+    "month": "month",
+    "year": "year",
+    "monthly": "Monthly",
+    "yearly": "Yearly",
+    "save": "Save",
+    "popular": "Popular",
+    "recommended": "Recommended",
+    "features": "Features",
+    "included": "Included",
+    "notIncluded": "Not included",
+    "unlimited": "Unlimited",
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "back": "Back",
+    "next": "Next",
+    "previous": "Previous",
+    "submit": "Submit",
+    "delete": "Delete",
+    "edit": "Edit",
+    "view": "View",
+    "download": "Download",
+    "upload": "Upload",
+    "search": "Search",
+    "filter": "Filter",
+    "sort": "Sort",
+    "all": "All",
+    "none": "None",
+    "yes": "Yes",
+    "no": "No",
+    "or": "or",
+    "and": "and"
+  },
+  "nav": {
+    "home": "Home",
+    "pricing": "Pricing",
+    "dashboard": "Dashboard",
+    "subscription": "My subscription",
+    "audit": "EU Audit",
+    "auditEU": "MDR Audit",
+    "qualificationISO": "ISO Qualification",
+    "auditISO": "ISO Audit",
+    "fdaAudit": "FDA Audit",
+    "auditFDA": "FDA Audit",
+    "classification": "EU Classification",
+    "classificationDM": "MDR Classification",
+    "fdaClassification": "FDA Classification",
+    "classificationFDA": "FDA Classification",
+    "regulatoryWatch": "Regulatory Watch",
+    "veille": "EU Watch",
+    "fdaRegulatoryWatch": "FDA Watch",
+    "veilleFDA": "FDA Watch",
+    "fdaDashboard": "FDA Dashboard",
+    "fdaSubmissions": "FDA Submissions",
+    "documents": "Documents",
+    "reports": "Reports",
+    "analytics": "Analytics",
+    "contact": "Contact",
+    "faq": "FAQ",
+    "administration": "Administration",
+    "settings": "Settings"
+  },
+  "home": {
+    "title": "MDR & ISO 13485 Regulatory Compliance Audit Platform",
+    "subtitle": "Evaluate your compliance interactively and guided. Get AI-powered personalized recommendations to achieve regulatory excellence.",
+    "cta": "Start free audit",
+    "ctaSecondary": "View pricing",
+    "modules": {
+      "mdrAudit": {
+        "title": "MDR 2017/745 Audit (EU)",
+        "description": "Assess your compliance with MDR 2017/745 Regulation with an interactive questionnaire tailored to your economic role",
+        "features": ["Targeted MDR questions", "Article criticality", "Real-time scoring"]
+      },
+      "iso9001Audit": {
+        "title": "ISO 9001:2015 Audit",
+        "description": "Assess your quality management system according to ISO 9001:2015 standard",
+        "features": ["239 ISO 9001 questions", "QMS compliance", "Detailed report"]
+      },
+      "iso13485Audit": {
+        "title": "ISO 13485:2016 Audit",
+        "description": "Assess your quality management system for medical devices according to ISO 13485:2016",
+        "features": ["ISO 13485 questions", "MD compliance", "CAPA action plan"]
+      },
+      "fdaAudit": {
+        "title": "FDA Audit (US)",
+        "description": "Complete FDA audit: QMSR, Part 820, Registration & Listing, 510(k), De Novo, PMA, Postmarket",
+        "features": ["109 FDA questions", "QMSR 2026 transition", "US pathways"]
+      },
+      "fdaClassification": {
+        "title": "FDA Classification (US)",
+        "description": "Determine FDA classification (Class I/II/III) and regulatory pathway (Exempt/510(k)/De Novo/PMA)",
+        "features": ["Progressive wizard", "Predicate search", "Detailed justification"]
+      }
+    }
+  },
+  "classification": {
+    "title": "Medical Device Classification",
+    "subtitle": "Annex VIII - Regulation (EU) 2017/745 (MDR)",
+    "steps": {
+      "general": "General Information",
+      "generalDesc": "Device type",
+      "invasiveness": "Invasiveness",
+      "invasivenessDesc": "Body contact",
+      "duration": "Duration of use",
+      "durationDesc": "Contact time",
+      "anatomicalSite": "Anatomical site",
+      "anatomicalSiteDesc": "Body part",
+      "functionEnergy": "Function & Energy",
+      "functionEnergyDesc": "Use and energy",
+      "sterility": "Sterility & Measurement",
+      "sterilityDesc": "Special characteristics",
+      "specialCases": "Special cases",
+      "specialCasesDesc": "Substances and materials",
+      "software": "Software",
+      "softwareDesc": "If applicable",
+      "result": "Result",
+      "resultDesc": "Final classification"
+    },
+    "stepOf": "Step {{current}} of {{total}}",
+    "percentComplete": "{{percent}}% complete",
+    "deviceName": "Medical device name",
+    "deviceNamePlaceholder": "E.g.: Central venous catheter",
+    "description": "Description",
+    "descriptionPlaceholder": "Brief description of the device and its use",
+    "deviceType": "Device type",
+    "medicalDevice": "Medical device",
+    "accessory": "Medical device accessory",
+    "isActive": "Is it an active device?",
+    "isActiveHint": "An active device operates using an energy source (electrical, pneumatic, etc.)",
+    "isSoftware": "Is it medical software?",
+    "invasivenessLevel": "Invasiveness level",
+    "nonInvasive": "Non-invasive (no body penetration)",
+    "invasiveOrifice": "Invasive through a body orifice",
+    "surgicallyInvasive": "Surgically invasive (penetrates the body through incision)",
+    "isImplantable": "Is the device implantable?",
+    "isImplantableHint": "An implantable device remains in the body for at least 30 days",
+    "contactNervousSystem": "Is the device in contact with the central nervous system?",
+    "contactCirculatorySystem": "Is the device in contact with the central circulatory system?",
+    "contactCirculatorySystemHint": "Heart, pulmonary arteries, aorta, coronary arteries, carotids, etc.",
+    "durationOfUse": "Duration of use",
+    "transient": "Transient (≤ 60 minutes)",
+    "shortTerm": "Short term (> 60 min to ≤ 30 days)",
+    "longTerm": "Long term (> 30 days)",
+    "durationNotApplicable": "Duration of use is not applicable for non-invasive devices. Proceed to the next step.",
+    "deviceClass": "Device class",
+    "confidence": "Confidence",
+    "confidenceHigh": "High",
+    "confidenceMedium": "Medium",
+    "confidenceLow": "Low",
+    "exportExcel": "Export Excel",
+    "exportPDF": "Export PDF",
+    "appliedRules": "Applied rules",
+    "rule": "Rule",
+    "detailedJustification": "Detailed justification",
+    "recommendations": "Next-step recommendations",
+    "missingData": "Missing data",
+    "classify": "Classify",
+    "newClassification": "New classification",
+    "successMessage": "Classification completed successfully!",
+    "errorMessage": "Error: {{message}}",
+    "fda": {
+      "title": "FDA Classification (US)",
+      "description": "Determine FDA classification (Class I/II/III) and regulatory pathway (Exempt/510(k)/De Novo/PMA)"
+    }
+  },
+  "home": {
+    "features": {
+      "fdaWatch": {
+        "title": "FDA Regulatory Watch",
+        "description": "Track the latest FDA updates: QMSR, guidances, cybersecurity, MDR reporting, UDI",
+        "features": ["10 recent updates", "Impact analysis", "Category filtering"]
+      },
+      "fdaDashboard": {
+        "title": "FDA Dashboard",
+        "description": "FDA dashboard with compliance scores by framework and personalized recommendations",
+        "features": ["Compliance score", "Progress by framework", "Recommendations"]
+      },
+      "fdaSubmission": {
+        "title": "FDA Submission Tracker",
+        "description": "Track your 510(k), De Novo, PMA and IDE submissions with timeline, checklist and FDA deadlines",
+        "features": ["Submission timeline", "Document checklist", "FDA deadlines"]
+      },
+      "euClassification": {
+        "title": "Medical Device Classification",
+        "description": "Determine your medical device class according to Annex VIII of MDR 2017/745",
+        "features": ["22 Annex VIII rules", "Progressive wizard", "Detailed justification"]
+      },
+      "dashboard": {
+        "title": "Dashboard",
+        "description": "Visualize your progress, compliance scores and compare with other economic roles",
+        "features": ["Scores by process", "Progress badges", "Role comparison"]
+      },
+      "regulatoryWatch": {
+        "title": "Regulatory Watch",
+        "description": "Stay informed about MDR, IVDR, harmonized standards and MDCG guidances updates",
+        "features": ["Real-time updates", "Impact analysis", "Custom notifications"]
+      },
+      "documents": {
+        "title": "Document Management",
+        "description": "Centralize and manage your technical documentation, design files and regulatory records",
+        "features": ["Secure storage", "Versioning", "Collaborative sharing"]
+      },
+      "reports": {
+        "title": "Reports & Exports",
+        "description": "Generate detailed audit reports, gap analyses and exportable action plans",
+        "features": ["PDF/Excel export", "Custom reports", "Complete history"]
+      }
+    },
+    "stats": {
+      "questions": "Audit questions",
+      "users": "Active users",
+      "compliance": "Average compliance rate"
+    },
+    "testimonials": {
+      "title": "What our customers say"
+    },
+    "faq": {
+      "title": "Frequently asked questions"
+    }
+  },
+  "pricing": {
+    "title": "Choose your plan",
+    "subtitle": "Solutions tailored to every stage of your compliance journey",
+    "monthly": "Monthly",
+    "yearly": "Yearly",
+    "savePercent": "Save {{percent}}%",
+    "perMonth": "/month",
+    "perYear": "/year",
+    "billedYearly": "Billed yearly",
+    "billedMonthly": "Billed monthly",
+    "startWith": "Start with {{plan}}",
+    "currentPlan": "Current plan",
+    "upgrade": "Upgrade",
+    "downgrade": "Downgrade",
+    "free": {
+      "name": "Free",
+      "description": "To discover the platform",
+      "features": [
+        "Basic MDR audit (100 questions)",
+        "Simplified device classification",
+        "Limited dashboard access",
+        "Email support"
+      ]
+    },
+    "pro": {
+      "name": "PRO",
+      "description": "For compliance professionals",
+      "features": [
+        "Complete MDR audit (1203 questions)",
+        "Complete FDA audit (109 questions)",
+        "EU and FDA device classification",
+        "Full dashboard with analytics",
+        "EU and FDA regulatory watch",
+        "PDF report export",
+        "Priority support"
+      ]
+    },
+    "expert": {
+      "name": "EXPERT",
+      "description": "For regulatory teams",
+      "features": [
+        "Everything in PRO",
+        "Advanced regulatory AI",
+        "Unlimited document management",
+        "FDA Submission Tracker",
+        "Custom reports",
+        "API access",
+        "Dedicated support"
+      ]
+    },
+    "enterprise": {
+      "name": "ENTERPRISE",
+      "description": "For large organizations",
+      "features": [
+        "Everything in EXPERT",
+        "Unlimited multi-users",
+        "SSO / SAML",
+        "Complete audit trail",
+        "Custom training",
+        "Dedicated account manager",
+        "Guaranteed SLA"
+      ]
+    }
+  },
+  "subscription": {
+    "title": "My subscription",
+    "currentPlan": "Current plan",
+    "status": "Status",
+    "active": "Active",
+    "inactive": "Inactive",
+    "cancelled": "Cancelled",
+    "pastDue": "Past due",
+    "nextBilling": "Next billing",
+    "manageBilling": "Manage billing",
+    "cancelSubscription": "Cancel subscription",
+    "reactivate": "Reactivate",
+    "upgrade": "Upgrade",
+    "success": {
+      "title": "Payment successful!",
+      "description": "Thank you for your subscription. Your account has been successfully upgraded.",
+      "cta": "Access dashboard"
+    },
+    "cancel": {
+      "title": "Payment cancelled",
+      "description": "Your payment has been cancelled. You can try again at any time.",
+      "cta": "Back to pricing"
+    }
+  },
+  "audit": {
+    "title": "Compliance Audit",
+    "subtitle": "Assess your compliance with regulatory requirements",
+    "configRequired": "Configuration Required",
+    "configRequiredDesc": "Please configure your economic role before starting the audit",
+    "configureProfile": "Configure my profile",
+    "filters": "Filters",
+    "filtersDesc": "Select a framework and/or process to begin",
+    "legalRole": "Legal Role",
+    "selectLegalRole": "Select your legal role",
+    "roleHint": "Questions displayed will be adapted to your role",
+    "referential": "Framework",
+    "allReferentials": "All frameworks",
+    "process": "Process",
+    "allProcesses": "All processes",
+    "selectRoleDesc": "Choose your role (Manufacturer, Importer or Distributor) to see relevant audit questions",
+    "noQuestions": "No questions available for the selected filters",
+    "questionOf": "Question {{current}} of {{total}}",
+    "selectRole": "Select your economic role",
+    "selectProcess": "Select a process",
+    "progress": "Progress",
+    "score": "Score",
+    "compliant": "Compliant",
+    "partiallyCompliant": "Partially compliant",
+    "nonCompliant": "Non-compliant",
+    "notApplicable": "Not applicable",
+    "recommendation": "Recommendation",
+    "evidence": "Evidence",
+    "comment": "Comment",
+    "saveAndContinue": "Save and continue",
+    "finish": "Finish audit",
+    "generateReport": "Generate report",
+    "responseNote": "Response / Note",
+    "responseNotePlaceholder": "Describe your response, measures implemented, or context elements...",
+    "responseNoteHint": "Document your response before setting the compliance status",
+    "complianceStatus": "Compliance status",
+    "supportingDocuments": "Supporting documents",
+    "supportingDocumentsHint": "Add documentary evidence to justify your response",
+    "commentPlaceholder": "Add notes or details...",
+    "generating": "Generating...",
+    "getAIRecommendation": "Get AI recommendation",
+    "aiRecommendation": "AI Recommendation",
+    "saving": "Saving...",
+    "selectStatusError": "Please select a status",
+    "responseSaved": "Response saved",
+    "saveError": "Error while saving",
+    "criticalityHigh": "High criticality",
+    "criticalityMedium": "Medium criticality",
+    "criticalityLow": "Low criticality",
+    "searchingDocuments": "Searching for expected documents...",
+    "expectedDocuments": "Expected documents for this requirement",
+    "requiredDocumentsCount": "{{count}} required document(s) identified to demonstrate compliance:",
+    "andOthers": "... and {{count}} other(s)",
+    "viewMissingDocuments": "View missing documents",
+    "eu": {
+      "title": "EU Compliance Audit",
+      "subtitle": "Assess your MDR and ISO 13485 compliance",
+      "description": "Complete audit questionnaire covering all regulatory requirements for medical device manufacturers in the European Union.",
+      "roles": {
+        "manufacturer": "Manufacturer",
+        "authorizedRep": "Authorized Representative",
+        "importer": "Importer",
+        "distributor": "Distributor"
+      },
+      "processes": {
+        "qms": "Quality Management System",
+        "design": "Design & Development",
+        "production": "Production",
+        "postmarket": "Post-Market Surveillance",
+        "vigilance": "Vigilance",
+        "clinicalEval": "Clinical Evaluation",
+        "techDoc": "Technical Documentation",
+        "labeling": "Labeling & IFU"
+      }
+    },
+    "fda": {
+      "title": "FDA Compliance Audit",
+      "subtitle": "Assess your FDA regulatory compliance",
+      "description": "Complete FDA audit covering QMSR, Part 820, Registration & Listing, premarket submissions and postmarket requirements.",
+      "frameworks": {
+        "qmsr": "QMSR (Quality Management System Regulation)",
+        "part820": "21 CFR Part 820",
+        "registration": "Registration & Listing",
+        "premarket": "Premarket Submissions",
+        "postmarket": "Postmarket Requirements",
+        "mdr": "MDR Reporting",
+        "udi": "UDI Requirements"
+      }
+    }
+  },
+  "classification": {
+    "title": "Medical Device Classification",
+    "subtitle": "Determine your device class according to applicable regulations",
+    "deviceName": "Medical device name",
+    "deviceNamePlaceholder": "Ex: Central venous catheter",
+    "description": "Description (optional)",
+    "descriptionPlaceholder": "Brief description of the device and its use",
+    "deviceType": "Device type",
+    "medicalDevice": "Medical device",
+    "accessory": "Medical device accessory",
+    "isActive": "Is it an active device?",
+    "activeHint": "An active device operates using an energy source (electrical, pneumatic, etc.)",
+    "isSoftware": "Is it medical software?",
+    "invasivenessLevel": "Invasiveness level",
+    "nonInvasive": "Non-invasive (no body penetration)",
+    "invasiveOrifice": "Invasive through body orifice",
+    "surgicallyInvasive": "Surgically invasive (penetrates body through incision)",
+    "isImplantable": "Is the device implantable?",
+    "implantableHint": "An implantable device remains in the body for at least 30 days",
+    "contactNervous": "Is the device in contact with the central nervous system?",
+    "contactCirculatory": "Is the device in contact with the central circulatory system?",
+    "circulatoryHint": "Heart, pulmonary arteries, aorta, coronary arteries, carotids, etc.",
+    "duration": "Duration of use",
+    "transient": "Transient (≤ 60 minutes)",
+    "shortTerm": "Short term (> 60 min to ≤ 30 days)",
+    "longTerm": "Long term (> 30 days)",
+    "durationNA": "Duration of use is not applicable for non-invasive devices. Proceed to the next step.",
+    "anatomicalSite": "Anatomical site(s) of contact (multiple selection)",
+    "deviceClass": "Device class",
+    "confidence": "Confidence",
+    "confidenceHigh": "High",
+    "confidenceMedium": "Medium",
+    "confidenceLow": "Low",
+    "exportExcel": "Export Excel",
+    "exportPdf": "Export PDF",
+    "appliedRules": "Applied rules",
+    "detailedJustification": "Detailed justification",
+    "recommendations": "Next-step recommendations",
+    "missingData": "Missing data",
+    "newClassification": "New classification",
+    "classify": "Classify",
+    "step": "Step {{current}} of {{total}}",
+    "completed": "{{percent}}% completed",
+    "euTitle": "MDR Classification (EU)",
+    "euSubtitle": "According to Annex VIII of MDR 2017/745",
+    "fdaTitle": "FDA Classification (US)",
+    "fdaSubtitle": "According to Code of Federal Regulations Title 21",
+    "startClassification": "Start classification",
+    "result": "Classification result",
+    "class": "Class",
+    "rule": "Applicable rule",
+    "justification": "Justification",
+    "pathway": "Regulatory pathway",
+    "predicates": "Potential predicates",
+    "eu": {
+      "title": "EU MDR Classification",
+      "subtitle": "Determine your device class according to MDR 2017/745 Annex VIII",
+      "description": "Interactive wizard to classify your medical device according to the 22 classification rules of MDR Annex VIII.",
+      "rules": "Classification Rules",
+      "annexVIII": "Annex VIII MDR 2017/745"
+    },
+    "fda": {
+      "title": "FDA Device Classification",
+      "subtitle": "Determine your FDA classification and regulatory pathway",
+      "description": "Interactive wizard to determine FDA device classification (Class I, II, or III) and appropriate regulatory pathway.",
+      "pathways": {
+        "exempt": "Exempt (Class I)",
+        "510k": "510(k) Premarket Notification",
+        "deNovo": "De Novo Classification",
+        "pma": "Premarket Approval (PMA)"
+      }
+    }
+  },
+  "footer": {
+    "company": "N3-Conseil",
+    "description": "Regulatory compliance audit platform for medical devices",
+    "legal": "Legal notice",
+    "privacy": "Privacy policy",
+    "terms": "Terms of use",
+    "contact": "Contact",
+    "copyright": "© {{year}} N3-Conseil. All rights reserved."
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "subtitle": "Track your compliance progress",
+    "welcome": "Welcome, {{name}}",
+    "overallScore": "Overall Compliance Score",
+    "progressByProcess": "Progress by Process",
+    "recentActivity": "Recent Activity",
+    "quickActions": "Quick Actions",
+    "startAudit": "Start New Audit",
+    "viewReports": "View Reports",
+    "manageDocuments": "Manage Documents",
+    "complianceStatus": {
+      "excellent": "Excellent",
+      "good": "Good",
+      "needsImprovement": "Needs Improvement",
+      "critical": "Critical"
+    },
+    "metrics": {
+      "auditsCompleted": "Audits Completed",
+      "questionsAnswered": "Questions Answered",
+      "documentsUploaded": "Documents Uploaded",
+      "nonConformities": "Non-Conformities"
+    },
+    "charts": {
+      "complianceByFramework": "Compliance by Framework",
+      "progressOverTime": "Progress Over Time",
+      "gapAnalysis": "Gap Analysis"
+    },
+    "fda": {
+      "title": "FDA Dashboard",
+      "subtitle": "Track your FDA compliance progress",
+      "qmsrScore": "QMSR Compliance Score",
+      "part820Score": "Part 820 Compliance Score",
+      "registrationStatus": "Registration Status",
+      "submissionStatus": "Submission Status"
+    }
+  },
+  "regulatoryWatch": {
+    "title": "Regulatory Watch",
+    "subtitle": "Stay informed about regulatory updates",
+    "latestUpdates": "Latest Updates",
+    "filterByCategory": "Filter by Category",
+    "filterByImpact": "Filter by Impact",
+    "filterByDate": "Filter by Date",
+    "categories": {
+      "mdr": "MDR 2017/745",
+      "ivdr": "IVDR 2017/746",
+      "harmonizedStandards": "Harmonized Standards",
+      "mdcgGuidance": "MDCG Guidance",
+      "notifiedBodies": "Notified Bodies",
+      "eudamed": "EUDAMED"
+    },
+    "impact": {
+      "high": "High Impact",
+      "medium": "Medium Impact",
+      "low": "Low Impact"
+    },
+    "noUpdates": "No updates found for the selected filters",
+    "readMore": "Read more",
+    "publishedOn": "Published on {{date}}",
+    "source": "Source",
+    "impactAnalysis": "Impact Analysis",
+    "actionRequired": "Action Required",
+    "fda": {
+      "title": "FDA Regulatory Watch",
+      "subtitle": "Stay informed about FDA regulatory updates",
+      "categories": {
+        "qmsr": "QMSR Updates",
+        "guidance": "FDA Guidance Documents",
+        "cybersecurity": "Cybersecurity",
+        "mdrReporting": "MDR Reporting",
+        "udi": "UDI Requirements",
+        "enforcement": "Enforcement Actions"
+      }
+    }
+  },
+  "documents": {
+    "title": "Document Management",
+    "subtitle": "Manage your regulatory documentation",
+    "uploadDocument": "Upload Document",
+    "createFolder": "Create Folder",
+    "searchDocuments": "Search documents...",
+    "categories": {
+      "technicalFile": "Technical File",
+      "designFile": "Design File",
+      "qmsDocuments": "QMS Documents",
+      "clinicalData": "Clinical Data",
+      "riskManagement": "Risk Management",
+      "labeling": "Labeling & IFU"
+    },
+    "columns": {
+      "name": "Name",
+      "category": "Category",
+      "version": "Version",
+      "lastModified": "Last Modified",
+      "status": "Status"
+    },
+    "status": {
+      "draft": "Draft",
+      "underReview": "Under Review",
+      "approved": "Approved",
+      "obsolete": "Obsolete"
+    }
+  },
+  "reports": {
+    "title": "Reports & Exports",
+    "subtitle": "Generate and export compliance reports",
+    "generateReport": "Generate Report",
+    "exportPdf": "Export PDF",
+    "exportExcel": "Export Excel",
+    "reportTypes": {
+      "auditReport": "Audit Report",
+      "gapAnalysis": "Gap Analysis",
+      "actionPlan": "Action Plan",
+      "complianceSummary": "Compliance Summary",
+      "progressReport": "Progress Report"
+    },
+    "selectDateRange": "Select Date Range",
+    "selectFramework": "Select Framework",
+    "includeRecommendations": "Include Recommendations",
+    "includeEvidence": "Include Evidence"
+  },
+  "demo": {
+    "title": "Free Demo - ISO 13485 Audit",
+    "subtitle": "Try our audit platform with a limited demo",
+    "description": "Answer 5 ISO 13485 questions to discover our interactive audit experience. No account required.",
+    "questionsRemaining": "{{count}} questions remaining",
+    "demoComplete": "Demo Complete!",
+    "demoCompleteMessage": "You've completed the free demo. Subscribe to access the full audit with 1203+ questions, AI recommendations, and detailed reports.",
+    "upgradeNow": "Upgrade Now",
+    "limitations": {
+      "title": "Demo Limitations",
+      "noSave": "Responses are not saved",
+      "noExport": "No report export",
+      "noAI": "AI recommendations disabled",
+      "limitedQuestions": "Limited to 5 questions"
+    }
+  },
+  "contact": {
+    "title": "Contact Us",
+    "subtitle": "Our team of medical device regulatory experts is available to answer your questions.",
+    "formTitle": "Send us a message",
+    "formDescription": "Fill out the form below and we will get back to you as soon as possible.",
+    "name": "Full name",
+    "namePlaceholder": "John Smith",
+    "email": "Email",
+    "emailPlaceholder": "john.smith@company.com",
+    "company": "Company",
+    "companyPlaceholder": "Your company name",
+    "subject": "Subject",
+    "selectSubject": "Select a subject",
+    "subjects": {
+      "demo": "Request a demo",
+      "pricing": "Pricing questions",
+      "technical": "Technical support",
+      "partnership": "Partnership",
+      "other": "Other"
+    },
+    "message": "Message",
+    "messagePlaceholder": "Describe your request in detail...",
+    "send": "Send message",
+    "sending": "Sending...",
+    "successMessage": "Message sent successfully! We will get back to you shortly.",
+    "infoTitle": "Our contact details",
+    "address": "Address",
+    "emailLabel": "Email",
+    "phone": "Phone",
+    "hours": "Business hours",
+    "regionsTitle": "International presence",
+    "regions": {
+      "eu": "European Union",
+      "euDesc": "Headquarters - MDR, IVDR, ISO 13485 expertise",
+      "us": "United States",
+      "usDesc": "FDA Support - QMSR, 510(k), De Novo, PMA",
+      "ca": "Canada",
+      "caDesc": "Health Canada Support - MDEL, MDSAP"
+    },
+    "quickLinks": "Quick links",
+    "viewPricing": "View pricing",
+    "startDemo": "Start free demo"
+  },
+  "upgradeRequired": {
+    "title": "Subscription Required",
+    "description": "This feature requires an active subscription. Upgrade now to unlock full access to all compliance tools.",
+    "cta": "View Pricing",
+    "features": {
+      "fullAudit": "Complete audit questionnaires",
+      "aiRecommendations": "AI-powered recommendations",
+      "documentManagement": "Document management",
+      "reports": "Detailed reports & exports"
+    }
+  },
+  "admin": {
+    "accessDenied": "Access Denied",
+    "accessDeniedDesc": "This page is restricted to administrators.",
+    "contacts": {
+      "title": "Contact Messages",
+      "subtitle": "Manage requests received via the contact form",
+      "totalMessages": "Total messages",
+      "newMessages": "New",
+      "readMessages": "Read",
+      "repliedMessages": "Replied",
+      "messagesList": "Messages list",
+      "messagesListDesc": "Click on a message to view details",
+      "noMessages": "No messages",
+      "noMessagesDesc": "Contact messages will appear here",
+      "messageDetail": "Message detail",
+      "statusUpdated": "Status updated",
+      "statusError": "Error updating status",
+      "status": {
+        "new": "New",
+        "read": "Read",
+        "replied": "Replied",
+        "archived": "Archived"
+      },
+      "columns": {
+        "status": "Status",
+        "name": "Name",
+        "email": "Email",
+        "company": "Company",
+        "subject": "Subject",
+        "date": "Date",
+        "actions": "Actions"
+      },
+      "actions": {
+        "view": "View message",
+        "markRead": "Mark as read",
+        "markReplied": "Mark as replied",
+        "archive": "Archive"
+      }
+    }
+  },
+  "faq": {
+    "title": "Frequently Asked Questions",
+    "subtitle": "Find answers to your questions about MDR, FDA and ISO 13485 compliance.",
+    "searchPlaceholder": "Search for a question...",
+    "allCategories": "All categories",
+    "resultsFound": "result(s) found",
+    "noResults": "No results found. Try different search terms.",
+    "ctaTitle": "Didn't find your answer?",
+    "ctaDescription": "Our team of experts is available to answer your specific questions.",
+    "ctaButton": "Contact us"
+  }
+}
