@@ -9,7 +9,16 @@ import { getLoginUrl } from "./const";
 import "./index.css";
 import "./lib/i18n"; // Initialize i18n
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5, // Les données sont considérées comme fraîches pendant 5 minutes
+      cacheTime: 1000 * 60 * 30, // Garder en cache pendant 30 minutes
+      retry: 1, // Réessayer une seule fois en cas d'échec
+      refetchOnWindowFocus: false, // Ne pas recharger quand on revient sur l'onglet
+    },
+  },
+});
 
 const redirectToLoginIfUnauthorized = (error: unknown) => {
   if (!(error instanceof TRPCClientError)) return;
