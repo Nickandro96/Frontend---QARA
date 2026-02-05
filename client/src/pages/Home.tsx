@@ -216,9 +216,9 @@ export default function Home() {
                 </DropdownMenu>
               </>
             ) : (
-              <Button asChild>
-                <a href={getLoginUrl()}>{t('common.login')}</a>
-              </Button>
+              <Link href="/login">
+                <Button>{t('common.login')}</Button>
+              </Link>
             )}
           </div>
         </div>
@@ -234,12 +234,12 @@ export default function Home() {
             {t('home.subtitle')}
           </p>
           {!isAuthenticated && (
-            <Button size="lg" asChild>
-              <a href={getLoginUrl()}>
+            <Link href="/login">
+              <Button size="lg">
                 {t('home.cta')}
                 <ArrowRight className="ml-2 h-4 w-4" />
-              </a>
-            </Button>
+              </Button>
+            </Link>
           )}
         </div>
 

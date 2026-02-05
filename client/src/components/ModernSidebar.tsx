@@ -22,7 +22,7 @@ import { cn } from "@/lib/utils";
 import { useMarket, Market } from "@/hooks/useMarket";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
-import { getLoginUrl } from "@/const";
+// import { getLoginUrl } from "@/const";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -304,9 +304,11 @@ export function ModernSidebar() {
             </DropdownMenuContent>
           </DropdownMenu>
         ) : (
-          <Button asChild className="w-full">
-            <a href={getLoginUrl()}>{t('common.login')}</a>
-          </Button>
+          <Link href="/login" className="w-full">
+            <Button className="w-full">
+              {t('common.login')}
+            </Button>
+          </Link>
         )}
       </div>
 
