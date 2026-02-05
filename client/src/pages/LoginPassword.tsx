@@ -7,7 +7,7 @@ import { Shield, Loader2 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Link } from "wouter";
 
-export default function Login() {
+export default function LoginPassword() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -24,16 +24,19 @@ export default function Login() {
     },
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    
+
     if (!email || !password) {
       setError("Veuillez remplir tous les champs");
       return;
     }
-    
-    loginMutation.mutate({ email, password });
+
+    loginMutation.mutate({ 
+      email, 
+      password
+    });
   };
 
   return (
@@ -63,6 +66,7 @@ export default function Login() {
                 required
               />
             </div>
+
             <div className="space-y-2">
               <label htmlFor="password" className="text-sm font-medium">Mot de passe</label>
               <Input
@@ -74,7 +78,7 @@ export default function Login() {
                 required
               />
             </div>
-            
+
             {error && (
               <div className="p-3 bg-red-50 border border-red-200 text-red-600 text-sm rounded">
                 {error}
@@ -95,13 +99,14 @@ export default function Login() {
               {loginMutation.isPending ? (
                 <>
                   <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                  Connexion...
+                  Connexion en cours...
                 </>
               ) : (
                 "Se connecter"
               )}
             </Button>
           </form>
+
           <div className="mt-6 space-y-4">
             <div className="relative">
               <div className="absolute inset-0 flex items-center">

@@ -18,6 +18,8 @@ export default function Register() {
   const [formData, setFormData] = useState({
     name: "",
     email: "",
+    password: "",
+    confirmPassword: "",
     company: "",
     role: "",
     phone: "",
@@ -25,7 +27,7 @@ export default function Register() {
   const [error, setError] = useState("");
   const { refresh } = useAuth();
   
-  const loginMutation = trpc.system.devLogin.useMutation({
+  const registerMutation = trpc.system.register.useMutation({
     onSuccess: () => {
       refresh().then(() => {
         window.location.href = "/";
@@ -55,16 +57,28 @@ export default function Register() {
     e.preventDefault();
     setError("");
     
-    if (!formData.name || !formData.email) {
-      setError("Le nom et l'email sont requis");
+    if (!formData.name || !formData.email || !formData.password || !formData.confirmPassword) {
+      setError("Veuillez remplir tous les champs obligatoires");
       return;
     }
 
-    // Pour maintenant, on utilise juste le nom et l'email
-    // Les autres champs seront stockés dans le profil utilisateur
-    loginMutation.mutate({ 
+    if (formData.password.length < 6) {
+      setError("Le mot de passe doit contenir au moins 6 caractères");
+      return;
+    }
+
+    if (formData.password !== formData.confirmPassword) {
+      setError("Les mots de passe ne correspondent pas");
+      return;
+    }
+
+    registerMutation.mutate({ 
       email: formData.email, 
-      name: formData.name 
+      name: formData.name,
+      password: formData.password,
+      company: formData.company,
+      role: formData.role,
+      phone: formData.phone,
     });
   };
 
@@ -104,6 +118,32 @@ export default function Register() {
                 type="email"
                 placeholder="jean@exemple.fr"
                 value={formData.email}
+                onChange={handleChange}
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="password" className="text-sm font-medium">Mot de passe *</label>
+              <Input
+                id="password"
+                name="password"
+                type="password"
+                placeholder="Minimum 6 caractères"
+                value={formData.password}
+                onChange={handleChange}
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="confirmPassword" className="text-sm font-medium">Confirmer le mot de passe *</label>
+              <Input
+                id="confirmPassword"
+                name="confirmPassword"
+                type="password"
+                placeholder="Confirmez votre mot de passe"
+                value={formData.confirmPassword}
                 onChange={handleChange}
                 required
               />
@@ -154,18 +194,18 @@ export default function Register() {
               </div>
             )}
 
-            {loginMutation.error && (
+            {registerMutation.error && (
               <div className="p-3 bg-red-50 border border-red-200 text-red-600 text-sm rounded">
-                {loginMutation.error.message}
+                {registerMutation.error.message}
               </div>
             )}
 
             <Button 
               type="submit" 
               className="w-full py-6 text-lg font-semibold" 
-              disabled={loginMutation.isPending}
+              disabled={registerMutation.isPending}
             >
-              {loginMutation.isPending ? (
+              {registerMutation.isPending ? (
                 <>
                   <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                   Création du compte...
