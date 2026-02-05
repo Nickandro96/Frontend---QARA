@@ -55,14 +55,14 @@ export default function MDRAudit() {
   });
   
   useEffect(() => {
-    if (!auditId && qualification) {
+    if (!auditId && qualification && !createAudit.isPending && !createAudit.isSuccess) {
       createAudit.mutate({
         auditType: "internal",
         name: `Audit MDR - ${new Date().toLocaleDateString("fr-FR")}`,
         referentialIds: [1], // MDR referentialId
       });
     }
-  }, [qualification, auditId]);
+  }, [qualification, auditId, createAudit.isPending, createAudit.isSuccess]);
   
   // Get user's qualification
   const { data: qualification, isLoading: loadingQualification } = trpc.mdr.getQualification.useQuery({});

@@ -54,14 +54,14 @@ export default function FDAAudit() {
   
   // Create audit when framework is selected
   useEffect(() => {
-    if (!auditId && selectedFramework && qualification) {
+    if (!auditId && selectedFramework && qualification && !createAudit.isPending && !createAudit.isSuccess) {
       createAudit.mutate({
         auditType: "internal",
         name: `Audit FDA ${selectedFramework} - ${new Date().toLocaleDateString("fr-FR")}`,
-        referentialIds: [4], // FDA referentialId (assuming 4, adjust if needed)
+        referentialIds: [4], // FDA referentialId
       });
     }
-  }, [selectedFramework, auditId, qualification]);
+  }, [selectedFramework, auditId, qualification, createAudit.isPending, createAudit.isSuccess]);
   
   const saveResponseMutation = trpc.fda.saveResponse.useMutation({
     onSuccess: () => {

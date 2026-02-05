@@ -80,7 +80,7 @@ export default function ISOAudit() {
   });
   
   useEffect(() => {
-    if (!auditId && selectedStandard && showQuestionnaire) {
+    if (!auditId && selectedStandard && showQuestionnaire && !createAudit.isPending && !createAudit.isSuccess) {
       const referentialId = selectedStandard === "9001" ? 2 : 3;
       createAudit.mutate({
         auditType: "internal",
@@ -88,7 +88,7 @@ export default function ISOAudit() {
         referentialIds: [referentialId],
       });
     }
-  }, [selectedStandard, showQuestionnaire, auditId]);
+  }, [selectedStandard, showQuestionnaire, auditId, createAudit.isPending, createAudit.isSuccess]);
   
   // Get user's qualification
   const { data: qualification, isLoading: loadingQualification } = trpc.iso.getQualification.useQuery({});
