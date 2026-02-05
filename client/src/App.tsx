@@ -1,4 +1,3 @@
-import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
@@ -6,6 +5,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
+import Register from "./pages/Register";
 import ActionDashboard from "./pages/ActionDashboard";
 import ModernHome from "./pages/ModernHome";
 import Classification from "./pages/Classification";
@@ -51,6 +51,7 @@ function Router() {
     <Switch>
       <Route path={"/"} component={ModernHome} />
       <Route path={"/login"} component={Login} />
+      <Route path={"/register"} component={Register} />
       <Route path={"/action-dashboard"} component={ActionDashboard} />
       <Route path={"/home-old"} component={Home} />
       <Route path="/classification" component={Classification} />
@@ -76,31 +77,30 @@ function Router() {
       <Route path={"/documents"} component={Documents} />
       <Route path={"/fda-audit"} component={FdaAudit} />
       <Route path={"/fda-classification"} component={FdaClassification} />
-        <Route path="/fda-regulatory-watch" component={FdaRegulatoryWatch} />
-        <Route path="/fda-dashboard" component={FdaDashboard} />
-        <Route path="/fda-submission-tracker" component={FdaSubmissionTracker} />
-        <Route path="/pricing" component={Pricing} />
-        <Route path="/subscription" component={Subscription} />
-        <Route path="/subscription/success" component={SubscriptionSuccess} />
-        <Route path="/subscription/cancel" component={SubscriptionCancel} />
-        <Route path="/contact" component={Contact} />
-        <Route path="/faq" component={FAQ} />
-        <Route path="/admin/contacts" component={AdminContacts} />
-        <Route path="/analytics" component={AnalyticsDashboard} />
-        <Route path="/reports/generate" component={ReportGeneration} />
-        <Route path="/reports/history" component={ReportHistory} />
-        <Route path="/404" component={NotFound} />
+      <Route path="/fda-regulatory-watch" component={FdaRegulatoryWatch} />
+      <Route path="/fda-dashboard" component={FdaDashboard} />
+      <Route path="/fda-submission-tracker" component={FdaSubmissionTracker} />
+      <Route path="/pricing" component={Pricing} />
+      <Route path="/subscription" component={Subscription} />
+      <Route path="/subscription/success" component={SubscriptionSuccess} />
+      <Route path="/subscription/cancel" component={SubscriptionCancel} />
+      <Route path="/contact" component={Contact} />
+      <Route path="/faq" component={FAQ} />
+      <Route path="/admin/contacts" component={AdminContacts} />
+      <Route path="/analytics" component={AnalyticsDashboard} />
+      <Route path="/reports/generate" component={ReportGeneration} />
+      <Route path="/reports/history" component={ReportHistory} />
+      <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
   );
 }
 
-function App() {
+export default function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider defaultTheme="light">
+      <ThemeProvider>
         <TooltipProvider>
-          <Toaster />
           <HreflangTags />
           <Router />
         </TooltipProvider>
@@ -108,5 +108,3 @@ function App() {
     </ErrorBoundary>
   );
 }
-
-export default App;

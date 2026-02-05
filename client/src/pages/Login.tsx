@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Shield, Loader2 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { Link } from "wouter";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -85,6 +86,28 @@ export default function Login() {
               )}
             </Button>
           </form>
+          <div className="mt-6 space-y-4">
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-300"></div>
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-2 bg-white text-gray-500">ou</span>
+              </div>
+            </div>
+
+            <div>
+              <p className="text-sm text-gray-600 text-center mb-3">
+                Pas encore de compte ?
+              </p>
+              <Link href="/register">
+                <Button variant="outline" className="w-full">
+                  S'inscrire
+                </Button>
+              </Link>
+            </div>
+          </div>
+
           <div className="mt-6 text-center text-xs text-muted-foreground">
             <p>Ce mode de connexion est autonome et ne dépend pas de Manus OAuth.</p>
           </div>
