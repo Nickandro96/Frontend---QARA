@@ -1,0 +1,13 @@
+# robots.txt for MDR Compliance Platform
+User-agent: *
+Allow: /
+Disallow: /dashboard
+Disallow: /dashboard-v2
+Disallow: /profile
+Disallow: /subscription
+Disallow: /fda/qualification
+Disallow: /fda/audit
+Disallow: /api/
+Disallow: /admin/
+
+Sitemap: https://mdrcompliance-jqqkzfyu.manus.space/sitemap.xml
