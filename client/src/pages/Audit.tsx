@@ -11,7 +11,7 @@ import { Link, useLocation } from "wouter";
 import { getLoginUrl } from "@/const";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
-import { Streamdown } from "streamdown";
+
 import { EvidenceUpload } from "@/components/EvidenceUpload";
 import { UpgradeRequired } from "@/components/UpgradeRequired";
 import { AuditDemo } from "@/components/AuditDemo";

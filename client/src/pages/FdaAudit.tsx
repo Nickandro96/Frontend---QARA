@@ -10,7 +10,7 @@ import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { getLoginUrl } from "@/const";
 import { toast } from "sonner";
-import { Streamdown } from "streamdown";
+
 import { EvidenceUpload } from "@/components/EvidenceUpload";
 
 export default function FdaAudit() {

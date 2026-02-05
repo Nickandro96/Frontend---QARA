@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  
+  <!-- Homepage -->
+  <url>
+    <loc>https://mdrcompliance-jqqkzfyu.manus.space/</loc>
+    <lastmod>2026-01-30</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+  
+  <!-- Pricing -->
+  <url>
+    <loc>https://mdrcompliance-jqqkzfyu.manus.space/pricing</loc>
+    <lastmod>2026-01-30</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  
+  <!-- Classification EU -->
+  <url>
+    <loc>https://mdrcompliance-jqqkzfyu.manus.space/classification</loc>
+    <lastmod>2026-01-30</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  
+  <!-- FDA Classification -->
+  <url>
+    <loc>https://mdrcompliance-jqqkzfyu.manus.space/fda-classification</loc>
+    <lastmod>2026-01-30</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  
+  <!-- Audit EU -->
+  <url>
+    <loc>https://mdrcompliance-jqqkzfyu.manus.space/audit</loc>
+    <lastmod>2026-01-30</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  
+  <!-- FDA Qualification -->
+  <url>
+    <loc>https://mdrcompliance-jqqkzfyu.manus.space/fda/qualification</loc>
+    <lastmod>2026-01-30</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  
+  <!-- FDA Audit -->
+  <url>
+    <loc>https://mdrcompliance-jqqkzfyu.manus.space/fda/audit</loc>
+    <lastmod>2026-01-30</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  
+  <!-- Dashboard V2 -->
+  <url>
+    <loc>https://mdrcompliance-jqqkzfyu.manus.space/dashboard-v2</loc>
+    <lastmod>2026-01-30</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  
+  <!-- Contact -->
+  <url>
+    <loc>https://mdrcompliance-jqqkzfyu.manus.space/contact</loc>
+    <lastmod>2026-01-30</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  
+  <!-- Regulatory Watch EU -->
+  <url>
+    <loc>https://mdrcompliance-jqqkzfyu.manus.space/regulatory-watch</loc>
+    <lastmod>2026-01-30</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <!-- FDA Regulatory Watch -->
+  <url>
+    <loc>https://mdrcompliance-jqqkzfyu.manus.space/fda-regulatory-watch</loc>
+    <lastmod>2026-01-30</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+</urlset>
