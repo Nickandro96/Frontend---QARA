@@ -29,6 +29,7 @@ import { HreflangTags } from "./components/HreflangTags";
 import Contact from "./pages/Contact";
 import FAQ from "./pages/FAQ";
 import AdminContacts from "./pages/AdminContacts";
+import AdminUsers from "./pages/AdminUsers";
 import AnalyticsDashboard from "./pages/AnalyticsDashboard";
 import DashboardV2 from "./pages/DashboardV2";
 import FDAQualification from "./pages/FDAQualification";
@@ -87,6 +88,7 @@ function Router() {
       <Route path="/contact" component={Contact} />
       <Route path="/faq" component={FAQ} />
       <Route path="/admin/contacts" component={AdminContacts} />
+      <Route path="/admin/users" component={AdminUsers} />
       <Route path="/analytics" component={AnalyticsDashboard} />
       <Route path="/reports/generate" component={ReportGeneration} />
       <Route path="/reports/history" component={ReportHistory} />
