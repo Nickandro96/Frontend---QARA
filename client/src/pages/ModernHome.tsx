@@ -111,21 +111,21 @@ export default function ModernHome() {
                   const Icon = feature.icon;
                   return (
                     <div
-                      key={index}
+                      key={String(index ?? Math.random())}
                       className="bg-blue-800/40 backdrop-blur-sm border border-blue-500/30 rounded-xl p-6 hover:bg-blue-800/60 transition-all hover:scale-[1.02] cursor-pointer"
                     >
                       <div className="flex items-center gap-4">
                         <div
-                          className={`${feature.iconBg} w-14 h-14 rounded-lg flex items-center justify-center shadow-lg`}
+                          className={`${String(feature.iconBg ?? "")} w-14 h-14 rounded-lg flex items-center justify-center shadow-lg`}
                         >
                           <Icon className="w-7 h-7 text-white" />
                         </div>
                         <div>
                           <h3 className="text-white text-xl font-semibold mb-1">
-                            {feature.title}
+                            {String(feature.title ?? "")}
                           </h3>
                           <p className="text-blue-200 text-sm">
-                            {feature.subtitle}
+                            {String(feature.subtitle ?? "")}
                           </p>
                         </div>
                       </div>
@@ -149,32 +149,32 @@ export default function ModernHome() {
 
             {/* Modules Grid */}
             <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {modules.map((module, index) => {
+              {Array.isArray(modules) && modules.map((module, index) => {
                 const Icon = module.icon;
                 const features = t(module.featuresKey, { returnObjects: true }) as string[];
                 
                 return (
-                  <Link key={index} href={module.link}>
+                  <Link key={String(index ?? Math.random())} href={String(module.link ?? "/")}>
                     <Card className="h-full hover:shadow-lg cursor-pointer group border-2 hover:border-primary transition-all">
                       <CardHeader>
                         <div className="flex items-center justify-between mb-4">
-                          <div className={`w-12 h-12 rounded-lg ${module.color} flex items-center justify-center group-hover:scale-110 transition-transform`}>
+                          <div className={`${String(module.color ?? "")} w-12 h-12 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform`}>
                             <Icon className="h-6 w-6 text-white" />
                           </div>
                         </div>
                         <CardTitle className="group-hover:text-primary transition-colors">
-                          {t(module.titleKey)}
+                          {String(t(module.titleKey) ?? "")}
                         </CardTitle>
                         <CardDescription className="min-h-[60px]">
-                          {t(module.descriptionKey)}
+                          {String(t(module.descriptionKey) ?? "")}
                         </CardDescription>
                       </CardHeader>
                       <CardContent>
                         <ul className="space-y-2">
                           {Array.isArray(features) && features.map((feature, idx) => (
-                            <li key={idx} className="text-sm text-slate-600 flex items-center gap-2">
+                            <li key={String(idx ?? Math.random())} className="text-sm text-slate-600 flex items-center gap-2">
                               <div className="w-1.5 h-1.5 rounded-full bg-primary" />
-                              {feature}
+                              {String(feature ?? "")}
                             </li>
                           ))}
                         </ul>
