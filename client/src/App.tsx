@@ -68,7 +68,7 @@ function Router() {
       <Route path="/audit/compare" component={AuditComparison} />
       <Route path="/audit/:id/results" component={AuditResults} />
       <Route path={"/profile"} component={Profile} />
-      <Route path={"/audit"} component={Audit} />
+      {/* Route obsolète - utilisez /mdr/audit à la place */}
       <Route path="/reports/comparative" component={ReportComparative} />
       <Route path="/audits" component={AuditsList} />
       <Route path={"/audit/:id"} component={AuditDetail} />

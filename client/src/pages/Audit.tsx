@@ -24,18 +24,60 @@ export default function Audit() {
   const { data: processes } = trpc.processes.list.useQuery();
 
   const [selectedRole, setSelectedRole] = useState<"fabricant" | "importateur" | "distributeur" | null>(null);
-  const [selectedReferential, setSelectedReferential] = useState<number | null>(null);
-  const [selectedProcess, setSelectedProcess] = useState<number | null>(null);
+  const [selectedReferential, setSelectedReferential] = useState<string>("all");
+  const [selectedProcess, setSelectedProcess] = useState<string>("all");
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [isCreatingAudit, setIsCreatingAudit] = useState(false);
 
   const { data: questions } = trpc.questions.list.useQuery(
     {
-      referentialId: selectedReferential || undefined,
-      processId: selectedProcess || undefined,
+      referentialId: selectedReferential !== "all" ? parseInt(selectedReferential) : undefined,
+      processId: selectedProcess !== "all" ? parseInt(selectedProcess) : undefined,
       economicRole: selectedRole || undefined,
     },
     { enabled: isAuthenticated && !!selectedRole }
   );
+
+  const createAuditMutation = trpc.audit.create.useMutation({
+    onSuccess: (data) => {
+      toast.success("✅ Audit créé avec succès");
+      setIsCreatingAudit(false);
+    },
+    onError: (error) => {
+      toast.error("❌ Erreur lors de la création : " + (error.message || "Erreur inconnue"));
+      setIsCreatingAudit(false);
+    },
+  });
+
+  const handleCreateAudit = async () => {
+    // Validation stricte
+    if (!selectedRole) {
+      toast.error("⚠️ Veuillez sélectionner un rôle légal");
+      return;
+    }
+
+    if (!selectedReferential || selectedReferential === "all") {
+      toast.error("⚠️ Veuillez sélectionner un référentiel");
+      return;
+    }
+
+    if (!selectedProcess || selectedProcess === "all") {
+      toast.error("⚠️ Veuillez sélectionner un processus");
+      return;
+    }
+
+    setIsCreatingAudit(true);
+
+    try {
+      await createAuditMutation.mutateAsync({
+        auditType: "internal",
+        name: `Audit ${selectedReferential} - ${new Date().toLocaleDateString("fr-FR")}`,
+        referentialIds: [parseInt(selectedReferential)],
+      });
+    } catch (error) {
+      console.error("Erreur lors de la création d'audit :", error);
+    }
+  };
 
   if (loading) {
     return (
@@ -102,7 +144,7 @@ export default function Audit() {
               <Link href="/dashboard">
                 <Button variant="ghost">Dashboard</Button>
               </Link>
-              <Link href="/audit">
+              <Link href="/mdr/audit">
                 <Button variant="ghost" className="font-medium">Audit</Button>
               </Link>
               <Link href="/reports">
@@ -137,9 +179,13 @@ export default function Audit() {
             <div>
               <label className="text-sm font-medium mb-2 block">{t('audit.legalRole', 'Rôle légal')} *</label>
               <Select
-                value={selectedRole ?? ""}
+                value={selectedRole || "none"}
                 onValueChange={(value) => {
-                  setSelectedRole(value as "fabricant" | "importateur" | "distributeur");
+                  if (value === "none") {
+                    setSelectedRole(null);
+                  } else {
+                    setSelectedRole(value as "fabricant" | "importateur" | "distributeur");
+                  }
                   setCurrentQuestionIndex(0);
                 }}
               >
@@ -147,6 +193,7 @@ export default function Audit() {
                   <SelectValue placeholder={t('audit.selectLegalRole', 'Sélectionnez votre rôle légal')} />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="none">-- Sélectionner un rôle --</SelectItem>
                   <SelectItem value="fabricant">{t('audit.eu.roles.manufacturer', 'Fabricant')}</SelectItem>
                   <SelectItem value="importateur">{t('audit.eu.roles.importer', 'Importateur')}</SelectItem>
                   <SelectItem value="distributeur">{t('audit.eu.roles.distributor', 'Distributeur')}</SelectItem>
@@ -158,51 +205,72 @@ export default function Audit() {
             </div>
 
             <div className="grid md:grid-cols-2 gap-4">
-            <div>
-              <label className="text-sm font-medium mb-2 block">{t('audit.referential', 'Référentiel')}</label>
-              <Select
-                value={String(selectedReferential ?? "all")}
-                onValueChange={(v) => {
-                  setSelectedReferential(v === "all" ? null : parseInt(v));
-                  setCurrentQuestionIndex(0);
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={t('audit.allReferentials', 'Tous les référentiels')} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">{t('audit.allReferentials', 'Tous les référentiels')}</SelectItem>
-                  {Array.isArray(referentials) && referentials.map((ref) => (
-                    <SelectItem key={String(ref.id ?? Math.random())} value={String(ref.id ?? "")}>
-                      {String(ref.name ?? "")}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div>
+                <label className="text-sm font-medium mb-2 block">{t('audit.referential', 'Référentiel')} *</label>
+                <Select
+                  value={selectedReferential}
+                  onValueChange={(v) => {
+                    setSelectedReferential(v);
+                    setCurrentQuestionIndex(0);
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={t('audit.selectReferential', 'Sélectionnez un référentiel')} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">-- Tous les référentiels --</SelectItem>
+                    {Array.isArray(referentials) && referentials.map((ref) => (
+                      <SelectItem key={String(ref.id ?? Math.random())} value={String(ref.id ?? "none")}>
+                        {String(ref.name ?? "Référentiel sans nom")}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium mb-2 block">{t('audit.process', 'Processus')} *</label>
+                <Select
+                  value={selectedProcess}
+                  onValueChange={(v) => {
+                    setSelectedProcess(v);
+                    setCurrentQuestionIndex(0);
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={t('audit.selectProcess', 'Sélectionnez un processus')} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">-- Tous les processus --</SelectItem>
+                    {Array.isArray(processes) && processes.map((proc) => (
+                      <SelectItem key={String(proc.id ?? Math.random())} value={String(proc.id ?? "none")}>
+                        {String(proc.name ?? "Processus sans nom")}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
-            <div>
-              <label className="text-sm font-medium mb-2 block">{t('audit.process', 'Processus')}</label>
-              <Select
-                value={String(selectedProcess ?? "all")}
-                onValueChange={(v) => {
-                  setSelectedProcess(v === "all" ? null : parseInt(v));
-                  setCurrentQuestionIndex(0);
-                }}
+            {/* Bouton de création d'audit */}
+            <div className="pt-4">
+              <Button
+                onClick={handleCreateAudit}
+                disabled={isCreatingAudit || !selectedRole || selectedReferential === "all" || selectedProcess === "all"}
+                className="w-full"
               >
-                <SelectTrigger>
-                  <SelectValue placeholder={t('audit.allProcesses', 'Tous les processus')} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">{t('audit.allProcesses', 'Tous les processus')}</SelectItem>
-                  {Array.isArray(processes) && processes.map((proc) => (
-                    <SelectItem key={String(proc.id ?? Math.random())} value={String(proc.id ?? "")}>
-                      {String(proc.name ?? "")}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+                {isCreatingAudit ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Création en cours...
+                  </>
+                ) : (
+                  <>
+                    <FileText className="mr-2 h-4 w-4" />
+                    Créer l'audit
+                  </>
+                )}
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -269,7 +337,7 @@ export default function Audit() {
                     </Button>
                     <Button variant="outline" className="h-20 flex flex-col gap-2 border-2 hover:border-yellow-500 hover:bg-yellow-50">
                       <MinusCircle className="h-6 w-6 text-yellow-500" />
-                      <span className="text-xs font-medium">Partiel</span>
+                      <span className="text-xs font-medium">Partielle</span>
                     </Button>
                     <Button variant="outline" className="h-20 flex flex-col gap-2 border-2 hover:border-gray-500 hover:bg-gray-50">
                       <AlertCircle className="h-6 w-6 text-gray-500" />
@@ -277,16 +345,17 @@ export default function Audit() {
                     </Button>
                   </div>
 
-                  <div className="space-y-4">
-                    <div>
-                      <label className="text-sm font-medium mb-2 block">Commentaires / Justification</label>
-                      <Textarea placeholder="Expliquez votre réponse..." rows={4} />
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium mb-2 block">Preuves / Documents</label>
-                      <EvidenceUpload />
-                    </div>
+                  {/* Commentaires */}
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">Commentaires</label>
+                    <Textarea
+                      placeholder="Ajouter des détails, preuves ou observations..."
+                      className="min-h-24"
+                    />
                   </div>
+
+                  {/* Evidence Upload */}
+                  <EvidenceUpload />
                 </CardContent>
               </Card>
             )}
@@ -294,10 +363,10 @@ export default function Audit() {
         ) : (
           <Card>
             <CardContent className="py-12 text-center">
-              <Sparkles className="h-12 w-12 mx-auto mb-4 text-primary/50" />
-              <h3 className="text-lg font-semibold mb-2">Aucune question trouvée</h3>
+              <AlertCircle className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+              <h3 className="text-lg font-semibold mb-2">Aucune question disponible</h3>
               <p className="text-muted-foreground">
-                Essayez de modifier vos filtres pour voir d'autres questions.
+                Veuillez sélectionner un référentiel et un processus valides
               </p>
             </CardContent>
           </Card>

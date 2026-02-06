@@ -55,7 +55,7 @@ export function ModernSidebar() {
       id: "audit",
       label: t("nav.auditEU") || "Audit MDR",
       icon: ClipboardCheck,
-      href: "/audit",
+      href: "/mdr/audit",
     },
     {
       id: "iso-qualification",
