@@ -137,7 +137,7 @@ export default function Audit() {
             <div>
               <label className="text-sm font-medium mb-2 block">{t('audit.legalRole', 'Rôle légal')} *</label>
               <Select
-                value={selectedRole || ""}
+                value={selectedRole ?? ""}
                 onValueChange={(value) => {
                   setSelectedRole(value as "fabricant" | "importateur" | "distributeur");
                   setCurrentQuestionIndex(0);
