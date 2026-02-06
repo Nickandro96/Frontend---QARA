@@ -1,5 +1,5 @@
 /**
- * MDR Audit Page - VERSION ULTRA-TOLÉRANTE
+ * MDR Audit Page - VERSION ULTRA-TOLÉRANTE (V2)
  * Interactive questionnaire for MDR 2017/745 compliance audit
  * Secured against undefined properties and rendering errors.
  */
@@ -12,7 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, AlertCircle, CheckCircle2, FileText, Save } from "lucide-react";
-import { Textarea } from "@/components/ui/textarea";
+import { Textarea } => "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Progress } from "@/components/ui/progress";
@@ -88,7 +88,7 @@ export default function MDRAudit() {
   });
   
   const handleResponseChange = (questionId: any, field: string, value: string) => {
-    const qId = String(questionId ?? "0");
+    const qId = String(questionId ?? `fallback-q-${Date.now()}`); // Ensure qId is always a string, use timestamp for unique fallback
     setResponses(prev => ({
       ...prev,
       [qId]: {
@@ -116,7 +116,7 @@ export default function MDRAudit() {
   };
   
   const handleSaveResponse = async (questionId: any) => {
-    const qId = String(questionId ?? "0");
+    const qId = String(questionId ?? `fallback-q-${Date.now()}`); // Ensure qId is always a string
     const response = responses[qId];
     if (!response?.responseValue || !auditId) return;
     
@@ -130,7 +130,7 @@ export default function MDRAudit() {
   };
   
   const currentQuestion = questionsData.questions[currentQuestionIndex] || null;
-  const currentQId = String(currentQuestion?.id ?? "0");
+  const currentQId = String(currentQuestion?.id ?? `fallback-q-${currentQuestionIndex}`); // Ensure currentQId is always a string
   const currentResponse = responses[currentQId];
   
   const { isSaving, lastSaved } = useAutoSave({
@@ -228,20 +228,20 @@ export default function MDRAudit() {
       <Card className={`mb-6 transition-opacity duration-300 ${isTransitioning ? "opacity-0" : "opacity-100"}`}>
         <CardHeader>
           <CardTitle className="text-xl mb-2">
-            {String(currentQuestion.questionShort || currentQuestion.questionText || "Sans titre")}
+            {String(currentQuestion?.questionShort || currentQuestion?.questionText || "Sans titre")}
           </CardTitle>
           <div className="flex gap-2 flex-wrap">
-            {currentQuestion.article && <Badge variant="outline">{String(currentQuestion.article)}</Badge>}
-            {currentQuestion.annexe && <Badge variant="outline">{String(currentQuestion.annexe)}</Badge>}
-            <Badge className={CRITICALITY_COLORS[String(currentQuestion.criticality)] || "bg-gray-100"}>
-              {String(currentQuestion.criticality || "medium")}
+            {currentQuestion?.article && <Badge variant="outline">{String(currentQuestion.article)}</Badge>}
+            {currentQuestion?.annexe && <Badge variant="outline">{String(currentQuestion.annexe)}</Badge>}
+            <Badge className={CRITICALITY_COLORS[String(currentQuestion?.criticality)] || "bg-gray-100"}>
+              {String(currentQuestion?.criticality || "medium")}
             </Badge>
           </div>
         </CardHeader>
         
         <CardContent className="space-y-6">
           <div className="p-4 bg-muted rounded-lg text-sm">
-            {String(currentQuestion.questionText || "Pas de description disponible.")}
+            {String(currentQuestion?.questionText || "Pas de description disponible.")}
           </div>
           
           <div className="space-y-3">
@@ -251,19 +251,19 @@ export default function MDRAudit() {
             </div>
             <RadioGroup
               value={currentResponse?.responseValue || ""}
-              onValueChange={(v) => handleResponseChange(currentQuestion.id, "responseValue", v)}
+              onValueChange={(v) => handleResponseChange(currentQuestion?.id, "responseValue", v)}
             >
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {COMPLIANCE_OPTIONS.map((opt) => {
-                  const idSuffix = String(currentQuestion.id ?? currentQuestionIndex);
+                  const idSuffix = String(currentQuestion?.id ?? currentQuestionIndex);
                   const inputId = `q-${idSuffix}-${opt.value}`;
                   return (
                     <div
-                      key={opt.value}
+                      key={inputId} // Use inputId as key for uniqueness
                       className={`flex items-center space-x-2 p-4 border-2 rounded-lg cursor-pointer transition-colors ${
                         currentResponse?.responseValue === opt.value ? opt.color : "border-border hover:border-primary/50"
                       }`}
-                      onClick={() => handleResponseChange(currentQuestion.id, "responseValue", opt.value)}
+                      onClick={() => handleResponseChange(currentQuestion?.id, "responseValue", opt.value)}
                     >
                       <RadioGroupItem value={opt.value} id={inputId} />
                       <Label htmlFor={inputId} className="cursor-pointer flex-1">{opt.label}</Label>
@@ -279,7 +279,7 @@ export default function MDRAudit() {
             <Textarea
               placeholder="Preuves, documents, actions correctives..."
               value={currentResponse?.responseComment || ""}
-              onChange={(e) => handleResponseChange(currentQuestion.id, "responseComment", e.target.value)}
+              onChange={(e) => handleResponseChange(currentQuestion?.id, "responseComment", e.target.value)}
               rows={4}
             />
           </div>
@@ -288,7 +288,7 @@ export default function MDRAudit() {
       
       <div className="flex gap-4">
         <Button variant="outline" onClick={handlePrevious} disabled={currentQuestionIndex === 0}>← Précédent</Button>
-        <Button onClick={() => handleSaveResponse(currentQuestion.id)} variant="outline" disabled={saveResponseMutation.isPending}>
+        <Button onClick={() => handleSaveResponse(currentQuestion?.id)} variant="outline" disabled={saveResponseMutation.isPending}>
           {saveResponseMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4 mr-2" />} Sauvegarder
         </Button>
         <Button onClick={handleNext} className="ml-auto">
