@@ -228,8 +228,8 @@ export function ModernSidebar() {
             const active = isActive(item.href);
             
             return (
-              <li key={item.id}>
-                <Link href={item.href}>
+              <li key={String(item.id ?? Math.random())}>
+                <Link href={String(item.href ?? "/")}>
                   <div
                     className={cn(
                       "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-normal transition-colors cursor-pointer",
@@ -239,7 +239,7 @@ export function ModernSidebar() {
                     )}
                   >
                     <Icon className="w-5 h-5 flex-shrink-0" />
-                    <span className="flex-1">{item.label}</span>
+                    <span className="flex-1">{String(item.label ?? "")}</span>
                   </div>
                 </Link>
               </li>
@@ -256,24 +256,24 @@ export function ModernSidebar() {
               <Button variant="ghost" className="w-full flex items-center gap-3 px-3 py-2 justify-start">
                 <Avatar className="h-8 w-8">
                   <AvatarFallback className="bg-primary text-primary-foreground text-sm">
-                    {user?.name?.substring(0, 2).toUpperCase() || "U"}
+                    {String(user?.name?.substring(0, 2) ?? "U").toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
                 <div className="flex-1 text-left overflow-hidden">
-                  <p className="text-sm font-medium truncate">{user?.name}</p>
+                  <p className="text-sm font-medium truncate">{String(user?.name ?? "")}</p>
                   <p className="text-xs text-muted-foreground">
-                    {user?.role?.toUpperCase() || 'FREE'}
+                    {String(user?.role ?? "FREE").toUpperCase()}
                   </p>
                 </div>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
               <div className="px-2 py-1.5 text-sm">
-                <p className="font-medium">{user?.name}</p>
-                <p className="text-xs text-muted-foreground">{user?.email}</p>
+                <p className="font-medium">{String(user?.name ?? "")}</p>
+                <p className="text-xs text-muted-foreground">{String(user?.email ?? "")}</p>
                 <p className="text-xs text-muted-foreground mt-1">
                   <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                    {user?.role?.toUpperCase() || 'USER'}
+                    {String(user?.role ?? "USER").toUpperCase()}
                   </span>
                 </p>
               </div>
@@ -281,13 +281,13 @@ export function ModernSidebar() {
               <DropdownMenuItem asChild>
                 <Link href="/profile" className="flex items-center gap-2 cursor-pointer">
                   <User className="h-4 w-4" />
-                  {t('common.profile')}
+                  {t("common.profile")}
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
                 <Link href="/subscription" className="flex items-center gap-2 cursor-pointer">
                   <CreditCard className="h-4 w-4" />
-                  {t('common.subscription')}
+                  {t("common.subscription")}
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
@@ -299,14 +299,14 @@ export function ModernSidebar() {
                 disabled={logoutMutation.isPending}
               >
                 <LogOut className="h-4 w-4" />
-                {logoutMutation.isPending ? 'Déconnexion...' : t('common.logout')}
+                {logoutMutation.isPending ? "Déconnexion..." : t("common.logout")}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         ) : (
           <Link href="/login" className="w-full">
             <Button className="w-full">
-              {t('common.login')}
+              {t("common.login")}
             </Button>
           </Link>
         )}
