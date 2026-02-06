@@ -1,7 +1,8 @@
 /**
- * MDR Audit Page - VERSION ULTRA-TOLÉRANTE (V2)
+ * MDR Audit Page - VERSION ULTRA-TOLÉRANTE (V3)
  * Interactive questionnaire for MDR 2017/745 compliance audit
  * Secured against undefined properties and rendering errors.
+ * Fixed: No automatic audit creation loop
  */
 
 import { useState, useEffect, useRef } from "react";
@@ -46,25 +47,40 @@ export default function MDRAudit() {
   const [showCheckmark, setShowCheckmark] = useState(false);
   const autoAdvanceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [auditId, setAuditId] = useState<number | null>(null);
+  const [auditCreationAttempted, setAuditCreationAttempted] = useState(false);
+  const [auditCreationError, setAuditCreationError] = useState<string | null>(null);
   
   // 1. SAFE DATA FETCHING
   const { data: qualification, isLoading: loadingQualification } = trpc.mdr.getQualification.useQuery({});
   
   const createAudit = trpc.audit.create.useMutation({
     onSuccess: (data) => {
-      if (data?.auditId) setAuditId(data.auditId);
+      if (data?.auditId) {
+        setAuditId(data.auditId);
+        setAuditCreationError(null);
+        toast.success("✅ Audit créé avec succès");
+      }
+    },
+    onError: (error) => {
+      const errorMessage = error.message || "Erreur lors de la création de l'audit";
+      setAuditCreationError(errorMessage);
+      console.error("[MDR AUDIT] Audit creation error:", errorMessage);
+      toast.error("❌ " + errorMessage);
     },
   });
   
+  // FIXED: Only create audit once, with proper error handling
   useEffect(() => {
-    if (!auditId && qualification && !createAudit.isPending && !createAudit.isSuccess) {
+    if (!auditCreationAttempted && qualification && !auditId && !createAudit.isPending) {
+      setAuditCreationAttempted(true);
+      
       createAudit.mutate({
         auditType: "internal",
         name: `Audit MDR - ${new Date().toLocaleDateString("fr-FR")}`,
         referentialIds: [1],
       });
     }
-  }, [qualification, auditId, createAudit.isPending, createAudit.isSuccess]);
+  }, [auditCreationAttempted, qualification, auditId, createAudit.isPending]);
   
   const { data: questionsDataRaw, isLoading: loadingQuestions, error: questionsError } = trpc.mdr.getQuestions.useQuery(
     {},
@@ -88,7 +104,7 @@ export default function MDRAudit() {
   });
   
   const handleResponseChange = (questionId: any, field: string, value: string) => {
-    const qId = String(questionId ?? `fallback-q-${Date.now()}`); // Ensure qId is always a string, use timestamp for unique fallback
+    const qId = String(questionId ?? `fallback-q-${Date.now()}`);
     setResponses(prev => ({
       ...prev,
       [qId]: {
@@ -97,203 +113,228 @@ export default function MDRAudit() {
       },
     }));
     setHasUnsavedChanges(true);
-    
-    if (field === 'responseValue' && value) {
-      setShowCheckmark(true);
-      if (autoAdvanceTimeoutRef.current) clearTimeout(autoAdvanceTimeoutRef.current);
-      
-      autoAdvanceTimeoutRef.current = setTimeout(() => {
-        setShowCheckmark(false);
-        if (currentQuestionIndex < (questionsData.questions.length || 0) - 1) {
-          setIsTransitioning(true);
-          setTimeout(() => {
-            setCurrentQuestionIndex(prev => prev + 1);
-            setIsTransitioning(false);
-          }, 300);
-        }
-      }, 1500);
-    }
   };
-  
-  const handleSaveResponse = async (questionId: any) => {
-    const qId = String(questionId ?? `fallback-q-${Date.now()}`); // Ensure qId is always a string
+
+  const handleSaveResponse = (questionId: any) => {
+    const qId = String(questionId ?? "");
     const response = responses[qId];
-    if (!response?.responseValue || !auditId) return;
     
-    await saveResponseMutation.mutateAsync({
+    if (!response) {
+      toast.error("❌ Aucune réponse sélectionnée");
+      return;
+    }
+
+    if (!auditId) {
+      toast.error("❌ Audit non créé");
+      return;
+    }
+
+    saveResponseMutation.mutate({
       auditId,
-      questionId: qId,
-      responseValue: response.responseValue as any,
-      responseComment: response.responseComment || undefined,
+      questionId: typeof questionId === "number" ? questionId : 0,
+      responseValue: response.responseValue,
+      responseComment: response.responseComment || "",
     });
+
     setHasUnsavedChanges(false);
   };
-  
-  const currentQuestion = questionsData.questions[currentQuestionIndex] || null;
-  const currentQId = String(currentQuestion?.id ?? `fallback-q-${currentQuestionIndex}`); // Ensure currentQId is always a string
-  const currentResponse = responses[currentQId];
-  
-  const { isSaving, lastSaved } = useAutoSave({
-    data: currentResponse,
-    onSave: async (data) => {
-      if (currentQuestion && data?.responseValue) {
-        await handleSaveResponse(currentQuestion.id);
-      }
-    },
-    delay: 30000,
-    enabled: !!currentQuestion && hasUnsavedChanges,
-  });
-  
-  const handleNext = async () => {
-    if (!currentQuestion) return;
-    await handleSaveResponse(currentQuestion.id);
-    
+
+  const handleNext = () => {
     if (currentQuestionIndex < questionsData.questions.length - 1) {
       setIsTransitioning(true);
       setTimeout(() => {
-        setCurrentQuestionIndex(prev => prev + 1);
+        setCurrentQuestionIndex(currentQuestionIndex + 1);
         setIsTransitioning(false);
       }, 300);
-    } else if (auditId) {
-      toast.success("Audit terminé !");
-      setTimeout(() => setLocation(`/audit/${auditId}/results`), 1500);
     }
   };
-  
-  useEffect(() => {
-    return () => {
-      if (autoAdvanceTimeoutRef.current) clearTimeout(autoAdvanceTimeoutRef.current);
-    };
-  }, []);
-  
+
   const handlePrevious = () => {
-    if (currentQuestionIndex > 0) setCurrentQuestionIndex(prev => prev - 1);
+    if (currentQuestionIndex > 0) {
+      setIsTransitioning(true);
+      setTimeout(() => {
+        setCurrentQuestionIndex(currentQuestionIndex - 1);
+        setIsTransitioning(false);
+      }, 300);
+    }
   };
-  
-  // 3. RENDER LOGIC WITH FALLBACKS
-  if (loadingQualification || loadingQuestions || createAudit.isPending) {
+
+  // LOADING STATE
+  if (loadingQualification || loadingQuestions) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" />
-      </div>
-    );
-  }
-  
-  if (!qualification) {
-    return (
-      <div className="container max-w-4xl py-8">
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>Veuillez compléter votre qualification MDR.</AlertDescription>
-        </Alert>
-      </div>
-    );
-  }
-  
-  if (questionsError || questionsData.questions.length === 0) {
-    return (
-      <div className="container max-w-4xl py-8">
-        <Alert>
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>
-            {questionsError?.message || "Aucune question disponible. Veuillez recharger la page."}
-          </AlertDescription>
-        </Alert>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-50">
+        <div className="text-center">
+          <Loader2 className="h-12 w-12 animate-spin text-blue-600 mx-auto mb-4" />
+          <p className="text-gray-600 font-medium">Chargement de l'audit MDR...</p>
+        </div>
       </div>
     );
   }
 
-  const progress = ((currentQuestionIndex + 1) / questionsData.questions.length) * 100;
-  
-  return (
-    <div className="container max-w-5xl py-8">
-      <div className="mb-6">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h1 className="text-3xl font-bold">Audit MDR 2017/745</h1>
-            <p className="text-muted-foreground">
-              Rôle : <Badge variant="outline">{String(qualification.economicRole ?? "Fabricant")}</Badge>
+  // ERROR STATE - Audit creation failed
+  if (auditCreationAttempted && auditCreationError && !auditId) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-50 p-4">
+        <Card className="w-full max-w-md border-red-200">
+          <CardHeader>
+            <CardTitle className="text-red-600">Erreur de création d'audit</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Alert className="bg-red-50 border-red-200">
+              <AlertCircle className="h-4 w-4 text-red-600" />
+              <AlertDescription className="text-red-800">
+                {String(auditCreationError ?? "Une erreur est survenue")}
+              </AlertDescription>
+            </Alert>
+            <Button 
+              onClick={() => {
+                setAuditCreationAttempted(false);
+                setAuditCreationError(null);
+              }}
+              className="w-full"
+            >
+              Réessayer
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // NO QUESTIONS STATE
+  if (questionsData.questions.length === 0) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-50 p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <CardTitle>Aucune question disponible</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-gray-600">
+              Les questions MDR ne sont pas disponibles pour le moment.
             </p>
-          </div>
-          <div className="text-right">
-            <div className="text-sm text-muted-foreground">Question</div>
-            <div className="text-2xl font-bold">
-              {currentQuestionIndex + 1} / {questionsData.questions.length}
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const currentQuestion = questionsData.questions[currentQuestionIndex];
+  const progress = ((currentQuestionIndex + 1) / questionsData.questions.length) * 100;
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50">
+      {/* Header */}
+      <div className="sticky top-0 z-40 bg-white border-b border-gray-200 shadow-sm">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <FileText className="h-6 w-6 text-blue-600" />
+              <h1 className="text-2xl font-bold text-gray-900">Audit MDR 2017/745</h1>
             </div>
+            <div className="text-sm text-gray-600">
+              Question {currentQuestionIndex + 1} / {questionsData.questions.length}
+            </div>
+          </div>
+          <Progress value={progress} className="h-2" />
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="container mx-auto px-4 py-8">
+        <div className="max-w-3xl mx-auto">
+          {/* Question Card */}
+          <Card className={`transition-all duration-300 ${isTransitioning ? "opacity-50" : "opacity-100"}`}>
+            <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50">
+              <div className="flex items-center gap-2 mb-2">
+                <Badge variant="outline" className="bg-blue-100 text-blue-800 border-blue-300">
+                  {String(currentQuestion?.referentialCode ?? "MDR")}
+                </Badge>
+                {currentQuestion?.criticality && (
+                  <Badge className={CRITICALITY_COLORS[String(currentQuestion.criticality)] || "bg-gray-100"}>
+                    {String(currentQuestion.criticality)}
+                  </Badge>
+                )}
+              </div>
+              <CardTitle className="text-xl">
+                {String(currentQuestion?.questionDetailed ?? currentQuestion?.questionShort ?? "Question sans titre")}
+              </CardTitle>
+              <CardDescription>
+                {String(currentQuestion?.processName ?? "")}
+              </CardDescription>
+            </CardHeader>
+
+            <CardContent className="space-y-6 pt-6">
+              {/* Compliance Options */}
+              <div>
+                <Label className="text-base font-semibold mb-3 block">Conformité</Label>
+                <RadioGroup
+                  value={responses[String(currentQuestion?.id ?? "")]?.responseValue || ""}
+                  onValueChange={(value) => handleResponseChange(currentQuestion?.id, "responseValue", value)}
+                >
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {COMPLIANCE_OPTIONS.map((option) => (
+                      <div key={option.value} className="flex items-center space-x-2">
+                        <RadioGroupItem value={option.value} id={option.value} />
+                        <Label htmlFor={option.value} className="cursor-pointer text-sm">
+                          {option.label}
+                        </Label>
+                      </div>
+                    ))}
+                  </div>
+                </RadioGroup>
+              </div>
+
+              {/* Comments */}
+              <div>
+                <Label htmlFor="comments" className="text-base font-semibold mb-2 block">
+                  Commentaires
+                </Label>
+                <Textarea
+                  id="comments"
+                  placeholder="Ajouter des détails, preuves ou observations..."
+                  value={responses[String(currentQuestion?.id ?? "")]?.responseComment || ""}
+                  onChange={(e) => handleResponseChange(currentQuestion?.id, "responseComment", e.target.value)}
+                  className="min-h-24"
+                />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3 justify-between pt-4">
+                <Button
+                  variant="outline"
+                  onClick={handlePrevious}
+                  disabled={currentQuestionIndex === 0}
+                >
+                  ← Précédent
+                </Button>
+
+                <Button
+                  onClick={() => handleSaveResponse(currentQuestion?.id)}
+                  disabled={saveResponseMutation.isPending}
+                  className="gap-2"
+                >
+                  <Save className="h-4 w-4" />
+                  {saveResponseMutation.isPending ? "Sauvegarde..." : "Sauvegarder"}
+                </Button>
+
+                <Button
+                  onClick={handleNext}
+                  disabled={currentQuestionIndex === questionsData.questions.length - 1}
+                >
+                  Suivant →
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Progress Info */}
+          <div className="mt-6 text-center text-sm text-gray-600">
+            {hasUnsavedChanges && (
+              <p className="text-orange-600 font-medium">⚠️ Modifications non sauvegardées</p>
+            )}
           </div>
         </div>
-        <Progress value={progress} className="h-2" />
-      </div>
-      
-      <Card className={`mb-6 transition-opacity duration-300 ${isTransitioning ? "opacity-0" : "opacity-100"}`}>
-        <CardHeader>
-          <CardTitle className="text-xl mb-2">
-            {String(currentQuestion?.questionShort || currentQuestion?.questionText || "Sans titre")}
-          </CardTitle>
-          <div className="flex gap-2 flex-wrap">
-            {currentQuestion?.article && <Badge variant="outline">{String(currentQuestion.article)}</Badge>}
-            {currentQuestion?.annexe && <Badge variant="outline">{String(currentQuestion.annexe)}</Badge>}
-            <Badge className={CRITICALITY_COLORS[String(currentQuestion?.criticality)] || "bg-gray-100"}>
-              {String(currentQuestion?.criticality || "medium")}
-            </Badge>
-          </div>
-        </CardHeader>
-        
-        <CardContent className="space-y-6">
-          <div className="p-4 bg-muted rounded-lg text-sm">
-            {String(currentQuestion?.questionText || "Pas de description disponible.")}
-          </div>
-          
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <Label>Statut de conformité *</Label>
-              {showCheckmark && <CheckCircle2 className="h-5 w-5 text-green-600" />}
-            </div>
-            <RadioGroup
-              value={currentResponse?.responseValue || ""}
-              onValueChange={(v) => handleResponseChange(currentQuestion?.id, "responseValue", v)}
-            >
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {COMPLIANCE_OPTIONS.map((opt) => {
-                  const idSuffix = String(currentQuestion?.id ?? currentQuestionIndex);
-                  const inputId = `q-${idSuffix}-${opt.value}`;
-                  return (
-                    <div
-                      key={inputId} // Use inputId as key for uniqueness
-                      className={`flex items-center space-x-2 p-4 border-2 rounded-lg cursor-pointer transition-colors ${
-                        currentResponse?.responseValue === opt.value ? opt.color : "border-border hover:border-primary/50"
-                      }`}
-                      onClick={() => handleResponseChange(currentQuestion?.id, "responseValue", opt.value)}
-                    >
-                      <RadioGroupItem value={opt.value} id={inputId} />
-                      <Label htmlFor={inputId} className="cursor-pointer flex-1">{opt.label}</Label>
-                    </div>
-                  );
-                })}
-              </div>
-            </RadioGroup>
-          </div>
-          
-          <div className="space-y-3">
-            <Label>Commentaires et preuves</Label>
-            <Textarea
-              placeholder="Preuves, documents, actions correctives..."
-              value={currentResponse?.responseComment || ""}
-              onChange={(e) => handleResponseChange(currentQuestion?.id, "responseComment", e.target.value)}
-              rows={4}
-            />
-          </div>
-        </CardContent>
-      </Card>
-      
-      <div className="flex gap-4">
-        <Button variant="outline" onClick={handlePrevious} disabled={currentQuestionIndex === 0}>← Précédent</Button>
-        <Button onClick={() => handleSaveResponse(currentQuestion?.id)} variant="outline" disabled={saveResponseMutation.isPending}>
-          {saveResponseMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4 mr-2" />} Sauvegarder
-        </Button>
-        <Button onClick={handleNext} className="ml-auto">
-          {currentQuestionIndex === questionsData.questions.length - 1 ? "Terminer l'audit" : "Suivant →"}
-        </Button>
       </div>
     </div>
   );
