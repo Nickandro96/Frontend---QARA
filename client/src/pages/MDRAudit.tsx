@@ -34,10 +34,9 @@ const CRITICALITY_COLORS = {
 
 export default function MDRAudit() {
   const [, setLocation] = useLocation();
-  // Using sonner toast
   
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [responses, setResponses] = useState<Record<number, {
+  const [responses, setResponses] = useState<Record<string, {
     responseValue: string;
     responseComment: string;
   }>>({});
@@ -46,6 +45,9 @@ export default function MDRAudit() {
   const [showCheckmark, setShowCheckmark] = useState(false);
   const autoAdvanceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [auditId, setAuditId] = useState<number | null>(null);
+  
+  // Get user's qualification
+  const { data: qualification, isLoading: loadingQualification } = trpc.mdr.getQualification.useQuery({});
   
   // Auto-create audit on mount if none exists
   const createAudit = trpc.audit.create.useMutation({
@@ -63,9 +65,6 @@ export default function MDRAudit() {
       });
     }
   }, [qualification, auditId, createAudit.isPending, createAudit.isSuccess]);
-  
-  // Get user's qualification
-  const { data: qualification, isLoading: loadingQualification } = trpc.mdr.getQualification.useQuery({});
   
   // Get questions
   const { data: questionsData, isLoading: loadingQuestions, error: questionsError } = trpc.mdr.getQuestions.useQuery(
@@ -99,15 +98,12 @@ export default function MDRAudit() {
     
     // Auto-advance to next question after selecting compliance status
     if (field === 'responseValue' && value) {
-      // Show checkmark feedback
       setShowCheckmark(true);
       
-      // Clear existing timeout
       if (autoAdvanceTimeoutRef.current) {
         clearTimeout(autoAdvanceTimeoutRef.current);
       }
       
-      // Auto-advance after 1.5 seconds
       autoAdvanceTimeoutRef.current = setTimeout(() => {
         setShowCheckmark(false);
         if (currentQuestionIndex < (questionsData?.questions.length || 0) - 1) {
@@ -125,7 +121,7 @@ export default function MDRAudit() {
     const qId = questionId?.toString() || "0";
     const response = responses[qId];
     if (!response?.responseValue) {
-      return; // Skip if no response value
+      return; 
     }
     
     if (!auditId) {
@@ -137,7 +133,7 @@ export default function MDRAudit() {
     
     await saveResponseMutation.mutateAsync({
       auditId,
-      questionId,
+      questionId: typeof questionId === 'number' ? questionId : 0,
       responseValue: response.responseValue as any,
       responseComment: response.responseComment || undefined,
     });
@@ -146,7 +142,8 @@ export default function MDRAudit() {
   
   // Auto-save current question response
   const currentQuestion = questionsData?.questions[currentQuestionIndex];
-  const currentResponse = responses[currentQuestion?.id || 0];
+  const qId = currentQuestion?.id?.toString() || "0";
+  const currentResponse = responses[qId];
   
   const { isSaving, lastSaved } = useAutoSave({
     data: currentResponse,
@@ -162,7 +159,6 @@ export default function MDRAudit() {
   const handleNext = async () => {
     if (!currentQuestion) return;
     
-    // Auto-save before moving to next
     await handleSaveResponse(currentQuestion.id);
     
     if (currentQuestionIndex < (questionsData?.questions.length || 0) - 1) {
@@ -172,7 +168,6 @@ export default function MDRAudit() {
         setIsTransitioning(false);
       }, 300);
     } else {
-      // Last question - redirect to results
       if (auditId) {
         toast.success("Audit terminé !", {
           description: "Redirection vers les résultats...",
@@ -184,7 +179,6 @@ export default function MDRAudit() {
     }
   };
   
-  // Cleanup timeout on unmount
   useEffect(() => {
     return () => {
       if (autoAdvanceTimeoutRef.current) {
@@ -199,7 +193,6 @@ export default function MDRAudit() {
     }
   };
   
-  // Show loading while creating audit or loading data
   if (loadingQualification || loadingQuestions || createAudit.isPending || (qualification && !auditId)) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -263,7 +256,6 @@ export default function MDRAudit() {
   
   return (
     <div className="container max-w-5xl py-8">
-      {/* Header */}
       <div className="mb-6">
         <div className="flex items-center justify-between mb-4">
           <div>
@@ -295,7 +287,6 @@ export default function MDRAudit() {
         <Progress value={progress} className="h-2" />
       </div>
       
-      {/* Question Card */}
       <Card className={`mb-6 transition-opacity duration-300 ${
         isTransitioning ? "opacity-0" : "opacity-100"
       }`}>
@@ -315,7 +306,7 @@ export default function MDRAudit() {
                 {currentQuestion.chapter && (
                   <Badge variant="secondary">{currentQuestion.chapter}</Badge>
                 )}
-                <Badge className={CRITICALITY_COLORS[currentQuestion.criticality as keyof typeof CRITICALITY_COLORS]}>
+                <Badge className={CRITICALITY_COLORS[currentQuestion.criticality as keyof typeof CRITICALITY_COLORS] || "bg-gray-100"}>
                   {currentQuestion.criticality === "critical" && "Critique"}
                   {currentQuestion.criticality === "high" && "Élevée"}
                   {currentQuestion.criticality === "medium" && "Moyenne"}
@@ -327,14 +318,12 @@ export default function MDRAudit() {
         </CardHeader>
         
         <CardContent className="space-y-6">
-          {/* Full question text */}
           {currentQuestion.questionShort && (
             <div className="p-4 bg-muted rounded-lg">
               <p className="text-sm">{currentQuestion.questionText}</p>
             </div>
           )}
           
-          {/* Risk warning */}
           {currentQuestion.riskIfNonCompliant && (
             <Alert className="bg-red-50 border-red-200">
               <AlertCircle className="h-4 w-4 text-red-600" />
@@ -345,7 +334,6 @@ export default function MDRAudit() {
             </Alert>
           )}
           
-          {/* Compliance Status */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <Label>Statut de conformité *</Label>
@@ -362,8 +350,8 @@ export default function MDRAudit() {
             >
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {COMPLIANCE_OPTIONS.map((option) => {
-                  const qId = currentQuestion.id?.toString() || "0";
-                  const inputId = `${qId}-${option.value}`;
+                  const currentId = currentQuestion.id?.toString() || "0";
+                  const inputId = `${currentId}-${option.value}`;
                   return (
                     <div
                       key={option.value}
@@ -385,7 +373,6 @@ export default function MDRAudit() {
             </RadioGroup>
           </div>
           
-          {/* Comments */}
           <div className="space-y-3">
             <Label>Commentaires et preuves</Label>
             <Textarea
@@ -396,7 +383,6 @@ export default function MDRAudit() {
             />
           </div>
           
-          {/* Expected Evidence */}
           {currentQuestion.expectedEvidence && (
             <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
               <div className="flex items-start gap-2">
@@ -409,7 +395,6 @@ export default function MDRAudit() {
             </div>
           )}
           
-          {/* Guidance Notes */}
           {currentQuestion.guidanceNotes && (
             <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
               <strong className="text-gray-900">Notes d'orientation :</strong>
@@ -419,7 +404,6 @@ export default function MDRAudit() {
         </CardContent>
       </Card>
       
-      {/* Navigation */}
       <div className="flex gap-4">
         <Button
           variant="outline"
