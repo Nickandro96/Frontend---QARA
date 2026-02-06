@@ -37,8 +37,6 @@ export default function Audit() {
     { enabled: isAuthenticated && !!selectedRole }
   );
 
-  const currentQuestion = questions?.[currentQuestionIndex];
-
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -163,7 +161,7 @@ export default function Audit() {
             <div>
               <label className="text-sm font-medium mb-2 block">{t('audit.referential', 'Référentiel')}</label>
               <Select
-                value={selectedReferential?.toString() || "all"}
+                value={String(selectedReferential ?? "all")}
                 onValueChange={(v) => {
                   setSelectedReferential(v === "all" ? null : parseInt(v));
                   setCurrentQuestionIndex(0);
@@ -174,9 +172,9 @@ export default function Audit() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">{t('audit.allReferentials', 'Tous les référentiels')}</SelectItem>
-                  {referentials?.map((ref) => (
-                    <SelectItem key={ref.id} value={ref.id.toString()}>
-                      {ref.name}
+                  {Array.isArray(referentials) && referentials.map((ref) => (
+                    <SelectItem key={String(ref.id ?? Math.random())} value={String(ref.id ?? "")}>
+                      {String(ref.name ?? "")}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -186,7 +184,7 @@ export default function Audit() {
             <div>
               <label className="text-sm font-medium mb-2 block">{t('audit.process', 'Processus')}</label>
               <Select
-                value={selectedProcess?.toString() || "all"}
+                value={String(selectedProcess ?? "all")}
                 onValueChange={(v) => {
                   setSelectedProcess(v === "all" ? null : parseInt(v));
                   setCurrentQuestionIndex(0);
@@ -197,9 +195,9 @@ export default function Audit() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">{t('audit.allProcesses', 'Tous les processus')}</SelectItem>
-                  {processes?.map((proc) => (
-                    <SelectItem key={proc.id} value={proc.id.toString()}>
-                      {proc.name}
+                  {Array.isArray(processes) && processes.map((proc) => (
+                    <SelectItem key={String(proc.id ?? Math.random())} value={String(proc.id ?? "")}>
+                      {String(proc.name ?? "")}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -220,7 +218,7 @@ export default function Audit() {
               </p>
             </CardContent>
           </Card>
-        ) : questions && questions.length > 0 ? (
+        ) : Array.isArray(questions) && questions.length > 0 ? (
           <>
             <div className="flex items-center justify-between mb-4">
               <p className="text-sm text-muted-foreground">
@@ -246,285 +244,65 @@ export default function Audit() {
               </div>
             </div>
 
-            {currentQuestion && (
-              <QuestionCard
-                question={currentQuestion}
-                onNext={() => {
-                  if (currentQuestionIndex < questions.length - 1) {
-                    setCurrentQuestionIndex(currentQuestionIndex + 1);
-                  }
-                }}
-              />
+            {/* Question Card */}
+            {questions[currentQuestionIndex] && (
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between mb-2">
+                    <Badge variant="outline">{String(questions[currentQuestionIndex].referentialCode ?? "")}</Badge>
+                    <Badge variant="secondary">{String(questions[currentQuestionIndex].processName ?? "")}</Badge>
+                  </div>
+                  <CardTitle className="text-xl">
+                    {String(questions[currentQuestionIndex].questionDetailed ?? questions[currentQuestionIndex].questionShort ?? "")}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {/* Options de réponse */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <Button variant="outline" className="h-20 flex flex-col gap-2 border-2 hover:border-green-500 hover:bg-green-50">
+                      <CheckCircle2 className="h-6 w-6 text-green-500" />
+                      <span className="text-xs font-medium">Conforme</span>
+                    </Button>
+                    <Button variant="outline" className="h-20 flex flex-col gap-2 border-2 hover:border-red-500 hover:bg-red-50">
+                      <XCircle className="h-6 w-6 text-red-500" />
+                      <span className="text-xs font-medium">Non-Conforme</span>
+                    </Button>
+                    <Button variant="outline" className="h-20 flex flex-col gap-2 border-2 hover:border-yellow-500 hover:bg-yellow-50">
+                      <MinusCircle className="h-6 w-6 text-yellow-500" />
+                      <span className="text-xs font-medium">Partiel</span>
+                    </Button>
+                    <Button variant="outline" className="h-20 flex flex-col gap-2 border-2 hover:border-gray-500 hover:bg-gray-50">
+                      <AlertCircle className="h-6 w-6 text-gray-500" />
+                      <span className="text-xs font-medium">N/A</span>
+                    </Button>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-sm font-medium mb-2 block">Commentaires / Justification</label>
+                      <Textarea placeholder="Expliquez votre réponse..." rows={4} />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium mb-2 block">Preuves / Documents</label>
+                      <EvidenceUpload />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             )}
           </>
         ) : (
           <Card>
-            <CardContent className="py-16 text-center">
+            <CardContent className="py-12 text-center">
+              <Sparkles className="h-12 w-12 mx-auto mb-4 text-primary/50" />
+              <h3 className="text-lg font-semibold mb-2">Aucune question trouvée</h3>
               <p className="text-muted-foreground">
-                {t('audit.noQuestions', 'Aucune question disponible pour les filtres sélectionnés')}
+                Essayez de modifier vos filtres pour voir d'autres questions.
               </p>
             </CardContent>
           </Card>
         )}
       </main>
     </div>
-  );
-}
-
-function QuestionCard({ question, onNext }: { question: any; onNext: () => void }) {
-  const { t } = useTranslation();
-  const { data: existingResponse } = trpc.audit.getResponse.useQuery({ questionId: question.id });
-  const saveResponse = trpc.audit.saveResponse.useMutation();
-  const getRecommendation = trpc.ai.getRecommendation.useMutation();
-
-  const [response, setResponse] = useState(existingResponse?.response || "");
-  const [status, setStatus] = useState<"conforme" | "nok" | "na" | null>(existingResponse?.status || null);
-  const [comment, setComment] = useState(existingResponse?.comment || "");
-  
-  // Update state when existingResponse changes
-  useState(() => {
-    if (existingResponse) {
-      setResponse(existingResponse.response || "");
-      setStatus(existingResponse.status);
-      setComment(existingResponse.comment || "");
-    }
-  });
-  const [showAI, setShowAI] = useState(false);
-
-  const handleSave = async () => {
-    if (!status) {
-      toast.error(t('audit.selectStatusError', 'Veuillez sélectionner un statut'));
-      return;
-    }
-
-    try {
-      await saveResponse.mutateAsync({
-        questionId: question.id,
-        response: response || undefined,
-        status,
-        comment: comment || undefined,
-      });
-      toast.success(t('audit.responseSaved', 'Réponse enregistrée'));
-      onNext();
-    } catch (error) {
-      toast.error(t('audit.saveError', 'Erreur lors de l\'enregistrement'));
-    }
-  };
-
-  const handleAI = async () => {
-    setShowAI(true);
-    if (!getRecommendation.data) {
-      await getRecommendation.mutateAsync({ questionId: question.id });
-    }
-  };
-
-  const criticityColors = {
-    high: "bg-red-100 text-red-800 border-red-300",
-    medium: "bg-amber-100 text-amber-800 border-amber-300",
-    low: "bg-blue-100 text-blue-800 border-blue-300",
-  };
-
-  const criticityLabels = {
-    high: t('audit.criticalityHigh', 'Haute criticité'),
-    medium: t('audit.criticalityMedium', 'Criticité moyenne'),
-    low: t('audit.criticalityLow', 'Criticité faible'),
-  };
-
-  return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-2">
-              <Badge variant="outline">{question.article}</Badge>
-              <Badge className={criticityColors[question.criticality as keyof typeof criticityColors]}>
-                {criticityLabels[question.criticality as keyof typeof criticityLabels]}
-              </Badge>
-            </div>
-            <CardTitle className="text-xl">{question.questionText}</CardTitle>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        {/* Response/Note Field */}
-        <div>
-          <label className="text-sm font-medium mb-2 block">{t('audit.responseNote', 'Réponse / Note')}</label>
-          <Textarea
-            placeholder={t('audit.responseNotePlaceholder', 'Décrivez votre réponse, les mesures mises en place, ou les éléments de contexte...')}
-            value={response}
-            onChange={(e) => setResponse(e.target.value)}
-            rows={4}
-            className="resize-none"
-          />
-          <p className="text-xs text-muted-foreground mt-1">
-            {t('audit.responseNoteHint', 'Documentez votre réponse avant de définir le statut de conformité')}
-          </p>
-        </div>
-
-        {/* Status Selection */}
-        <div>
-          <label className="text-sm font-medium mb-3 block">{t('audit.complianceStatus', 'Statut de conformité')}</label>
-          <div className="grid grid-cols-3 gap-3">
-            <Button
-              variant={status === "conforme" ? "default" : "outline"}
-              className={status === "conforme" ? "status-conforme" : ""}
-              onClick={() => setStatus("conforme")}
-            >
-              <CheckCircle2 className="mr-2 h-4 w-4" />
-              {t('audit.compliant', 'Conforme')}
-            </Button>
-            <Button
-              variant={status === "nok" ? "default" : "outline"}
-              className={status === "nok" ? "status-nok" : ""}
-              onClick={() => setStatus("nok")}
-            >
-              <XCircle className="mr-2 h-4 w-4" />
-              {t('audit.nonCompliant', 'NOK')}
-            </Button>
-            <Button
-              variant={status === "na" ? "default" : "outline"}
-              className={status === "na" ? "status-na" : ""}
-              onClick={() => setStatus("na")}
-            >
-              <MinusCircle className="mr-2 h-4 w-4" />
-              {t('audit.notApplicable', 'N/A')}
-            </Button>
-          </div>
-        </div>
-
-        {/* Document Upload */}
-        <div>
-          <label className="text-sm font-medium mb-2 block">{t('audit.supportingDocuments', 'Documents justificatifs')}</label>
-          <EvidenceUpload questionId={question.id} />
-          <p className="text-xs text-muted-foreground mt-1">
-            {t('audit.supportingDocumentsHint', 'Ajoutez des preuves documentaires pour justifier votre réponse')}
-          </p>
-        </div>
-
-        {/* Missing Documents Button (if NOK) */}
-        {status === "nok" && (
-          <MissingDocumentsButton questionId={question.id} />
-        )}
-
-        {/* Comment */}
-        <div>
-          <label className="text-sm font-medium mb-2 block">{t('audit.comment', 'Commentaire')} ({t('common.optional', 'optionnel')})</label>
-          <Textarea
-            value={comment}
-            onChange={(e) => setComment(e.target.value)}
-            placeholder={t('audit.commentPlaceholder', 'Ajoutez des notes ou des précisions...')}
-            rows={3}
-          />
-        </div>
-
-        {/* AI Recommendation */}
-        <div>
-          <Button
-            variant="outline"
-            onClick={handleAI}
-            disabled={getRecommendation.isPending}
-            className="w-full"
-          >
-            {getRecommendation.isPending ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                {t('audit.generating', 'Génération...')}
-              </>
-            ) : (
-              <>
-                <Sparkles className="mr-2 h-4 w-4" />
-                {t('audit.getAIRecommendation', 'Obtenir une recommandation IA')}
-              </>
-            )}
-          </Button>
-
-          {showAI && getRecommendation.data && (
-            <Card className="mt-4 bg-blue-50 border-blue-200">
-              <CardHeader>
-                <CardTitle className="text-sm">{t('audit.aiRecommendation', 'Recommandation IA')}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Streamdown>{typeof getRecommendation.data.recommendation === 'string' ? getRecommendation.data.recommendation : JSON.stringify(getRecommendation.data.recommendation)}</Streamdown>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-
-        {/* Actions */}
-        <div className="flex gap-3">
-          <Button onClick={handleSave} disabled={!status || saveResponse.isPending} className="flex-1">
-            {saveResponse.isPending ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                {t('audit.saving', 'Enregistrement...')}
-              </>
-            ) : (
-              t('audit.saveAndContinue', 'Enregistrer et continuer')
-            )}
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-
-// Composant pour afficher les documents manquants liés à une question NOK
-function MissingDocumentsButton({ questionId }: { questionId: number }) {
-  const { t } = useTranslation();
-  const [, setLocation] = useLocation();
-  const { data: relatedDocs, isLoading } = trpc.documents.getRelatedDocuments.useQuery({ questionId });
-  
-  if (isLoading) {
-    return (
-      <div className="flex items-center gap-2 text-sm text-slate-600">
-        <Loader2 className="w-4 h-4 animate-spin" />
-        <span>{t('audit.searchingDocuments', 'Recherche des documents attendus...')}</span>
-      </div>
-    );
-  }
-  
-  if (!relatedDocs || relatedDocs.length === 0) {
-    return null;
-  }
-  
-  return (
-    <Card className="bg-amber-50 border-amber-200">
-      <CardContent className="pt-4">
-        <div className="flex items-start gap-3">
-          <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <h4 className="font-semibold text-amber-900 mb-2">
-              {t('audit.expectedDocuments', 'Documents attendus pour cette exigence')}
-            </h4>
-            <p className="text-sm text-amber-800 mb-3">
-              {t('audit.requiredDocumentsCount', '{{count}} document(s) obligatoire(s) identifié(s) pour démontrer la conformité :', { count: relatedDocs.length })}
-            </p>
-            <ul className="space-y-1 mb-3">
-              {relatedDocs.slice(0, 3).map((doc) => (
-                <li key={doc.id} className="text-sm text-amber-900 flex items-center gap-2">
-                  <FileText className="w-4 h-4" />
-                  {doc.documentName}
-                </li>
-              ))}
-              {relatedDocs.length > 3 && (
-                <li className="text-sm text-amber-800 italic">
-                  {t('audit.andOthers', '... et {{count}} autre(s)', { count: relatedDocs.length - 3 })}
-                </li>
-              )}
-            </ul>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setLocation("/documents")}
-              className="bg-white hover:bg-amber-100 border-amber-300"
-            >
-              <FileText className="w-4 h-4 mr-2" />
-              {t('audit.viewMissingDocuments', 'Voir les documents manquants')}
-            </Button>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
   );
 }
