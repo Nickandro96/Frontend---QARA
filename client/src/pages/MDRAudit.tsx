@@ -1,5 +1,5 @@
 /**
- * MDR Audit Page - VERSION ULTRA-COMPLÈTE (V4)
+ * MDR Audit Page - VERSION ULTRA-COMPLÈTE (V5)
  * Interactive questionnaire for MDR 2017/745 compliance audit
  */
 
@@ -46,6 +46,7 @@ export default function MDRAudit() {
   
   // 1. DATA FETCHING
   const { data: qualification } = trpc.mdr.getQualification.useQuery({});
+  const { data: processesData, isLoading: loadingProcesses } = trpc.mdr.getProcesses.useQuery();
   
   const createAudit = trpc.audit.create.useMutation({
     onSuccess: (data) => {
@@ -58,7 +59,7 @@ export default function MDRAudit() {
   });
 
   const { data: questionsDataRaw, isLoading: loadingQuestions } = trpc.mdr.getQuestions.useQuery(
-    {},
+    { selectedProcesses: selectedProcess === "all" ? [] : [selectedProcess] },
     { enabled: isAuditStarted }
   );
 
@@ -143,11 +144,7 @@ export default function MDRAudit() {
     if (autoNext) handleNext();
   };
 
-  // Filter questions based on UI selection (Process)
-  const allQuestions = Array.isArray(questionsDataRaw?.questions) ? questionsDataRaw.questions : [];
-  const filteredQuestions = selectedProcess === "all" 
-    ? allQuestions 
-    : allQuestions.filter((q: any) => q.processId === selectedProcess || q.process === selectedProcess);
+  const filteredQuestions = Array.isArray(questionsDataRaw?.questions) ? questionsDataRaw.questions : [];
 
   const handleNext = () => {
     if (currentQuestionIndex < filteredQuestions.length - 1) {
@@ -168,9 +165,6 @@ export default function MDRAudit() {
       }, 200);
     }
   };
-
-  // Get unique processes for the filter
-  const uniqueProcesses = Array.from(new Set(allQuestions.map((q: any) => q.processId || q.process))).filter(Boolean);
 
   if (!isAuditStarted) {
     return (
@@ -205,7 +199,17 @@ export default function MDRAudit() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Tous les processus</SelectItem>
-                  {/* Process list will be populated once questions are loaded, but for now we show static or empty */}
+                  {processesData?.processes?.map((p: any) => (
+                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                  ))}
+                  {loadingProcesses && (
+                    <div className="p-2 flex items-center justify-center text-xs text-slate-500">
+                      <Loader2 className="h-3 w-3 animate-spin mr-2" /> Chargement des processus...
+                    </div>
+                  )}
+                  {!loadingProcesses && (!processesData?.processes || processesData.processes.length === 0) && (
+                    <div className="p-2 text-xs text-red-500">Erreur de chargement des processus</div>
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -222,7 +226,10 @@ export default function MDRAudit() {
   if (loadingQuestions) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="h-12 w-12 animate-spin text-blue-600" />
+        <div className="text-center">
+          <Loader2 className="h-12 w-12 animate-spin text-blue-600 mx-auto mb-4" />
+          <p className="text-slate-600 font-medium">Chargement des questions MDR...</p>
+        </div>
       </div>
     );
   }
@@ -251,7 +258,7 @@ export default function MDRAudit() {
               <div className="text-sm font-medium">{currentQuestionIndex + 1} / {filteredQuestions.length}</div>
               <Progress value={progress} className="w-32 h-2 mt-1" />
             </div>
-            <Button variant="outline" size="sm" className="gap-2">
+            <Button variant="outline" size="sm" className="gap-2" onClick={() => setLocation("/")}>
               <CheckCircle2 className="h-4 w-4 text-green-600" />
               Terminer
             </Button>
@@ -266,7 +273,7 @@ export default function MDRAudit() {
             <Card className="p-12 text-center">
               <AlertCircle className="h-12 w-12 text-amber-500 mx-auto mb-4" />
               <CardTitle>Aucune question trouvée</CardTitle>
-              <CardDescription>Essayez de changer de processus ou de rôle.</CardDescription>
+              <CardDescription>Aucune question ne correspond à votre sélection de rôle ({selectedRole}) et de processus ({selectedProcess}).</CardDescription>
               <Button variant="outline" className="mt-6" onClick={() => setIsAuditStarted(false)}>Retour aux réglages</Button>
             </Card>
           ) : (
@@ -278,120 +285,124 @@ export default function MDRAudit() {
                     <Badge variant="secondary" className="bg-blue-50 text-blue-700 hover:bg-blue-50">
                       {currentQuestion?.article || "MDR"}
                     </Badge>
-                    <Badge variant="outline" className="capitalize">
+                    {currentQuestion?.criticality === "high" && (
+                      <Badge variant="destructive" className="animate-pulse">CRITIQUE</Badge>
+                    )}
+                    <Badge variant="outline" className="text-slate-500">
                       {currentQuestion?.processId || currentQuestion?.process || "Général"}
                     </Badge>
-                    <Badge className={
-                      currentQuestion?.criticality === "critical" || currentQuestion?.criticality === "high" 
-                        ? "bg-red-100 text-red-700 hover:bg-red-100" 
-                        : "bg-amber-100 text-amber-700 hover:bg-amber-100"
-                    }>
-                      {currentQuestion?.criticality || "Medium"}
-                    </Badge>
                   </div>
-                  <CardTitle className="text-2xl leading-tight text-slate-900">
-                    {currentQuestion?.questionText}
+                  <CardTitle className="text-xl md:text-2xl leading-tight">
+                    {currentQuestion?.questionText || "Question sans texte"}
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-8 pt-2">
-                  {/* Status Selection */}
+
+                <CardContent className="space-y-8 pt-4">
+                  {/* Note Technique / Exigences */}
+                  {currentQuestion?.note && (
+                    <div className="bg-slate-50 border rounded-lg p-4">
+                      <div className="flex items-center gap-2 text-slate-700 font-semibold mb-2">
+                        <FileText className="h-4 w-4" />
+                        Exigence technique / Note
+                      </div>
+                      <p className="text-slate-600 text-sm whitespace-pre-wrap">{currentQuestion.note}</p>
+                    </div>
+                  )}
+
+                  {/* Statut de Conformité */}
                   <div className="space-y-4">
-                    <Label className="text-base font-bold text-slate-800">Statut de conformité</Label>
+                    <Label className="text-base font-bold">Statut de conformité</Label>
                     <RadioGroup 
-                      value={responses[currentQuestion?.id]?.responseValue || ""} 
+                      value={responses[currentQuestion.id]?.responseValue || ""} 
                       onValueChange={(val) => handleResponseChange(currentQuestion.id, "responseValue", val)}
                       className="grid grid-cols-1 md:grid-cols-2 gap-3"
                     >
-                      {COMPLIANCE_OPTIONS.map((opt) => (
-                        <div key={opt.value} className={`relative flex items-center p-4 rounded-xl border-2 transition-all cursor-pointer ${
-                          responses[currentQuestion?.id]?.responseValue === opt.value 
-                            ? "border-blue-600 bg-blue-50" 
-                            : "border-slate-100 hover:border-slate-200"
-                        }`}>
-                          <RadioGroupItem value={opt.value} id={opt.value} className="sr-only" />
-                          <Label htmlFor={opt.value} className="flex items-center gap-3 cursor-pointer w-full font-medium text-slate-700">
-                            <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                              responses[currentQuestion?.id]?.responseValue === opt.value ? "border-blue-600" : "border-slate-300"
-                            }`}>
-                              {responses[currentQuestion?.id]?.responseValue === opt.value && <div className="w-2 h-2 rounded-full bg-blue-600" />}
-                            </div>
-                            {opt.label}
+                      {COMPLIANCE_OPTIONS.map((option) => (
+                        <div key={option.value} className="flex items-center">
+                          <RadioGroupItem value={option.value} id={`${currentQuestion.id}-${option.value}`} className="sr-only" />
+                          <Label
+                            htmlFor={`${currentQuestion.id}-${option.value}`}
+                            className={`flex-1 flex items-center justify-between p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                              responses[currentQuestion.id]?.responseValue === option.value
+                                ? "border-blue-600 bg-blue-50 ring-2 ring-blue-100"
+                                : "border-slate-100 bg-white hover:border-slate-200"
+                            }`}
+                          >
+                            <span className="font-medium">{option.label}</span>
+                            {responses[currentQuestion.id]?.responseValue === option.value && (
+                              <CheckCircle2 className="h-5 w-5 text-blue-600" />
+                            )}
                           </Label>
                         </div>
                       ))}
                     </RadioGroup>
                   </div>
 
-                  {/* Note / Réponse */}
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-base font-bold text-slate-800">Réponse / Note technique</Label>
-                      <Button variant="ghost" size="sm" className="text-blue-600 h-8 gap-1">
+                  {/* Commentaires et Preuves */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-3">
+                      <Label className="font-bold flex items-center gap-2">
                         <MessageSquare className="h-4 w-4" />
-                        Aide IA
-                      </Button>
+                        Commentaires / Observations
+                      </Label>
+                      <Textarea 
+                        placeholder="Détails, preuves observées ou justifications..."
+                        className="min-h-[120px] resize-none focus:ring-blue-500"
+                        value={responses[currentQuestion.id]?.responseComment || ""}
+                        onChange={(e) => handleResponseChange(currentQuestion.id, "responseComment", e.target.value)}
+                      />
                     </div>
-                    <Textarea 
-                      placeholder="Décrivez comment vous répondez à cette exigence..."
-                      className="min-h-[120px] bg-slate-50 border-slate-200 focus:bg-white transition-colors"
-                      value={responses[currentQuestion?.id]?.note || ""}
-                      onChange={(e) => handleResponseChange(currentQuestion.id, "note", e.target.value)}
-                    />
-                  </div>
-
-                  {/* Commentaire */}
-                  <div className="space-y-3">
-                    <Label className="text-base font-bold text-slate-800">Commentaire (interne)</Label>
-                    <Textarea 
-                      placeholder="Notes pour l'équipe, points à revoir..."
-                      className="min-h-[80px] bg-slate-50 border-slate-200"
-                      value={responses[currentQuestion?.id]?.responseComment || ""}
-                      onChange={(e) => handleResponseChange(currentQuestion.id, "responseComment", e.target.value)}
-                    />
-                  </div>
-
-                  {/* Evidence Upload */}
-                  <div className="space-y-3">
-                    <Label className="text-base font-bold text-slate-800">Documents justificatifs</Label>
-                    <div className="border-2 border-dashed border-slate-200 rounded-xl p-8 text-center hover:border-blue-400 hover:bg-blue-50/30 transition-all cursor-pointer group">
-                      <Upload className="h-8 w-8 text-slate-400 mx-auto mb-2 group-hover:text-blue-500 transition-colors" />
-                      <p className="text-sm font-medium text-slate-600">Cliquez pour ajouter des preuves</p>
-                      <p className="text-xs text-slate-400 mt-1">PDF, PNG, JPG, DOCX (Max 10MB)</p>
-                    </div>
-                  </div>
-
-                  {/* Navigation & Actions */}
-                  <div className="flex flex-col md:flex-row gap-4 pt-4 border-t">
-                    <div className="flex gap-2 flex-1">
-                      <Button variant="outline" onClick={handlePrevious} disabled={currentQuestionIndex === 0} className="flex-1 md:flex-none">
-                        <ChevronLeft className="mr-2 h-4 w-4" /> Précédent
-                      </Button>
-                      <Button variant="outline" onClick={handleNext} disabled={currentQuestionIndex === filteredQuestions.length - 1} className="flex-1 md:flex-none">
-                        Suivant <ChevronRight className="ml-2 h-4 w-4" />
-                      </Button>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button variant="secondary" onClick={() => handleSaveResponse(currentQuestion.id)} className="gap-2" disabled={saveResponseMutation.isPending}>
-                        <Save className="h-4 w-4" /> Enregistrer
-                      </Button>
-                      <Button onClick={() => handleSaveResponse(currentQuestion.id, true)} className="gap-2 bg-blue-600 hover:bg-blue-700" disabled={saveResponseMutation.isPending}>
-                        Enregistrer et continuer <ChevronRight className="h-4 w-4" />
-                      </Button>
+                    <div className="space-y-3">
+                      <Label className="font-bold flex items-center gap-2">
+                        <Upload className="h-4 w-4" />
+                        Preuves / Documents (Upload)
+                      </Label>
+                      <div className="border-2 border-dashed border-slate-200 rounded-lg p-8 flex flex-col items-center justify-center bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer">
+                        <Upload className="h-8 w-8 text-slate-400 mb-2" />
+                        <p className="text-xs text-slate-500 text-center font-medium">
+                          Cliquez ou glissez-déposez vos fichiers ici<br/>
+                          <span className="text-[10px] text-slate-400 font-normal">(PDF, JPG, PNG, DOCX)</span>
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </CardContent>
+
+                {/* Navigation Footer */}
+                <div className="bg-slate-50 border-t p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <Button 
+                    variant="outline" 
+                    onClick={handlePrevious} 
+                    disabled={currentQuestionIndex === 0}
+                    className="w-full sm:w-auto"
+                  >
+                    <ChevronLeft className="h-4 w-4 mr-2" /> Précédent
+                  </Button>
+                  
+                  <div className="flex items-center gap-3 w-full sm:w-auto">
+                    <Button 
+                      variant="outline" 
+                      className="flex-1 sm:flex-none"
+                      onClick={() => handleSaveResponse(currentQuestion.id)}
+                      disabled={saveResponseMutation.isPending || !hasUnsavedChanges}
+                    >
+                      {saveResponseMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+                      Enregistrer
+                    </Button>
+                    <Button 
+                      className="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-700"
+                      onClick={() => handleSaveResponse(currentQuestion.id, true)}
+                      disabled={saveResponseMutation.isPending}
+                    >
+                      Enregistrer & Continuer <ChevronRight className="h-4 w-4 ml-2" />
+                    </Button>
+                  </div>
+                </div>
               </Card>
             </div>
           )}
         </div>
       </main>
-
-      {/* Unsaved Warning */}
-      {hasUnsavedChanges && (
-        <div className="bg-amber-500 text-white text-center py-1.5 text-xs font-bold uppercase tracking-widest animate-pulse">
-          Modifications non enregistrées
-        </div>
-      )}
     </div>
   );
 }
