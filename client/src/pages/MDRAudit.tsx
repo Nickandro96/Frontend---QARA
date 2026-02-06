@@ -131,7 +131,7 @@ export default function MDRAudit() {
 
     saveResponseMutation.mutate({
       auditId,
-      questionId: typeof questionId === "number" ? questionId : 0,
+      questionKey: String(questionId),
       responseValue: response.responseValue,
       responseComment: response.responseComment || "",
     });
