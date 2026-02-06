@@ -1,6 +1,7 @@
 /**
- * MDR Audit Page
+ * MDR Audit Page - VERSION ULTRA-TOLÉRANTE
  * Interactive questionnaire for MDR 2017/745 compliance audit
+ * Secured against undefined properties and rendering errors.
  */
 
 import { useState, useEffect, useRef } from "react";
@@ -25,7 +26,7 @@ const COMPLIANCE_OPTIONS = [
   { value: "not_applicable", label: "Non Applicable", color: "bg-gray-100 text-gray-800 border-gray-300" },
 ];
 
-const CRITICALITY_COLORS = {
+const CRITICALITY_COLORS: Record<string, string> = {
   critical: "bg-red-100 text-red-800 border-red-300",
   high: "bg-orange-100 text-orange-800 border-orange-300",
   medium: "bg-yellow-100 text-yellow-800 border-yellow-300",
@@ -46,13 +47,12 @@ export default function MDRAudit() {
   const autoAdvanceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [auditId, setAuditId] = useState<number | null>(null);
   
-  // Get user's qualification
+  // 1. SAFE DATA FETCHING
   const { data: qualification, isLoading: loadingQualification } = trpc.mdr.getQualification.useQuery({});
   
-  // Auto-create audit on mount if none exists
   const createAudit = trpc.audit.create.useMutation({
     onSuccess: (data) => {
-      setAuditId(data.auditId);
+      if (data?.auditId) setAuditId(data.auditId);
     },
   });
   
@@ -61,32 +61,34 @@ export default function MDRAudit() {
       createAudit.mutate({
         auditType: "internal",
         name: `Audit MDR - ${new Date().toLocaleDateString("fr-FR")}`,
-        referentialIds: [1], // MDR referentialId
+        referentialIds: [1],
       });
     }
   }, [qualification, auditId, createAudit.isPending, createAudit.isSuccess]);
   
-  // Get questions
-  const { data: questionsData, isLoading: loadingQuestions, error: questionsError } = trpc.mdr.getQuestions.useQuery(
+  const { data: questionsDataRaw, isLoading: loadingQuestions, error: questionsError } = trpc.mdr.getQuestions.useQuery(
     {},
     { enabled: !!qualification }
   );
+
+  // 2. SAFE DATA NORMALIZATION (Frontend Fallback)
+  const questionsData = {
+    questions: Array.isArray(questionsDataRaw?.questions) ? questionsDataRaw.questions : [],
+    totalQuestions: questionsDataRaw?.totalQuestions || 0,
+    userRole: String(questionsDataRaw?.userRole || qualification?.economicRole || "fabricant")
+  };
   
   const saveResponseMutation = trpc.mdr.saveResponse.useMutation({
     onSuccess: () => {
-      toast.success("✅ Réponse sauvegardée", {
-        description: "Votre réponse a été enregistrée avec succès",
-      });
+      toast.success("✅ Réponse sauvegardée");
     },
     onError: (error) => {
-      toast.error("❌ Erreur", {
-        description: error.message,
-      });
+      toast.error("❌ Erreur: " + error.message);
     },
   });
   
-  const handleResponseChange = (questionId: number | string, field: string, value: string) => {
-    const qId = questionId?.toString() || "0";
+  const handleResponseChange = (questionId: any, field: string, value: string) => {
+    const qId = String(questionId ?? "0");
     setResponses(prev => ({
       ...prev,
       [qId]: {
@@ -96,17 +98,13 @@ export default function MDRAudit() {
     }));
     setHasUnsavedChanges(true);
     
-    // Auto-advance to next question after selecting compliance status
     if (field === 'responseValue' && value) {
       setShowCheckmark(true);
-      
-      if (autoAdvanceTimeoutRef.current) {
-        clearTimeout(autoAdvanceTimeoutRef.current);
-      }
+      if (autoAdvanceTimeoutRef.current) clearTimeout(autoAdvanceTimeoutRef.current);
       
       autoAdvanceTimeoutRef.current = setTimeout(() => {
         setShowCheckmark(false);
-        if (currentQuestionIndex < (questionsData?.questions.length || 0) - 1) {
+        if (currentQuestionIndex < (questionsData.questions.length || 0) - 1) {
           setIsTransitioning(true);
           setTimeout(() => {
             setCurrentQuestionIndex(prev => prev + 1);
@@ -117,33 +115,23 @@ export default function MDRAudit() {
     }
   };
   
-  const handleSaveResponse = async (questionId: number | string) => {
-    const qId = questionId?.toString() || "0";
+  const handleSaveResponse = async (questionId: any) => {
+    const qId = String(questionId ?? "0");
     const response = responses[qId];
-    if (!response?.responseValue) {
-      return; 
-    }
-    
-    if (!auditId) {
-      toast.error("❌ Erreur", {
-        description: "Audit non créé. Veuillez patienter...",
-      });
-      return;
-    }
+    if (!response?.responseValue || !auditId) return;
     
     await saveResponseMutation.mutateAsync({
       auditId,
-      questionId: typeof questionId === 'number' ? questionId : 0,
+      questionId: qId,
       responseValue: response.responseValue as any,
       responseComment: response.responseComment || undefined,
     });
     setHasUnsavedChanges(false);
   };
   
-  // Auto-save current question response
-  const currentQuestion = questionsData?.questions[currentQuestionIndex];
-  const qId = currentQuestion?.id?.toString() || "0";
-  const currentResponse = responses[qId];
+  const currentQuestion = questionsData.questions[currentQuestionIndex] || null;
+  const currentQId = String(currentQuestion?.id ?? "0");
+  const currentResponse = responses[currentQId];
   
   const { isSaving, lastSaved } = useAutoSave({
     data: currentResponse,
@@ -152,58 +140,41 @@ export default function MDRAudit() {
         await handleSaveResponse(currentQuestion.id);
       }
     },
-    delay: 30000, // 30 seconds
+    delay: 30000,
     enabled: !!currentQuestion && hasUnsavedChanges,
   });
   
   const handleNext = async () => {
     if (!currentQuestion) return;
-    
     await handleSaveResponse(currentQuestion.id);
     
-    if (currentQuestionIndex < (questionsData?.questions.length || 0) - 1) {
+    if (currentQuestionIndex < questionsData.questions.length - 1) {
       setIsTransitioning(true);
       setTimeout(() => {
         setCurrentQuestionIndex(prev => prev + 1);
         setIsTransitioning(false);
       }, 300);
-    } else {
-      if (auditId) {
-        toast.success("Audit terminé !", {
-          description: "Redirection vers les résultats...",
-        });
-        setTimeout(() => {
-          setLocation(`/audit/${auditId}/results`);
-        }, 1500);
-      }
+    } else if (auditId) {
+      toast.success("Audit terminé !");
+      setTimeout(() => setLocation(`/audit/${auditId}/results`), 1500);
     }
   };
   
   useEffect(() => {
     return () => {
-      if (autoAdvanceTimeoutRef.current) {
-        clearTimeout(autoAdvanceTimeoutRef.current);
-      }
+      if (autoAdvanceTimeoutRef.current) clearTimeout(autoAdvanceTimeoutRef.current);
     };
   }, []);
   
   const handlePrevious = () => {
-    if (currentQuestionIndex > 0) {
-      setCurrentQuestionIndex(prev => prev - 1);
-    }
+    if (currentQuestionIndex > 0) setCurrentQuestionIndex(prev => prev - 1);
   };
   
-  if (loadingQualification || loadingQuestions || createAudit.isPending || (qualification && !auditId)) {
+  // 3. RENDER LOGIC WITH FALLBACKS
+  if (loadingQualification || loadingQuestions || createAudit.isPending) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-4" />
-          <p className="text-muted-foreground">
-            {createAudit.isPending || (qualification && !auditId) 
-              ? "Création de l'audit en cours..."
-              : "Chargement..."}
-          </p>
-        </div>
+        <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" />
       </div>
     );
   }
@@ -213,45 +184,25 @@ export default function MDRAudit() {
       <div className="container max-w-4xl py-8">
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
-          <AlertDescription>
-            Veuillez d'abord compléter votre qualification MDR.
-            <Button
-              variant="link"
-              className="ml-2"
-              onClick={() => setLocation("/mdr/qualification")}
-            >
-              Aller à la qualification →
-            </Button>
-          </AlertDescription>
+          <AlertDescription>Veuillez compléter votre qualification MDR.</AlertDescription>
         </Alert>
       </div>
     );
   }
   
-  if (questionsError) {
-    return (
-      <div className="container max-w-4xl py-8">
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{questionsError.message}</AlertDescription>
-        </Alert>
-      </div>
-    );
-  }
-  
-  if (!questionsData || questionsData.questions.length === 0) {
+  if (questionsError || questionsData.questions.length === 0) {
     return (
       <div className="container max-w-4xl py-8">
         <Alert>
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
-            Aucune question disponible pour votre profil. Veuillez contacter le support.
+            {questionsError?.message || "Aucune question disponible. Veuillez recharger la page."}
           </AlertDescription>
         </Alert>
       </div>
     );
   }
-  
+
   const progress = ((currentQuestionIndex + 1) / questionsData.questions.length) * 100;
   
   return (
@@ -261,7 +212,7 @@ export default function MDRAudit() {
           <div>
             <h1 className="text-3xl font-bold">Audit MDR 2017/745</h1>
             <p className="text-muted-foreground">
-              Rôle : <Badge variant="outline">{qualification.economicRole}</Badge>
+              Rôle : <Badge variant="outline">{String(qualification.economicRole ?? "Fabricant")}</Badge>
             </p>
           </div>
           <div className="text-right">
@@ -269,103 +220,53 @@ export default function MDRAudit() {
             <div className="text-2xl font-bold">
               {currentQuestionIndex + 1} / {questionsData.questions.length}
             </div>
-            {isSaving && (
-              <div className="text-xs text-blue-600 mt-1 flex items-center gap-1">
-                <Loader2 className="h-3 w-3 animate-spin" />
-                Sauvegarde...
-              </div>
-            )}
-            {!isSaving && lastSaved && (
-              <div className="text-xs text-green-600 mt-1 flex items-center gap-1">
-                <CheckCircle2 className="h-3 w-3" />
-                Sauvegardé {new Date(lastSaved).toLocaleTimeString()}
-              </div>
-            )}
           </div>
         </div>
-        
         <Progress value={progress} className="h-2" />
       </div>
       
-      <Card className={`mb-6 transition-opacity duration-300 ${
-        isTransitioning ? "opacity-0" : "opacity-100"
-      }`}>
+      <Card className={`mb-6 transition-opacity duration-300 ${isTransitioning ? "opacity-0" : "opacity-100"}`}>
         <CardHeader>
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex-1">
-              <CardTitle className="text-xl mb-2">
-                {currentQuestion.questionShort || currentQuestion.questionText}
-              </CardTitle>
-              <div className="flex gap-2 flex-wrap">
-                {currentQuestion.article && (
-                  <Badge variant="outline">{currentQuestion.article}</Badge>
-                )}
-                {currentQuestion.annexe && (
-                  <Badge variant="outline">{currentQuestion.annexe}</Badge>
-                )}
-                {currentQuestion.chapter && (
-                  <Badge variant="secondary">{currentQuestion.chapter}</Badge>
-                )}
-                <Badge className={CRITICALITY_COLORS[currentQuestion.criticality as keyof typeof CRITICALITY_COLORS] || "bg-gray-100"}>
-                  {currentQuestion.criticality === "critical" && "Critique"}
-                  {currentQuestion.criticality === "high" && "Élevée"}
-                  {currentQuestion.criticality === "medium" && "Moyenne"}
-                  {currentQuestion.criticality === "low" && "Faible"}
-                </Badge>
-              </div>
-            </div>
+          <CardTitle className="text-xl mb-2">
+            {String(currentQuestion.questionShort || currentQuestion.questionText || "Sans titre")}
+          </CardTitle>
+          <div className="flex gap-2 flex-wrap">
+            {currentQuestion.article && <Badge variant="outline">{String(currentQuestion.article)}</Badge>}
+            {currentQuestion.annexe && <Badge variant="outline">{String(currentQuestion.annexe)}</Badge>}
+            <Badge className={CRITICALITY_COLORS[String(currentQuestion.criticality)] || "bg-gray-100"}>
+              {String(currentQuestion.criticality || "medium")}
+            </Badge>
           </div>
         </CardHeader>
         
         <CardContent className="space-y-6">
-          {currentQuestion.questionShort && (
-            <div className="p-4 bg-muted rounded-lg">
-              <p className="text-sm">{currentQuestion.questionText}</p>
-            </div>
-          )}
-          
-          {currentQuestion.riskIfNonCompliant && (
-            <Alert className="bg-red-50 border-red-200">
-              <AlertCircle className="h-4 w-4 text-red-600" />
-              <AlertDescription>
-                <strong>⚠️ Risque si non-conforme :</strong>
-                <p className="mt-1">{currentQuestion.riskIfNonCompliant}</p>
-              </AlertDescription>
-            </Alert>
-          )}
+          <div className="p-4 bg-muted rounded-lg text-sm">
+            {String(currentQuestion.questionText || "Pas de description disponible.")}
+          </div>
           
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <Label>Statut de conformité *</Label>
-              {showCheckmark && (
-                <div className="flex items-center gap-2 text-green-600 animate-in fade-in duration-300">
-                  <CheckCircle2 className="h-5 w-5" />
-                  <span className="text-sm font-medium">Réponse enregistrée</span>
-                </div>
-              )}
+              {showCheckmark && <CheckCircle2 className="h-5 w-5 text-green-600" />}
             </div>
             <RadioGroup
               value={currentResponse?.responseValue || ""}
-              onValueChange={(value) => handleResponseChange(currentQuestion.id, "responseValue", value)}
+              onValueChange={(v) => handleResponseChange(currentQuestion.id, "responseValue", v)}
             >
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {COMPLIANCE_OPTIONS.map((option) => {
-                  const currentId = currentQuestion.id?.toString() || "0";
-                  const inputId = `${currentId}-${option.value}`;
+                {COMPLIANCE_OPTIONS.map((opt) => {
+                  const idSuffix = String(currentQuestion.id ?? currentQuestionIndex);
+                  const inputId = `q-${idSuffix}-${opt.value}`;
                   return (
                     <div
-                      key={option.value}
+                      key={opt.value}
                       className={`flex items-center space-x-2 p-4 border-2 rounded-lg cursor-pointer transition-colors ${
-                        currentResponse?.responseValue === option.value
-                          ? option.color
-                          : "border-border hover:border-primary/50"
+                        currentResponse?.responseValue === opt.value ? opt.color : "border-border hover:border-primary/50"
                       }`}
-                      onClick={() => handleResponseChange(currentQuestion.id, "responseValue", option.value)}
+                      onClick={() => handleResponseChange(currentQuestion.id, "responseValue", opt.value)}
                     >
-                      <RadioGroupItem value={option.value} id={inputId} />
-                      <Label htmlFor={inputId} className="cursor-pointer flex-1">
-                        {option.label}
-                      </Label>
+                      <RadioGroupItem value={opt.value} id={inputId} />
+                      <Label htmlFor={inputId} className="cursor-pointer flex-1">{opt.label}</Label>
                     </div>
                   );
                 })}
@@ -376,78 +277,23 @@ export default function MDRAudit() {
           <div className="space-y-3">
             <Label>Commentaires et preuves</Label>
             <Textarea
-              placeholder="Décrivez les preuves de conformité, les documents associés, ou les actions correctives prévues..."
+              placeholder="Preuves, documents, actions correctives..."
               value={currentResponse?.responseComment || ""}
               onChange={(e) => handleResponseChange(currentQuestion.id, "responseComment", e.target.value)}
               rows={4}
             />
           </div>
-          
-          {currentQuestion.expectedEvidence && (
-            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-              <div className="flex items-start gap-2">
-                <FileText className="h-4 w-4 text-blue-600 mt-0.5" />
-                <div>
-                  <strong className="text-blue-900">Preuves attendues :</strong>
-                  <p className="text-sm text-blue-800 mt-1">{currentQuestion.expectedEvidence}</p>
-                </div>
-              </div>
-            </div>
-          )}
-          
-          {currentQuestion.guidanceNotes && (
-            <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
-              <strong className="text-gray-900">Notes d'orientation :</strong>
-              <p className="text-sm text-gray-700 mt-1">{currentQuestion.guidanceNotes}</p>
-            </div>
-          )}
         </CardContent>
       </Card>
       
       <div className="flex gap-4">
-        <Button
-          variant="outline"
-          onClick={handlePrevious}
-          disabled={currentQuestionIndex === 0}
-        >
-          ← Précédent
+        <Button variant="outline" onClick={handlePrevious} disabled={currentQuestionIndex === 0}>← Précédent</Button>
+        <Button onClick={() => handleSaveResponse(currentQuestion.id)} variant="outline" disabled={saveResponseMutation.isPending}>
+          {saveResponseMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4 mr-2" />} Sauvegarder
         </Button>
-        
-        <Button
-          onClick={() => handleSaveResponse(currentQuestion.id)}
-          variant="outline"
-          disabled={saveResponseMutation.isPending}
-        >
-          {saveResponseMutation.isPending ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <Save className="mr-2 h-4 w-4" />
-          )}
-          Sauvegarder
+        <Button onClick={handleNext} className="ml-auto">
+          {currentQuestionIndex === questionsData.questions.length - 1 ? "Terminer l'audit" : "Suivant →"}
         </Button>
-        
-        <Button
-          onClick={handleNext}
-          disabled={currentQuestionIndex === questionsData.questions.length - 1}
-          className="ml-auto"
-        >
-          Suivant →
-        </Button>
-        
-        {currentQuestionIndex === questionsData.questions.length - 1 && (
-          <Button
-            onClick={() => {
-              toast.success("✅ Audit terminé", {
-                description: "Toutes les questions ont été complétées",
-              });
-              setLocation("/audits");
-            }}
-            variant="default"
-          >
-            <CheckCircle2 className="mr-2 h-4 w-4" />
-            Terminer l'audit
-          </Button>
-        )}
       </div>
     </div>
   );
