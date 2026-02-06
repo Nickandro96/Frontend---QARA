@@ -56,6 +56,9 @@ export default function MDRAudit() {
         toast.success("✅ Audit démarré");
       }
     },
+    onError: (error) => {
+      toast.error("❌ Erreur lors de la création de l'audit: " + error.message);
+    }
   });
 
   const { data: questionsDataRaw, isLoading: loadingQuestions } = trpc.mdr.getQuestions.useQuery(
@@ -94,10 +97,12 @@ export default function MDRAudit() {
       toast.error("Veuillez sélectionner un rôle économique");
       return;
     }
+    
+    // Find MDR referential ID if possible, otherwise use fallback 1
     createAudit.mutate({
       auditType: "internal",
       name: `Audit MDR (${selectedRole}) - ${new Date().toLocaleDateString("fr-FR")}`,
-      referentials: JSON.stringify([1]),
+      referentialIds: [1], // Use an array of numbers as expected by the backend
     });
   };
 
@@ -208,7 +213,7 @@ export default function MDRAudit() {
                     </div>
                   )}
                   {!loadingProcesses && (!processesData?.processes || processesData.processes.length === 0) && (
-                    <div className="p-2 text-xs text-red-500">Erreur de chargement des processus</div>
+                    <div className="p-2 text-xs text-slate-500 italic">Aucun processus spécifique trouvé (mode global)</div>
                   )}
                 </SelectContent>
               </Select>
@@ -274,115 +279,135 @@ export default function MDRAudit() {
               <AlertCircle className="h-12 w-12 text-amber-500 mx-auto mb-4" />
               <CardTitle>Aucune question trouvée</CardTitle>
               <CardDescription>Aucune question ne correspond à votre sélection de rôle ({selectedRole}) et de processus ({selectedProcess}).</CardDescription>
-              <Button variant="outline" className="mt-6" onClick={() => setIsAuditStarted(false)}>Retour aux réglages</Button>
+              <Button onClick={() => setIsAuditStarted(false)} className="mt-6">Modifier la configuration</Button>
             </Card>
-          ) : (
+          ) : currentQuestion ? (
             <div className={`transition-all duration-300 ${isTransitioning ? "opacity-0 translate-x-4" : "opacity-100 translate-x-0"}`}>
-              <Card className="border-none shadow-md overflow-hidden">
-                <div className="bg-blue-600 h-1.5 w-full" />
-                <CardHeader className="pb-4">
-                  <div className="flex flex-wrap gap-2 mb-3">
-                    <Badge variant="secondary" className="bg-blue-50 text-blue-700 hover:bg-blue-50">
-                      {currentQuestion?.article || "MDR"}
-                    </Badge>
-                    {currentQuestion?.criticality === "high" && (
-                      <Badge variant="destructive" className="animate-pulse">CRITIQUE</Badge>
-                    )}
-                    <Badge variant="outline" className="text-slate-500">
-                      {currentQuestion?.processId || currentQuestion?.process || "Général"}
-                    </Badge>
+              <Card className="shadow-md border-none overflow-hidden">
+                <div className="h-1.5 bg-blue-600" />
+                <CardHeader className="bg-white border-b">
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 uppercase text-[10px]">MDR</Badge>
+                    {currentQuestion.criticality === "high" && <Badge className="bg-red-100 text-red-700 hover:bg-red-100 border-red-200 uppercase text-[10px]">Critique</Badge>}
+                    <Badge variant="outline" className="bg-slate-50 text-slate-600 border-slate-200 uppercase text-[10px]">{currentQuestion.processId || currentQuestion.process || "Général"}</Badge>
+                    {currentQuestion.article && <Badge variant="secondary" className="text-[10px]">{currentQuestion.article}</Badge>}
                   </div>
-                  <CardTitle className="text-xl md:text-2xl leading-tight">
-                    {currentQuestion?.questionText || "Question sans texte"}
+                  <CardTitle className="text-xl text-slate-800 leading-tight">
+                    {currentQuestion.title || "Question d'audit"}
                   </CardTitle>
                 </CardHeader>
+                <CardContent className="p-6 space-y-8 bg-white">
+                  {/* Question Text */}
+                  <div className="bg-slate-50 p-4 rounded-lg border border-slate-100">
+                    <p className="text-slate-700 leading-relaxed font-medium">
+                      {currentQuestion.questionText}
+                    </p>
+                  </div>
 
-                <CardContent className="space-y-8 pt-4">
-                  {/* Note Technique / Exigences */}
-                  {currentQuestion?.note && (
-                    <div className="bg-slate-50 border rounded-lg p-4">
-                      <div className="flex items-center gap-2 text-slate-700 font-semibold mb-2">
-                        <FileText className="h-4 w-4" />
-                        Exigence technique / Note
+                  {/* Expected Evidence */}
+                  {currentQuestion.expectedEvidence && (
+                    <div className="space-y-2">
+                      <Label className="flex items-center gap-2 text-slate-500 font-semibold uppercase text-[11px] tracking-wider">
+                        <FileText className="h-3 w-3" /> Preuves attendues
+                      </Label>
+                      <div className="bg-blue-50/50 p-4 rounded-lg border border-blue-100 text-sm text-slate-700">
+                        {Array.isArray(currentQuestion.expectedEvidence) ? (
+                          <ul className="list-disc list-inside space-y-1">
+                            {currentQuestion.expectedEvidence.map((e: string, i: number) => <li key={i}>{e}</li>)}
+                          </ul>
+                        ) : (
+                          <p>{currentQuestion.expectedEvidence}</p>
+                        )}
                       </div>
-                      <p className="text-slate-600 text-sm whitespace-pre-wrap">{currentQuestion.note}</p>
                     </div>
                   )}
 
-                  {/* Statut de Conformité */}
-                  <div className="space-y-4">
-                    <Label className="text-base font-bold">Statut de conformité</Label>
+                  {/* Interview Functions */}
+                  {currentQuestion.interviewFunctions && (
+                    <div className="space-y-2">
+                      <Label className="flex items-center gap-2 text-slate-500 font-semibold uppercase text-[11px] tracking-wider">
+                        <MessageSquare className="h-3 w-3" /> Fonctions à interroger
+                      </Label>
+                      <div className="flex flex-wrap gap-2">
+                        {(Array.isArray(currentQuestion.interviewFunctions) ? currentQuestion.interviewFunctions : [currentQuestion.interviewFunctions]).map((f: any, i: number) => (
+                          <Badge key={i} variant="outline" className="bg-white">{typeof f === 'string' ? f : f.name || JSON.stringify(f)}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Compliance Status */}
+                  <div className="space-y-4 pt-4 border-t">
+                    <Label className="text-slate-800 font-bold text-base">Statut de Conformité</Label>
                     <RadioGroup 
                       value={responses[currentQuestion.id]?.responseValue || ""} 
                       onValueChange={(val) => handleResponseChange(currentQuestion.id, "responseValue", val)}
                       className="grid grid-cols-1 md:grid-cols-2 gap-3"
                     >
                       {COMPLIANCE_OPTIONS.map((option) => (
-                        <div key={option.value} className="flex items-center">
-                          <RadioGroupItem value={option.value} id={`${currentQuestion.id}-${option.value}`} className="sr-only" />
+                        <div key={option.value} className="relative">
+                          <RadioGroupItem value={option.value} id={option.value} className="peer sr-only" />
                           <Label
-                            htmlFor={`${currentQuestion.id}-${option.value}`}
-                            className={`flex-1 flex items-center justify-between p-4 rounded-xl border-2 cursor-pointer transition-all ${
-                              responses[currentQuestion.id]?.responseValue === option.value
-                                ? "border-blue-600 bg-blue-50 ring-2 ring-blue-100"
-                                : "border-slate-100 bg-white hover:border-slate-200"
+                            htmlFor={option.value}
+                            className={`flex items-center justify-between p-4 rounded-xl border-2 cursor-pointer transition-all hover:bg-slate-50 peer-data-[state=checked]:border-blue-600 peer-data-[state=checked]:bg-blue-50/50 ${
+                              responses[currentQuestion.id]?.responseValue === option.value ? "border-blue-600 bg-blue-50/50" : "border-slate-200"
                             }`}
                           >
-                            <span className="font-medium">{option.label}</span>
-                            {responses[currentQuestion.id]?.responseValue === option.value && (
-                              <CheckCircle2 className="h-5 w-5 text-blue-600" />
-                            )}
+                            <span className="font-semibold">{option.label}</span>
+                            <div className={`w-4 h-4 rounded-full border-2 ${responses[currentQuestion.id]?.responseValue === option.value ? "border-blue-600 bg-blue-600" : "border-slate-300"}`}>
+                              {responses[currentQuestion.id]?.responseValue === option.value && <div className="w-1.5 h-1.5 bg-white rounded-full m-auto mt-0.5" />}
+                            </div>
                           </Label>
                         </div>
                       ))}
                     </RadioGroup>
                   </div>
 
-                  {/* Commentaires et Preuves */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-3">
-                      <Label className="font-bold flex items-center gap-2">
-                        <MessageSquare className="h-4 w-4" />
-                        Commentaires / Observations
-                      </Label>
-                      <Textarea 
-                        placeholder="Détails, preuves observées ou justifications..."
-                        className="min-h-[120px] resize-none focus:ring-blue-500"
-                        value={responses[currentQuestion.id]?.responseComment || ""}
-                        onChange={(e) => handleResponseChange(currentQuestion.id, "responseComment", e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-3">
-                      <Label className="font-bold flex items-center gap-2">
-                        <Upload className="h-4 w-4" />
-                        Preuves / Documents (Upload)
-                      </Label>
-                      <div className="border-2 border-dashed border-slate-200 rounded-lg p-8 flex flex-col items-center justify-center bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer">
-                        <Upload className="h-8 w-8 text-slate-400 mb-2" />
-                        <p className="text-xs text-slate-500 text-center font-medium">
-                          Cliquez ou glissez-déposez vos fichiers ici<br/>
-                          <span className="text-[10px] text-slate-400 font-normal">(PDF, JPG, PNG, DOCX)</span>
-                        </p>
-                      </div>
+                  {/* Technical Note / Observations */}
+                  <div className="space-y-3">
+                    <Label htmlFor="note" className="text-slate-800 font-bold text-base">Note Technique / Observations</Label>
+                    <Textarea
+                      id="note"
+                      placeholder="Saisissez ici les détails techniques, observations ou justifications..."
+                      className="min-h-[120px] bg-slate-50 focus:bg-white transition-colors"
+                      value={responses[currentQuestion.id]?.note || ""}
+                      onChange={(e) => handleResponseChange(currentQuestion.id, "note", e.target.value)}
+                    />
+                  </div>
+
+                  {/* Internal Comments */}
+                  <div className="space-y-3">
+                    <Label htmlFor="comment" className="text-slate-800 font-bold text-base">Commentaires Internes</Label>
+                    <Textarea
+                      id="comment"
+                      placeholder="Commentaires pour l'équipe interne (non inclus dans le rapport final)..."
+                      className="min-h-[80px] bg-slate-50 focus:bg-white transition-colors border-dashed"
+                      value={responses[currentQuestion.id]?.responseComment || ""}
+                      onChange={(e) => handleResponseChange(currentQuestion.id, "responseComment", e.target.value)}
+                    />
+                  </div>
+
+                  {/* Evidence Upload Area */}
+                  <div className="space-y-3 pt-4 border-t">
+                    <Label className="text-slate-800 font-bold text-base">Preuves & Documents</Label>
+                    <div className="border-2 border-dashed border-slate-200 rounded-xl p-8 text-center hover:border-blue-400 transition-colors bg-slate-50/50 group cursor-pointer">
+                      <Upload className="h-8 w-8 text-slate-400 mx-auto mb-2 group-hover:text-blue-500 transition-colors" />
+                      <p className="text-sm font-medium text-slate-600">Cliquez pour ajouter des fichiers de preuve</p>
+                      <p className="text-xs text-slate-400 mt-1">PDF, Images, Word (Max 10MB)</p>
                     </div>
                   </div>
                 </CardContent>
-
+                
                 {/* Navigation Footer */}
-                <div className="bg-slate-50 border-t p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-                  <Button 
-                    variant="outline" 
-                    onClick={handlePrevious} 
-                    disabled={currentQuestionIndex === 0}
-                    className="w-full sm:w-auto"
-                  >
+                <CardHeader className="bg-slate-50 border-t flex flex-row items-center justify-between p-4">
+                  <Button variant="outline" onClick={handlePrevious} disabled={currentQuestionIndex === 0}>
                     <ChevronLeft className="h-4 w-4 mr-2" /> Précédent
                   </Button>
                   
-                  <div className="flex items-center gap-3 w-full sm:w-auto">
+                  <div className="flex gap-2">
                     <Button 
                       variant="outline" 
-                      className="flex-1 sm:flex-none"
+                      className="bg-white"
                       onClick={() => handleSaveResponse(currentQuestion.id)}
                       disabled={saveResponseMutation.isPending || !hasUnsavedChanges}
                     >
@@ -390,17 +415,18 @@ export default function MDRAudit() {
                       Enregistrer
                     </Button>
                     <Button 
-                      className="flex-1 sm:flex-none bg-blue-600 hover:bg-blue-700"
+                      className="bg-blue-600 hover:bg-blue-700"
                       onClick={() => handleSaveResponse(currentQuestion.id, true)}
                       disabled={saveResponseMutation.isPending}
                     >
-                      Enregistrer & Continuer <ChevronRight className="h-4 w-4 ml-2" />
+                      {currentQuestionIndex === filteredQuestions.length - 1 ? "Terminer" : "Enregistrer et continuer"}
+                      <ChevronRight className="h-4 w-4 ml-2" />
                     </Button>
                   </div>
-                </div>
+                </CardHeader>
               </Card>
             </div>
-          )}
+          ) : null}
         </div>
       </main>
     </div>
