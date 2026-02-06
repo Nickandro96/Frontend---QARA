@@ -86,11 +86,12 @@ export default function MDRAudit() {
     },
   });
   
-  const handleResponseChange = (questionId: number, field: string, value: string) => {
+  const handleResponseChange = (questionId: number | string, field: string, value: string) => {
+    const qId = questionId?.toString() || "0";
     setResponses(prev => ({
       ...prev,
-      [questionId]: {
-        ...prev[questionId],
+      [qId]: {
+        ...prev[qId],
         [field]: value,
       },
     }));
@@ -120,8 +121,9 @@ export default function MDRAudit() {
     }
   };
   
-  const handleSaveResponse = async (questionId: number) => {
-    const response = responses[questionId];
+  const handleSaveResponse = async (questionId: number | string) => {
+    const qId = questionId?.toString() || "0";
+    const response = responses[qId];
     if (!response?.responseValue) {
       return; // Skip if no response value
     }
@@ -359,22 +361,26 @@ export default function MDRAudit() {
               onValueChange={(value) => handleResponseChange(currentQuestion.id, "responseValue", value)}
             >
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {COMPLIANCE_OPTIONS.map((option) => (
-                  <div
-                    key={option.value}
-                    className={`flex items-center space-x-2 p-4 border-2 rounded-lg cursor-pointer transition-colors ${
-                      currentResponse?.responseValue === option.value
-                        ? option.color
-                        : "border-border hover:border-primary/50"
-                    }`}
-                    onClick={() => handleResponseChange(currentQuestion.id, "responseValue", option.value)}
-                  >
-                    <RadioGroupItem value={option.value} id={`${currentQuestion.id}-${option.value}`} />
-                    <Label htmlFor={`${currentQuestion.id}-${option.value}`} className="cursor-pointer flex-1">
-                      {option.label}
-                    </Label>
-                  </div>
-                ))}
+                {COMPLIANCE_OPTIONS.map((option) => {
+                  const qId = currentQuestion.id?.toString() || "0";
+                  const inputId = `${qId}-${option.value}`;
+                  return (
+                    <div
+                      key={option.value}
+                      className={`flex items-center space-x-2 p-4 border-2 rounded-lg cursor-pointer transition-colors ${
+                        currentResponse?.responseValue === option.value
+                          ? option.color
+                          : "border-border hover:border-primary/50"
+                      }`}
+                      onClick={() => handleResponseChange(currentQuestion.id, "responseValue", option.value)}
+                    >
+                      <RadioGroupItem value={option.value} id={inputId} />
+                      <Label htmlFor={inputId} className="cursor-pointer flex-1">
+                        {option.label}
+                      </Label>
+                    </div>
+                  );
+                })}
               </div>
             </RadioGroup>
           </div>
