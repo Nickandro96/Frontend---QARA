@@ -63,6 +63,7 @@ function Router() {
       <Route path={"/fda/audit"} component={FDAAuditNew} />
       <Route path={"/mdr/qualification"} component={MDRQualification} />
       <Route path={"/mdr/audit"} component={MDRAudit} />
+      <Route path={"/mdr/audit/:id"} component={MDRAudit} />
       <Route path={"/iso/qualification"} component={ISOQualification} />
       <Route path="/iso/audit" component={ISOAudit} />
       <Route path="/audit-history" component={AuditHistory} />

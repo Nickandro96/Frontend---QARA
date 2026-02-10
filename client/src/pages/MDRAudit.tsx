@@ -7,7 +7,7 @@
  */
 
 import { useState, useEffect } from "react";
-import { useLocation } from "wouter";
+import { useLocation, useRoute } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -39,10 +39,11 @@ const AUDIT_METHODS = [
 export default function MDRAudit() {
   const { isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
+  const [match, params] = useRoute("/mdr/audit/:id");
   
   // Wizard state
   const [wizardStep, setWizardStep] = useState(1);
-  const [auditId, setAuditId] = useState<number | null>(null);
+  const [auditId, setAuditId] = useState<number | null>(params?.id ? parseInt(params.id) : null);
   const [isAuditCreated, setIsAuditCreated] = useState(false);
   const [showSiteModal, setShowSiteModal] = useState(false);
   
@@ -110,12 +111,17 @@ export default function MDRAudit() {
     { enabled: !!auditId }
   );
 
-  // Initialize role from profile
+  // Initialize from params or profile
   useEffect(() => {
-    if (qualification?.economicRole) {
+    if (params?.id) {
+      const id = parseInt(params.id);
+      setAuditId(id);
+      setIsAuditCreated(true);
+      setWizardStep(3); // Direct to step 3 if ID exists
+    } else if (qualification?.economicRole) {
       setSelectedRole(qualification.economicRole);
     }
-  }, [qualification]);
+  }, [params, qualification]);
 
   // Auto-generate audit name
   useEffect(() => {
