@@ -12,11 +12,13 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, AlertCircle, FileText, Save, CheckCircle2, ChevronLeft, ChevronRight, Upload, MessageSquare } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useAuth } from "@/_core/hooks/useAuth";
 
 const COMPLIANCE_OPTIONS = [
   { value: "compliant", label: "Conforme", color: "bg-green-100 text-green-800 border-green-300" },
@@ -33,6 +35,7 @@ const ECONOMIC_ROLES = [
 ];
 
 export default function MDRAudit() {
+  const { isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
   
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -43,10 +46,19 @@ export default function MDRAudit() {
   const [selectedRole, setSelectedRole] = useState<string>("fabricant");
   const [selectedProcess, setSelectedProcess] = useState<string>("all");
   const [isAuditStarted, setIsAuditStarted] = useState(false);
+  const [selectedSiteId, setSelectedSiteId] = useState<string>("");
+  const [selectedOrganizationId, setSelectedOrganizationId] = useState<string>("");
+  const [auditName, setAuditName] = useState<string>("");
+  const [auditScope, setAuditScope] = useState<string>("");
+  const [auditMethod, setAuditMethod] = useState<string>("on_site");
+  const [auditeeContactName, setAuditeeContactName] = useState<string>("");
+  const [auditeeContactEmail, setAuditeeContactEmail] = useState<string>("");
   
   // 1. DATA FETCHING
   const { data: qualification } = trpc.mdr.getQualification.useQuery({});
   const { data: processesData, isLoading: loadingProcesses } = trpc.mdr.getProcesses.useQuery();
+  const { data: sitesData } = trpc.sites.list.useQuery();
+  const { data: organizationsData } = trpc.organizations.list.useQuery();
   
   const createAudit = trpc.audit.create.useMutation({
     onSuccess: (data) => {
@@ -92,17 +104,36 @@ export default function MDRAudit() {
     }
   }, [qualification]);
 
+  useEffect(() => {
+    setAuditName(`Audit MDR (${selectedRole}) - ${new Date().toLocaleDateString("fr-FR")}`);
+  }, [selectedRole]);
+
   const startAudit = () => {
     if (!selectedRole) {
       toast.error("Veuillez sélectionner un rôle économique");
       return;
     }
     
+    if (!selectedSiteId) {
+      toast.error("Veuillez sélectionner un site");
+      return;
+    }
+    
+    const finalAuditName = auditName || `Audit MDR (${selectedRole}) - ${new Date().toLocaleDateString("fr-FR")}`;
+    
     // Find MDR referential ID if possible, otherwise use fallback 1
     createAudit.mutate({
-      auditType: "internal",
-      name: `Audit MDR (${selectedRole}) - ${new Date().toLocaleDateString("fr-FR")}`,
+      auditType: "mdr",
+      name: finalAuditName,
+      siteId: parseInt(selectedSiteId),
+      organizationId: selectedOrganizationId ? parseInt(selectedOrganizationId) : undefined,
       referentialIds: [1], // Use an array of numbers as expected by the backend
+      economicRole: selectedRole,
+      processesSelected: selectedProcess === "all" ? "[]" : JSON.stringify([selectedProcess]),
+      auditScope: auditScope,
+      auditMethod: auditMethod,
+      auditeeContactName: auditeeContactName,
+      auditeeContactEmail: auditeeContactEmail,
     });
   };
 
@@ -171,10 +202,27 @@ export default function MDRAudit() {
     }
   };
 
-  if (!isAuditStarted) {
+  if (!isAuthenticated) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
         <Card className="w-full max-w-md shadow-lg">
+          <CardHeader className="text-center">
+            <AlertCircle className="h-8 w-8 text-red-600 mx-auto mb-4" />
+            <CardTitle className="text-2xl">Authentification requise</CardTitle>
+            <CardDescription>Veuillez vous connecter pour accéder à l'audit</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button onClick={() => setLocation("/login")} className="w-full">Se connecter</Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (!isAuditStarted) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
+        <Card className="w-full max-w-2xl shadow-lg">
           <CardHeader className="text-center">
             <div className="mx-auto bg-blue-100 w-16 h-16 rounded-full flex items-center justify-center mb-4">
               <FileText className="h-8 w-8 text-blue-600" />
@@ -184,7 +232,7 @@ export default function MDRAudit() {
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="space-y-2">
-              <Label>Rôle Économique</Label>
+              <Label>Rôle Économique *</Label>
               <Select value={selectedRole} onValueChange={setSelectedRole}>
                 <SelectTrigger>
                   <SelectValue placeholder="Sélectionnez votre rôle" />
@@ -196,6 +244,93 @@ export default function MDRAudit() {
                 </SelectContent>
               </Select>
             </div>
+            
+            <div className="space-y-2">
+              <Label>Site / Localisation *</Label>
+              <Select value={selectedSiteId} onValueChange={setSelectedSiteId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Sélectionnez un site" />
+                </SelectTrigger>
+                <SelectContent>
+                  {sitesData?.map((site: any) => (
+                    <SelectItem key={site.id} value={String(site.id)}>{site.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="space-y-2">
+              <Label>Organisation (optionnel)</Label>
+              <Select value={selectedOrganizationId} onValueChange={setSelectedOrganizationId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Sélectionnez une organisation" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">-- Aucune --</SelectItem>
+                  {organizationsData?.map((org: any) => (
+                    <SelectItem key={org.id} value={String(org.id)}>{org.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="space-y-2">
+              <Label>Nom de l'audit</Label>
+              <input
+                type="text"
+                value={auditName}
+                onChange={(e) => setAuditName(e.target.value)}
+                placeholder="Audit MDR (Fabricant) - 10/02/2026"
+                className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label>Périmètre / Scope (optionnel)</Label>
+              <Textarea
+                value={auditScope}
+                onChange={(e) => setAuditScope(e.target.value)}
+                placeholder="Décrivez le périmètre de l'audit"
+                className="min-h-20"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label>Méthode d'audit</Label>
+              <Select value={auditMethod} onValueChange={setAuditMethod}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Sélectionnez la méthode" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="on_site">Sur site</SelectItem>
+                  <SelectItem value="remote">À distance</SelectItem>
+                  <SelectItem value="hybrid">Hybride</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="space-y-2">
+              <Label>Contact auditée - Nom (optionnel)</Label>
+              <input
+                type="text"
+                value={auditeeContactName}
+                onChange={(e) => setAuditeeContactName(e.target.value)}
+                placeholder="Nom du contact"
+                className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label>Contact auditée - Email (optionnel)</Label>
+              <input
+                type="email"
+                value={auditeeContactEmail}
+                onChange={(e) => setAuditeeContactEmail(e.target.value)}
+                placeholder="email@example.com"
+                className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm"
+              />
+            </div>
+            
             <div className="space-y-2">
               <Label>Processus à auditer</Label>
               <Select value={selectedProcess} onValueChange={setSelectedProcess}>
@@ -218,7 +353,8 @@ export default function MDRAudit() {
                 </SelectContent>
               </Select>
             </div>
-            <Button onClick={startAudit} className="w-full h-12 text-lg" disabled={createAudit.isPending}>
+            
+            <Button onClick={startAudit} className="w-full h-12 text-lg" disabled={createAudit.isPending || !selectedSiteId}>
               {createAudit.isPending ? <Loader2 className="animate-spin mr-2" /> : null}
               Démarrer l'Audit
             </Button>
