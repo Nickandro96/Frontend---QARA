@@ -195,7 +195,11 @@ export default function MDRAudit() {
   // Handle Step 3 - Start audit questions
   const handleStartQuestions = () => {
     if (auditId) {
-      setLocation(`/mdr/audit/${auditId}`);
+      // Rediriger vers la liste des audits ou le détail de l'audit
+      // Étant donné que /mdr/audit/:id ne semble pas encore implémenté pour le questionnaire,
+      // on redirige vers /audits pour que l'utilisateur puisse voir son audit créé.
+      setLocation(`/audits`);
+      toast.info("Audit créé ! Vous pouvez maintenant le retrouver dans votre liste d'audits.");
     }
   };
 
