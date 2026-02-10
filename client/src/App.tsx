@@ -46,6 +46,7 @@ import ISOAudit from "./pages/ISOAudit";
 import AuditHistory from "./pages/AuditHistory";
 import AuditResults from "./pages/AuditResults";
 import AuditComparison from "./pages/AuditComparison";
+import SiteManagement from "./pages/SiteManagement";
 
 function Router() {
   return (
@@ -67,6 +68,7 @@ function Router() {
       <Route path="/audit-history" component={AuditHistory} />
       <Route path="/audit/compare" component={AuditComparison} />
       <Route path="/audit/:id/results" component={AuditResults} />
+      <Route path="/settings/sites" component={SiteManagement} />
       <Route path={"/profile"} component={Profile} />
       {/* Route obsolète - utilisez /mdr/audit à la place */}
       <Route path="/reports/comparative" component={ReportComparative} />
