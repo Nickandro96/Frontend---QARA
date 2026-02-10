@@ -266,7 +266,6 @@ export default function MDRAudit() {
                   <SelectValue placeholder="Sélectionnez une organisation" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">-- Aucune --</SelectItem>
                   {organizationsData?.map((org: any) => (
                     <SelectItem key={org.id} value={String(org.id)}>{org.name}</SelectItem>
                   ))}
