@@ -21,6 +21,7 @@ import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { SiteCreationModal } from "@/components/SiteCreationModal";
 
 const ECONOMIC_ROLES = [
   { value: "fabricant", label: "Fabricant" },
@@ -43,6 +44,7 @@ export default function MDRAudit() {
   const [wizardStep, setWizardStep] = useState(1);
   const [auditId, setAuditId] = useState<number | null>(null);
   const [isAuditCreated, setIsAuditCreated] = useState(false);
+  const [showSiteModal, setShowSiteModal] = useState(false);
   
   // Step 1: Critical fields
   const [selectedRole, setSelectedRole] = useState<string>("fabricant");
@@ -71,7 +73,7 @@ export default function MDRAudit() {
   // Data fetching
   const { data: qualification } = trpc.mdr.getQualification.useQuery({});
   const { data: processesData, isLoading: loadingProcesses } = trpc.mdr.getProcesses.useQuery();
-  const { data: sitesData, isLoading: loadingSites } = trpc.sites.list.useQuery();
+  const { data: sitesData, isLoading: loadingSites, refetch: refetchSites } = trpc.sites.list.useQuery();
   const { data: organizationsData } = trpc.organizations.list.useQuery();
   
   const createAudit = trpc.audits.create.useMutation({
@@ -121,6 +123,12 @@ export default function MDRAudit() {
       setAuditName(`Audit MDR (${selectedRole}) - ${new Date().toLocaleDateString("fr-FR")}`);
     }
   }, [selectedRole]);
+
+  // Handle site creation
+  const handleSiteCreated = (siteId: number) => {
+    setSelectedSiteId(String(siteId));
+    refetchSites();
+  };
 
   // Validation for Step 1
   const isStep1Valid = () => {
@@ -241,21 +249,39 @@ export default function MDRAudit() {
                     <Loader2 className="h-4 w-4 animate-spin mr-2" /> Chargement des sites...
                   </div>
                 ) : !sitesData || sitesData.length === 0 ? (
-                  <Alert>
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>Aucun site disponible. Veuillez en créer un.</AlertDescription>
-                  </Alert>
+                  <div className="space-y-2">
+                    <Alert>
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>Aucun site disponible.</AlertDescription>
+                    </Alert>
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => setShowSiteModal(true)}
+                    >
+                      + Créer un nouveau site
+                    </Button>
+                  </div>
                 ) : (
-                  <Select value={selectedSiteId} onValueChange={setSelectedSiteId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Sélectionnez un site" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {sitesData.map((site: any) => (
-                        <SelectItem key={site.id} value={String(site.id)}>{site.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="space-y-2">
+                    <Select value={selectedSiteId} onValueChange={setSelectedSiteId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Sélectionnez un site" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {sitesData.map((site: any) => (
+                          <SelectItem key={site.id} value={String(site.id)}>{site.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => setShowSiteModal(true)}
+                    >
+                      + Créer un nouveau site
+                    </Button>
+                  </div>
                 )}
               </div>
 
@@ -409,6 +435,11 @@ export default function MDRAudit() {
             </div>
           </CardContent>
         </Card>
+        <SiteCreationModal
+          isOpen={showSiteModal}
+          onClose={() => setShowSiteModal(false)}
+          onSiteCreated={handleSiteCreated}
+        />
       </div>
     );
   }
