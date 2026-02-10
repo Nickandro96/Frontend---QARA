@@ -70,13 +70,10 @@ export function SiteCreationModal({ isOpen, onClose, onSiteCreated }: SiteCreati
     setError(null);
     createSite.mutate({
       name: name.trim(),
-      address: address.trim() || undefined,
+      addressLine1: address.trim() || undefined,
       city: city.trim() || undefined,
-      state: state.trim() || undefined,
-      zipCode: zipCode.trim() || undefined,
+      postalCode: zipCode.trim() || undefined,
       country: country.trim() || undefined,
-      phone: phone.trim() || undefined,
-      email: email.trim() || undefined,
       notes: notes.trim() || undefined,
     });
   };

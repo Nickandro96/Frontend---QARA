@@ -151,7 +151,8 @@ export default function MDRAudit() {
     }
 
     createAudit.mutate({
-      auditType: "mdr",
+      auditType: "internal", // Default for MDR Wizard
+      standard: "MDR",
       name: auditName,
       siteId: parseInt(selectedSiteId),
       organizationId: selectedOrganizationId ? parseInt(selectedOrganizationId) : undefined,
