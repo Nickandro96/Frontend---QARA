@@ -89,7 +89,7 @@ export default function AuditsList() {
             </Link>
             <h1 className="text-xl font-bold">Mes Audits</h1>
           </div>
-          <Link href="/audit">
+          <Link href="/mdr/audit">
             <Button className="gap-2">
               <Plus className="h-4 w-4" />
               Nouvel Audit
@@ -178,7 +178,7 @@ export default function AuditsList() {
                     ? "Essayez de modifier vos filtres de recherche"
                     : "Commencez par créer votre premier audit"}
                 </p>
-                <Link href="/audit">
+                <Link href="/mdr/audit">
                   <Button className="gap-2">
                     <Plus className="h-4 w-4" />
                     Créer un audit
