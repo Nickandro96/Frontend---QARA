@@ -1,6 +1,6 @@
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
-import { Route, Switch } from "wouter";
+import { Route, Switch, Redirect } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import Home from "./pages/Home";
@@ -11,7 +11,6 @@ import ModernHome from "./pages/ModernHome";
 import Classification from "./pages/Classification";
 import Dashboard from "./pages/Dashboard";
 import Profile from "./pages/Profile";
-import Audit from "./pages/Audit";
 import Reports from "./pages/Reports";
 import RegulatoryWatch from "./pages/RegulatoryWatch";
 import WatchDashboard from "./pages/WatchDashboard";
@@ -60,42 +59,65 @@ function Router() {
       <Route path="/classification" component={Classification} />
       <Route path={"/dashboard"} component={Dashboard} />
       <Route path={"/dashboard-v2"} component={DashboardV2} />
+
       <Route path={"/fda/qualification"} component={FDAQualification} />
       <Route path={"/fda/audit"} component={FDAAuditNew} />
+
       <Route path={"/mdr/qualification"} component={MDRQualification} />
       <Route path={"/mdr/audit"} component={MDRAudit} />
       <Route path={"/mdr/audit/:id"} component={MDRAuditDrilldown} />
+
       <Route path={"/iso/qualification"} component={ISOQualification} />
       <Route path="/iso/audit" component={ISOAudit} />
+
       <Route path="/audit-history" component={AuditHistory} />
       <Route path="/audit/compare" component={AuditComparison} />
       <Route path="/audit/:id/results" component={AuditResults} />
       <Route path="/settings/sites" component={SiteManagement} />
+
       <Route path={"/profile"} component={Profile} />
-      {/* Route obsolète - utilisez /mdr/audit à la place */}
+
       <Route path="/reports/comparative" component={ReportComparative} />
       <Route path="/audits" component={AuditsList} />
+
+      {/* ✅ Aliases pour éviter les 404 (ORDER MATTERS) */}
+      <Route path="/audit/new">
+        <Redirect to="/mdr/audit" />
+      </Route>
+      <Route path="/audit/create">
+        <Redirect to="/mdr/audit" />
+      </Route>
+      <Route path="/audit">
+        <Redirect to="/audits" />
+      </Route>
+
       <Route path={"/audit/:id"} component={AuditDetail} />
+
       <Route path={"/reports"} component={Reports} />
       <Route path={"/regulatory-watch"} component={RegulatoryWatch} />
       <Route path={"/watch-dashboard"} component={WatchDashboard} />
       <Route path={"/documents"} component={Documents} />
+
       <Route path={"/fda-audit"} component={FdaAudit} />
       <Route path={"/fda-classification"} component={FdaClassification} />
       <Route path="/fda-regulatory-watch" component={FdaRegulatoryWatch} />
       <Route path="/fda-dashboard" component={FdaDashboard} />
       <Route path="/fda-submission-tracker" component={FdaSubmissionTracker} />
+
       <Route path="/pricing" component={Pricing} />
       <Route path="/subscription" component={Subscription} />
       <Route path="/subscription/success" component={SubscriptionSuccess} />
       <Route path="/subscription/cancel" component={SubscriptionCancel} />
+
       <Route path="/contact" component={Contact} />
       <Route path="/faq" component={FAQ} />
       <Route path="/admin/contacts" component={AdminContacts} />
       <Route path="/admin/users" component={AdminUsers} />
       <Route path="/analytics" component={AnalyticsDashboard} />
+
       <Route path="/reports/generate" component={ReportGeneration} />
       <Route path="/reports/history" component={ReportHistory} />
+
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
