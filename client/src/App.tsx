@@ -61,6 +61,7 @@ function Router() {
       <Route path={"/fda/qualification"} component={FDAQualification} />
       <Route path={"/fda/audit"} component={FDAAuditNew} />
 
+      {/* 🔴 Zone MDR (gérée dans le router interne) */}
       <Route path={"/mdr/*"} component={MdrRoutesErrorBoundary} />
 
       <Route path={"/iso/qualification"} component={ISOQualification} />
@@ -76,12 +77,12 @@ function Router() {
       <Route path="/reports/comparative" component={ReportComparative} />
       <Route path="/audits" component={AuditsList} />
 
-      {/* ✅ Aliases pour éviter les 404 (ORDER MATTERS) */}
+      {/* ✅ Aliases sécurisés pour éviter auditId undefined */}
       <Route path="/audit/new">
-        <Redirect to="/mdr/audit" />
+        <Redirect to="/mdr/audit/0" />
       </Route>
       <Route path="/audit/create">
-        <Redirect to="/mdr/audit" />
+        <Redirect to="/mdr/audit/0" />
       </Route>
       <Route path="/audit">
         <Redirect to="/audits" />
