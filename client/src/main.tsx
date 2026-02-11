@@ -9,42 +9,30 @@ import { getLoginUrl } from "./const";
 import "./index.css";
 import "./lib/i18n"; // Initialize i18n
 
-// ✅ DEBUG TEMP: trace + prevent removeChild crash (MDR)
-// À enlever une fois la cause trouvée
-const __origRemoveChild = Node.prototype.removeChild;
-Node.prototype.removeChild = function <T extends Node>(this: Node, child: T) {
-  try {
-    // Avoid crash: removing a node that is not a child of this node
-    if (!this.contains(child)) {
-      console.error("[DOM] removeChild called with non-child", { parent: this, child });
-      console.error(new Error("[DOM] removeChild stack").stack);
-      // prevent crash
-      return child;
-    }
-    return __origRemoveChild.call(this, child) as T;
-  } catch (e) {
-    console.error("[DOM] removeChild exception", e);
-    console.error(new Error("[DOM] removeChild stack").stack);
-    throw e;
-  }
-};
-
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 60 * 5, // Les données sont considérées comme fraîches pendant 5 minutes
-      cacheTime: 1000 * 60 * 30, // Garder en cache pendant 30 minutes
-      retry: 1, // Réessayer une seule fois en cas d'échec
-      refetchOnWindowFocus: false, // Ne pas recharger quand on revient sur l'onglet
+      staleTime: 1000 * 60 * 5,
+      cacheTime: 1000 * 60 * 30,
+      retry: 1,
+      refetchOnWindowFocus: false,
     },
   },
 });
 
 const redirectToLoginIfUnauthorized = (error: unknown) => {
-  if (!(error instanceof TRPCClientError)) return;
+  // TRPCClientError peut ne pas matcher en "instanceof" dans certains bundles,
+  // donc on sécurise en plus via un check sur "message".
+  const msg =
+    error instanceof TRPCClientError
+      ? error.message
+      : typeof (error as any)?.message === "string"
+        ? (error as any).message
+        : "";
+
   if (typeof window === "undefined") return;
 
-  const isUnauthorized = error.message === UNAUTHED_ERR_MSG;
+  const isUnauthorized = msg === UNAUTHED_ERR_MSG;
   if (!isUnauthorized) return;
 
   window.location.href = getLoginUrl();
@@ -69,17 +57,29 @@ queryClient.getMutationCache().subscribe((event) => {
 // Use environment variable for API URL, fallback to relative path for development
 const apiUrl = import.meta.env.VITE_API_URL || "";
 
+// IMPORTANT: IE n'a pas globalThis et parfois pas fetch.
+// On utilise fetch natif si dispo, sinon on renvoie une erreur explicite.
+const safeFetch: typeof fetch = (input, init) => {
+  if (typeof fetch !== "function") {
+    return Promise.reject(
+      new Error(
+        "Fetch API not available in this browser. Please use a modern browser (Edge/Chrome)."
+      )
+    ) as any;
+  }
+
+  return fetch(input, {
+    ...(init ?? {}),
+    credentials: "include",
+  });
+};
+
 const trpcClient = trpc.createClient({
   links: [
     httpBatchLink({
       url: `${apiUrl}/api/trpc`,
       transformer: superjson,
-      fetch(input, init) {
-        return globalThis.fetch(input, {
-          ...(init ?? {}),
-          credentials: "include",
-        });
-      },
+      fetch: safeFetch,
     }),
   ],
 });
