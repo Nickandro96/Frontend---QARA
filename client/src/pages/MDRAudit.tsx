@@ -40,16 +40,18 @@ export default function MDRAudit() {
   const { isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
 
-  // ✅ FIX: param name = auditId (pas id)
+  // ✅ Route param name = auditId
   const [match, params] = useRoute("/mdr/audit/:auditId");
 
   // Wizard state
   const [wizardStep, setWizardStep] = useState(1);
 
-  // ✅ FIX: lire params.auditId
-  const [auditId, setAuditId] = useState<number | null>(
-    params?.auditId ? parseInt(params.auditId) : null
-  );
+  // ✅ Parse auditId safely
+  const auditIdFromUrlRaw = params?.auditId;
+  const auditIdFromUrlNum = auditIdFromUrlRaw ? Number(auditIdFromUrlRaw) : NaN;
+  const auditIdFromUrl = auditIdFromUrlRaw && !Number.isNaN(auditIdFromUrlNum) ? auditIdFromUrlNum : null;
+
+  const [auditId, setAuditId] = useState<number | null>(auditIdFromUrl);
 
   const [isAuditCreated, setIsAuditCreated] = useState(false);
   const [showSiteModal, setShowSiteModal] = useState(false);
@@ -95,7 +97,7 @@ export default function MDRAudit() {
     },
     onError: (error) => {
       toast.error("❌ Erreur lors de la création de l'audit: " + error.message);
-    }
+    },
   });
 
   const updateAuditMetadata = trpc.audits.updateMetadata.useMutation({
@@ -105,31 +107,43 @@ export default function MDRAudit() {
     },
     onError: (error) => {
       toast.error("❌ Erreur lors de la mise à jour: " + error.message);
-    }
+    },
   });
 
+  // ✅ IMPORTANT: getQuestions must NOT run unless auditId is valid (>0)
+  const auditIdNum = typeof auditId === "number" ? auditId : null;
+  const canQueryByAuditId = !!auditIdNum && auditIdNum > 0;
+
   const { data: questionsDataRaw, isLoading: loadingQuestions } = trpc.mdr.getQuestions.useQuery(
-    { selectedProcesses: selectedProcess === "all" ? [] : [selectedProcess] },
-    { enabled: isAuditCreated }
+    {
+      auditId: auditIdNum as number,
+      selectedProcesses: selectedProcess === "all" ? [] : [selectedProcess],
+    },
+    {
+      enabled: canQueryByAuditId,
+    }
   );
 
   const { data: existingResponses } = trpc.mdr.getResponses.useQuery(
-    { auditId: auditId as number },
-    { enabled: !!auditId }
+    { auditId: auditIdNum as number },
+    { enabled: canQueryByAuditId }
   );
 
   // Initialize from params or profile
   useEffect(() => {
-    // ✅ FIX: params.auditId
-    if (params?.auditId) {
-      const id = parseInt(params.auditId);
-      setAuditId(id);
+    // ✅ if URL contains auditId -> direct open summary step 3
+    if (auditIdFromUrl && auditIdFromUrl > 0) {
+      setAuditId(auditIdFromUrl);
       setIsAuditCreated(true);
-      setWizardStep(3); // Direct to step 3 if ID exists
-    } else if (qualification?.economicRole) {
+      setWizardStep(3);
+      return;
+    }
+
+    // else: default role from qualification
+    if (qualification?.economicRole) {
       setSelectedRole(qualification.economicRole);
     }
-  }, [params, qualification]);
+  }, [auditIdFromUrl, qualification]);
 
   // Auto-generate audit name
   useEffect(() => {
@@ -185,10 +199,10 @@ export default function MDRAudit() {
 
   // Handle Step 2 submission
   const handleStep2Submit = () => {
-    if (!auditId) return;
+    if (!auditIdNum || auditIdNum <= 0) return;
 
     updateAuditMetadata.mutate({
-      auditId,
+      auditId: auditIdNum,
       auditedEntityName: auditedEntityName || undefined,
       auditedEntityAddress: auditedEntityAddress || undefined,
       exclusions: exclusions || undefined,
@@ -202,8 +216,8 @@ export default function MDRAudit() {
 
   // Handle Step 3 - Start audit questions
   const handleStartQuestions = () => {
-    if (auditId) {
-      setLocation(`/mdr/audit/${auditId}`);
+    if (auditIdNum && auditIdNum > 0) {
+      setLocation(`/mdr/audit/${auditIdNum}`);
     }
   };
 
@@ -217,7 +231,9 @@ export default function MDRAudit() {
             <CardDescription>Veuillez vous connecter pour accéder à l'audit</CardDescription>
           </CardHeader>
           <CardContent>
-            <Button onClick={() => setLocation("/login")} className="w-full">Se connecter</Button>
+            <Button onClick={() => setLocation("/login")} className="w-full">
+              Se connecter
+            </Button>
           </CardContent>
         </Card>
       </div>
@@ -238,7 +254,6 @@ export default function MDRAudit() {
             <Progress value={33} className="mt-4" />
           </CardHeader>
           <CardContent className="space-y-6">
-
             {/* IDENTIFICATION */}
             <div className="space-y-4">
               <h3 className="font-semibold text-sm text-slate-700">Identification</h3>
@@ -250,8 +265,10 @@ export default function MDRAudit() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {(ECONOMIC_ROLES ?? []).map(role => (
-                      <SelectItem key={role.value} value={role.value}>{role.label}</SelectItem>
+                    {(ECONOMIC_ROLES ?? []).map((role) => (
+                      <SelectItem key={role.value} value={role.value}>
+                        {role.label}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -269,11 +286,7 @@ export default function MDRAudit() {
                       <AlertCircle className="h-4 w-4" />
                       <AlertDescription>Aucun site disponible.</AlertDescription>
                     </Alert>
-                    <Button
-                      variant="outline"
-                      className="w-full"
-                      onClick={() => setShowSiteModal(true)}
-                    >
+                    <Button variant="outline" className="w-full" onClick={() => setShowSiteModal(true)}>
                       + Créer un nouveau site
                     </Button>
                   </div>
@@ -284,16 +297,14 @@ export default function MDRAudit() {
                         <SelectValue placeholder="Sélectionnez un site" />
                       </SelectTrigger>
                       <SelectContent>
-                        {(sitesData?.sites ?? []).map(site => (
-                          <SelectItem key={site.id} value={String(site.id)}>{site.name}</SelectItem>
+                        {(sitesData?.sites ?? []).map((site) => (
+                          <SelectItem key={site.id} value={String(site.id)}>
+                            {site.name}
+                          </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-                    <Button
-                      variant="outline"
-                      className="w-full"
-                      onClick={() => setShowSiteModal(true)}
-                    >
+                    <Button variant="outline" className="w-full" onClick={() => setShowSiteModal(true)}>
                       + Créer un nouveau site
                     </Button>
                   </div>
@@ -308,7 +319,9 @@ export default function MDRAudit() {
                   </SelectTrigger>
                   <SelectContent>
                     {(organizationsData ?? []).map((org: any) => (
-                      <SelectItem key={org.id} value={String(org.id)}>{org.name}</SelectItem>
+                      <SelectItem key={org.id} value={String(org.id)}>
+                        {org.name}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -345,8 +358,10 @@ export default function MDRAudit() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {AUDIT_METHODS.map(method => (
-                      <SelectItem key={method.value} value={method.value}>{method.label}</SelectItem>
+                    {AUDIT_METHODS.map((method) => (
+                      <SelectItem key={method.value} value={method.value}>
+                        {method.label}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -361,7 +376,9 @@ export default function MDRAudit() {
                   <SelectContent>
                     <SelectItem value="all">Tous les processus</SelectItem>
                     {(processesData?.processes ?? []).map((process: any) => (
-                      <SelectItem key={process.id} value={String(process.id)}>{process.name}</SelectItem>
+                      <SelectItem key={process.id} value={String(process.id)}>
+                        {process.name}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -375,19 +392,11 @@ export default function MDRAudit() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Date de démarrage prévue *</Label>
-                  <Input
-                    type="date"
-                    value={plannedStartDate}
-                    onChange={(e) => setPlannedStartDate(e.target.value)}
-                  />
+                  <Input type="date" value={plannedStartDate} onChange={(e) => setPlannedStartDate(e.target.value)} />
                 </div>
                 <div className="space-y-2">
                   <Label>Date de fin prévue</Label>
-                  <Input
-                    type="date"
-                    value={plannedEndDate}
-                    onChange={(e) => setPlannedEndDate(e.target.value)}
-                  />
+                  <Input type="date" value={plannedEndDate} onChange={(e) => setPlannedEndDate(e.target.value)} />
                 </div>
               </div>
             </div>
@@ -430,11 +439,7 @@ export default function MDRAudit() {
               <Button variant="outline" className="flex-1" onClick={() => setLocation("/")}>
                 Annuler
               </Button>
-              <Button
-                className="flex-1"
-                onClick={handleStep1Submit}
-                disabled={!isStep1Valid() || createAudit.isPending}
-              >
+              <Button className="flex-1" onClick={handleStep1Submit} disabled={!isStep1Valid() || createAudit.isPending}>
                 {createAudit.isPending ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -450,17 +455,13 @@ export default function MDRAudit() {
             </div>
           </CardContent>
         </Card>
-        <SiteCreationModal
-          isOpen={showSiteModal}
-          onClose={() => setShowSiteModal(false)}
-          onSiteCreated={handleSiteCreated}
-        />
+        <SiteCreationModal isOpen={showSiteModal} onClose={() => setShowSiteModal(false)} onSiteCreated={handleSiteCreated} />
       </div>
     );
   }
 
   // STEP 2: CONTEXT & METADATA
-  if (wizardStep === 2 && isAuditCreated && auditId) {
+  if (wizardStep === 2 && isAuditCreated && auditIdNum && auditIdNum > 0) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
         <Card className="w-full max-w-2xl shadow-lg">
@@ -473,7 +474,6 @@ export default function MDRAudit() {
             <Progress value={66} className="mt-4" />
           </CardHeader>
           <CardContent className="space-y-6">
-
             {/* IDENTIFICATION AVANCÉE */}
             <div className="space-y-4">
               <h3 className="font-semibold text-sm text-slate-700">Identification Avancée</h3>
@@ -523,20 +523,12 @@ export default function MDRAudit() {
 
               <div className="space-y-2">
                 <Label>Classification des dispositifs</Label>
-                <Input
-                  value={classDevices}
-                  onChange={(e) => setClassDevices(e.target.value)}
-                  placeholder="Ex: Classe IIb, Classe III"
-                />
+                <Input value={classDevices} onChange={(e) => setClassDevices(e.target.value)} placeholder="Ex: Classe IIb, Classe III" />
               </div>
 
               <div className="space-y-2">
                 <Label>Marchés visés</Label>
-                <Input
-                  value={markets}
-                  onChange={(e) => setMarkets(e.target.value)}
-                  placeholder="Ex: EU, US, ASEAN"
-                />
+                <Input value={markets} onChange={(e) => setMarkets(e.target.value)} placeholder="Ex: EU, US, ASEAN" />
               </div>
             </div>
 
@@ -566,19 +558,11 @@ export default function MDRAudit() {
 
             {/* ACTIONS */}
             <div className="flex gap-4 pt-6">
-              <Button
-                variant="outline"
-                className="flex-1"
-                onClick={() => setWizardStep(1)}
-              >
+              <Button variant="outline" className="flex-1" onClick={() => setWizardStep(1)}>
                 <ChevronLeft className="h-4 w-4 mr-2" />
                 Retour
               </Button>
-              <Button
-                className="flex-1"
-                onClick={handleStep2Submit}
-                disabled={updateAuditMetadata.isPending}
-              >
+              <Button className="flex-1" onClick={handleStep2Submit} disabled={updateAuditMetadata.isPending}>
                 {updateAuditMetadata.isPending ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -599,7 +583,7 @@ export default function MDRAudit() {
   }
 
   // STEP 3: SUMMARY & START QUESTIONS
-  if (wizardStep === 3 && isAuditCreated && auditId) {
+  if (wizardStep === 3 && isAuditCreated && auditIdNum && auditIdNum > 0) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
         <Card className="w-full max-w-2xl shadow-lg">
@@ -612,36 +596,38 @@ export default function MDRAudit() {
             <Progress value={100} className="mt-4" />
           </CardHeader>
           <CardContent className="space-y-6">
-
             <Alert>
               <CheckCircle2 className="h-4 w-4 text-green-600" />
               <AlertDescription>
-                Audit <strong>#{auditId}</strong> créé avec succès. Vous pouvez maintenant démarrer le questionnaire MDR.
+                Audit <strong>#{auditIdNum}</strong> créé avec succès. Vous pouvez maintenant démarrer le questionnaire MDR.
               </AlertDescription>
             </Alert>
 
             <div className="bg-slate-50 p-4 rounded-lg space-y-3 text-sm">
-              <div><strong>Rôle économique :</strong> {selectedRole}</div>
-              <div><strong>Scope :</strong> {auditScope}</div>
-              <div><strong>Méthode :</strong> {auditMethod}</div>
-              <div><strong>Auditeur responsable :</strong> {auditLeader}</div>
-              <div><strong>Contact auditée :</strong> {auditeeMainContact} ({auditeeContactEmail})</div>
+              <div>
+                <strong>Rôle économique :</strong> {selectedRole}
+              </div>
+              <div>
+                <strong>Scope :</strong> {auditScope}
+              </div>
+              <div>
+                <strong>Méthode :</strong> {auditMethod}
+              </div>
+              <div>
+                <strong>Auditeur responsable :</strong> {auditLeader}
+              </div>
+              <div>
+                <strong>Contact auditée :</strong> {auditeeMainContact} ({auditeeContactEmail})
+              </div>
             </div>
 
             {/* ACTIONS */}
             <div className="flex gap-4 pt-6">
-              <Button
-                variant="outline"
-                className="flex-1"
-                onClick={() => setWizardStep(2)}
-              >
+              <Button variant="outline" className="flex-1" onClick={() => setWizardStep(2)}>
                 <ChevronLeft className="h-4 w-4 mr-2" />
                 Retour
               </Button>
-              <Button
-                className="flex-1 bg-green-600 hover:bg-green-700"
-                onClick={handleStartQuestions}
-              >
+              <Button className="flex-1 bg-green-600 hover:bg-green-700" onClick={handleStartQuestions}>
                 Démarrer le Questionnaire MDR
                 <ChevronRight className="h-4 w-4 ml-2" />
               </Button>
