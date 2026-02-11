@@ -1,19 +1,11 @@
-/**
- * MDR Audit Page - WIZARD VERSION (V6)
- * Professional 3-step wizard for audit creation
- * Step 1: Critical fields (required to start audit)
- * Step 2: Context & metadata (optional enrichment)
- * Step 3: Results & summary (auto-filled)
- */
-
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useLocation, useRoute } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, AlertCircle, FileText, ChevronLeft, ChevronRight, CheckCircle2 } from "lucide-react";
+import { Loader2, AlertCircle, FileText, ChevronLeft, ChevronRight, CheckCircle2, Lightbulb } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,6 +28,37 @@ const AUDIT_METHODS = [
   { value: "hybrid", label: "Hybride" },
 ];
 
+const RESPONSE_STATUSES = [
+  { ui: "Conforme", backend: "compliant", color: "bg-green-500" },
+  { ui: "NOK", backend: "non_compliant", color: "bg-red-500" },
+  { ui: "N/A", backend: "not_applicable", color: "bg-gray-500" },
+  { ui: "Partiel", backend: "partial", color: "bg-yellow-500" },
+  { ui: "En cours", backend: "in_progress", color: "bg-blue-500" },
+];
+
+interface Question {
+  id: string | number;
+  questionKey: string;
+  article?: string;
+  annexe?: string;
+  title?: string;
+  questionText: string;
+  criticality: string;
+  risks?: string;
+  expectedEvidence?: string;
+  processId?: string | number;
+  processName?: string;
+  referenceLabel?: string;
+}
+
+interface AuditResponse {
+  questionKey: string;
+  responseValue: string;
+  responseComment?: string;
+  note?: string;
+  evidenceFiles?: string[];
+}
+
 export default function MDRAudit() {
   const { isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
@@ -44,7 +67,7 @@ export default function MDRAudit() {
   // Wizard state
   const [wizardStep, setWizardStep] = useState(1);
   const [auditId, setAuditId] = useState<number | null>(params?.id ? parseInt(params.id) : null);
-  const [isAuditCreated, setIsAuditCreated] = useState(false);
+  const [isAuditCreated, setIsAuditCreated] = useState(!!params?.id);
   const [showSiteModal, setShowSiteModal] = useState(false);
   
   // Step 1: Critical fields
@@ -70,6 +93,12 @@ export default function MDRAudit() {
   const [markets, setMarkets] = useState<string>("");
   const [auditTeamMembers, setAuditTeamMembers] = useState<string>("");
   const [versionReferentials, setVersionReferentials] = useState<string>("");
+
+  // Drill-down state
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [currentResponseValue, setCurrentResponseValue] = useState<string | undefined>(undefined);
+  const [currentResponseComment, setCurrentResponseComment] = useState<string>("");
+  const [currentAiSuggestion, setCurrentAiSuggestion] = useState<string | null>(null);
   
   // Data fetching
   const { data: qualification } = trpc.mdr.getQualification.useQuery({});
@@ -83,33 +112,49 @@ export default function MDRAudit() {
         setAuditId(data.auditId);
         setIsAuditCreated(true);
         toast.success("✅ Audit créé avec succès");
-        setWizardStep(2);
+        setLocation(`/mdr/audit/${data.auditId}`); // Redirect directly to drill-down
+        toast.info("Audit créé ! Redirection vers le questionnaire...");
       }
     },
     onError: (error) => {
-      toast.error("❌ Erreur lors de la création de l'audit: " + error.message);
+      toast.error("❌ Erreur lors de la création de l\'audit: " + error.message);
     }
   });
 
-  const updateAuditMetadata = trpc.audits.updateMetadata.useMutation({
-    onSuccess: () => {
-      toast.success("✅ Métadonnées mises à jour");
-      setWizardStep(3);
-    },
-    onError: (error) => {
-      toast.error("❌ Erreur lors de la mise à jour: " + error.message);
-    }
-  });
-
-  const { data: questionsDataRaw, isLoading: loadingQuestions } = trpc.mdr.getQuestions.useQuery(
-    { selectedProcesses: selectedProcess === "all" ? [] : [selectedProcess] },
-    { enabled: isAuditCreated }
-  );
-
-  const { data: existingResponses } = trpc.mdr.getResponses.useQuery(
+  // New tRPC queries for drill-down
+  const { data: auditContext, isLoading: loadingAuditContext } = trpc.mdr.getAuditContext.useQuery(
     { auditId: auditId as number },
     { enabled: !!auditId }
   );
+
+  const { data: questionsData, isLoading: loadingQuestions } = trpc.mdr.getQuestionsForAudit.useQuery(
+    { auditId: auditId as number },
+    { enabled: !!auditId }
+  );
+
+  const { data: existingResponses, refetch: refetchResponses } = trpc.mdr.getResponses.useQuery(
+    { auditId: auditId as number },
+    { enabled: !!auditId }
+  );
+
+  const saveResponseMutation = trpc.mdr.saveResponse.useMutation({
+    onSuccess: () => {
+      toast.success("Réponse enregistrée !");
+      refetchResponses(); // Refresh responses after saving
+    },
+    onError: (error) => {
+      toast.error("Erreur lors de l\'enregistrement de la réponse: " + error.message);
+    },
+  });
+
+  const getAiSuggestionMutation = trpc.mdr.getAiSuggestion.useMutation({
+    onSuccess: (data) => {
+      setCurrentAiSuggestion(data.suggestion);
+    },
+    onError: (error) => {
+      toast.error("Erreur lors de la génération de la suggestion IA: " + error.message);
+    },
+  });
 
   // Initialize from params or profile
   useEffect(() => {
@@ -117,7 +162,6 @@ export default function MDRAudit() {
       const id = parseInt(params.id);
       setAuditId(id);
       setIsAuditCreated(true);
-      setWizardStep(3); // Direct to step 3 if ID exists
     } else if (qualification?.economicRole) {
       setSelectedRole(qualification.economicRole);
     }
@@ -129,6 +173,19 @@ export default function MDRAudit() {
       setAuditName(`Audit MDR (${selectedRole}) - ${new Date().toLocaleDateString("fr-FR")}`);
     }
   }, [selectedRole]);
+
+  // Update current response state when question or existing responses change
+  useEffect(() => {
+    if (questionsData?.questions && existingResponses) {
+      const currentQuestion = questionsData.questions[currentQuestionIndex];
+      if (currentQuestion) {
+        const response = existingResponses.find(r => r.questionKey === currentQuestion.questionKey);
+        setCurrentResponseValue(response?.responseValue);
+        setCurrentResponseComment(response?.responseComment || "");
+        setCurrentAiSuggestion(null); // Clear AI suggestion for new question
+      }
+    }
+  }, [currentQuestionIndex, questionsData, existingResponses]);
 
   // Handle site creation
   const handleSiteCreated = (siteId: number) => {
@@ -152,12 +209,12 @@ export default function MDRAudit() {
   // Handle Step 1 submission
   const handleStep1Submit = () => {
     if (!isStep1Valid()) {
-      toast.error("Veuillez remplir tous les champs obligatoires de l'étape 1");
+      toast.error("Veuillez remplir tous les champs obligatoires de l\'étape 1");
       return;
     }
 
     createAudit.mutate({
-      auditType: "internal", // Default for MDR Wizard
+      auditType: "internal",
       standard: "MDR",
       name: auditName,
       siteId: parseInt(selectedSiteId),
@@ -175,33 +232,50 @@ export default function MDRAudit() {
     });
   };
 
-  // Handle Step 2 submission
-  const handleStep2Submit = () => {
-    if (!auditId) return;
+  const handleSaveAndContinue = useCallback(async () => {
+    if (!auditId || !questionsData?.questions) return;
 
-    updateAuditMetadata.mutate({
-      auditId,
-      auditedEntityName: auditedEntityName || undefined,
-      auditedEntityAddress: auditedEntityAddress || undefined,
-      exclusions: exclusions || undefined,
-      productFamilies: productFamilies || undefined,
-      classDevices: classDevices || undefined,
-      markets: markets || undefined,
-      auditTeamMembers: auditTeamMembers || undefined,
-      versionReferentials: versionReferentials || undefined,
-    });
-  };
-
-  // Handle Step 3 - Start audit questions
-  const handleStartQuestions = () => {
-    if (auditId) {
-      // Rediriger vers la liste des audits ou le détail de l'audit
-      // Étant donné que /mdr/audit/:id ne semble pas encore implémenté pour le questionnaire,
-      // on redirige vers /audits pour que l'utilisateur puisse voir son audit créé.
-      setLocation(`/audits`);
-      toast.info("Audit créé ! Vous pouvez maintenant le retrouver dans votre liste d'audits.");
+    const currentQuestion = questionsData.questions[currentQuestionIndex];
+    if (!currentQuestion || !currentResponseValue) {
+      toast.error("Veuillez sélectionner une réponse pour continuer.");
+      return;
     }
-  };
+
+    await saveResponseMutation.mutateAsync({
+      auditId,
+      questionKey: currentQuestion.questionKey,
+      responseValue: currentResponseValue as any,
+      responseComment: currentResponseComment,
+      note: currentResponseComment,
+      role: auditContext?.economicRole,
+      processId: String(currentQuestion.processId),
+      evidenceFiles: [],
+    });
+
+    if (currentQuestionIndex < questionsData.questions.length - 1) {
+      setCurrentQuestionIndex(prev => prev + 1);
+    } else {
+      toast.success("Toutes les questions ont été traitées !");
+      setLocation(`/audit/${auditId}/results`);
+    }
+  }, [auditId, questionsData, currentQuestionIndex, currentResponseValue, currentResponseComment, saveResponseMutation, auditContext, setLocation]);
+
+  const handleGetAiSuggestion = useCallback(() => {
+    if (!auditId || !questionsData?.questions) return;
+    const currentQuestion = questionsData.questions[currentQuestionIndex];
+    if (!currentQuestion) return;
+
+    getAiSuggestionMutation.mutate({
+      auditId,
+      questionKey: currentQuestion.questionKey,
+      current: {
+        responseValue: currentResponseValue as any,
+        responseComment: currentResponseComment,
+        role: auditContext?.economicRole,
+        processId: String(currentQuestion.processId),
+      },
+    });
+  }, [auditId, questionsData, currentQuestionIndex, currentResponseValue, currentResponseComment, auditContext, getAiSuggestionMutation]);
 
   if (!isAuthenticated) {
     return (
@@ -210,7 +284,7 @@ export default function MDRAudit() {
           <CardHeader className="text-center">
             <AlertCircle className="h-8 w-8 text-red-600 mx-auto mb-4" />
             <CardTitle className="text-2xl">Authentification requise</CardTitle>
-            <CardDescription>Veuillez vous connecter pour accéder à l'audit</CardDescription>
+            <CardDescription>Veuillez vous connecter pour accéder à l\'audit</CardDescription>
           </CardHeader>
           <CardContent>
             <Button onClick={() => setLocation("/login")} className="w-full">Se connecter</Button>
@@ -220,425 +294,144 @@ export default function MDRAudit() {
     );
   }
 
-  // STEP 1: CRITICAL FIELDS
-  if (wizardStep === 1 && !isAuditCreated) {
+  // Render drill-down UI if auditId is present
+  if (match && auditId) {
+    if (loadingAuditContext || loadingQuestions) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+          <p className="ml-2">Chargement de l\'audit...</p>
+        </div>
+      );
+    }
+
+    if (!questionsData || !auditContext || questionsData.questions.length === 0) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
+          <Card className="w-full max-w-2xl shadow-lg">
+            <CardHeader className="text-center">
+              <AlertCircle className="h-8 w-8 text-red-600 mx-auto mb-4" />
+              <CardTitle className="text-2xl">Aucune question trouvée</CardTitle>
+              <CardDescription>Veuillez vérifier la configuration de l\'audit (rôle, processus) ou les questions disponibles.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button onClick={() => setLocation("/audits")} className="w-full">Retour à la liste des audits</Button>
+            </CardContent>
+          </Card>
+        </div>
+      );
+    }
+
+    const questions = questionsData.questions;
+    const totalQuestions = questions.length;
+    const currentQuestion = questions[currentQuestionIndex];
+    const progress = ((currentQuestionIndex + 1) / totalQuestions) * 100;
+
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
-        <Card className="w-full max-w-2xl shadow-lg">
-          <CardHeader className="text-center">
-            <div className="mx-auto bg-blue-100 w-16 h-16 rounded-full flex items-center justify-center mb-4">
-              <FileText className="h-8 w-8 text-blue-600" />
-            </div>
-            <CardTitle className="text-2xl">Démarrer un Audit MDR</CardTitle>
-            <CardDescription>Étape 1/3 - Informations critiques (obligatoires)</CardDescription>
-            <Progress value={33} className="mt-4" />
+        <Card className="w-full max-w-3xl shadow-lg">
+          <CardHeader>
+            <CardTitle className="text-2xl">Audit MDR: {auditContext.auditName || `ID ${auditId}`}</CardTitle>
+            <CardDescription>
+              Question {currentQuestionIndex + 1} / {totalQuestions}
+              <Progress value={progress} className="mt-2" />
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            
-            {/* IDENTIFICATION */}
-            <div className="space-y-4">
-              <h3 className="font-semibold text-sm text-slate-700">Identification</h3>
-              
-              <div className="space-y-2">
-                <Label>Rôle Économique *</Label>
-                <Select value={selectedRole} onValueChange={setSelectedRole}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ECONOMIC_ROLES.map(role => (
-                      <SelectItem key={role.value} value={role.value}>{role.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+            <div className="flex flex-wrap gap-2 mb-4">
+              {currentQuestion.article && <Badge variant="secondary">Article: {currentQuestion.article}</Badge>}
+              {currentQuestion.annexe && <Badge variant="secondary">Annexe: {currentQuestion.annexe}</Badge>}
+              {currentQuestion.criticality && <Badge variant="secondary">Criticité: {currentQuestion.criticality}</Badge>}
+              {currentQuestion.processName && <Badge variant="secondary">Processus: {currentQuestion.processName}</Badge>}
+            </div>
 
-              <div className="space-y-2">
-                <Label>Site / Localisation *</Label>
-                {loadingSites ? (
-                  <div className="flex items-center justify-center p-2 text-sm text-slate-500">
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" /> Chargement des sites...
-                  </div>
-                ) : !sitesData || sitesData.length === 0 ? (
-                  <div className="space-y-2">
-                    <Alert>
-                      <AlertCircle className="h-4 w-4" />
-                      <AlertDescription>Aucun site disponible.</AlertDescription>
-                    </Alert>
-                    <Button
-                      variant="outline"
-                      className="w-full"
-                      onClick={() => setShowSiteModal(true)}
-                    >
-                      + Créer un nouveau site
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <Select value={selectedSiteId} onValueChange={setSelectedSiteId}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Sélectionnez un site" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {sitesData.map((site: any) => (
-                          <SelectItem key={site.id} value={String(site.id)}>{site.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Button
-                      variant="outline"
-                      className="w-full"
-                      onClick={() => setShowSiteModal(true)}
-                    >
-                      + Créer un nouveau site
-                    </Button>
-                  </div>
-                )}
-              </div>
+            <div className="space-y-2">
+              <Label className="text-lg font-semibold">{currentQuestion.questionText}</Label>
+            </div>
 
-              <div className="space-y-2">
-                <Label>Organisation (optionnel)</Label>
-                <Select value={selectedOrganizationId} onValueChange={setSelectedOrganizationId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Sélectionnez une organisation" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {organizationsData?.map((org: any) => (
-                      <SelectItem key={org.id} value={String(org.id)}>{org.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+            {currentQuestion.risks && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  <span className="font-semibold">Risque associé :</span> {currentQuestion.risks}
+                </AlertDescription>
+              </Alert>
+            )}
 
-              <div className="space-y-2">
-                <Label>Nom de l'audit</Label>
-                <Input
-                  value={auditName}
-                  onChange={(e) => setAuditName(e.target.value)}
-                  placeholder="Audit MDR (Fabricant) - 10/02/2026"
-                />
+            <div className="space-y-2">
+              <Label htmlFor="response-comment">Réponse / Note</Label>
+              <Textarea
+                id="response-comment"
+                value={currentResponseComment}
+                onChange={(e) => setCurrentResponseComment(e.target.value)}
+                placeholder="Saisissez votre réponse ou vos notes ici..."
+                className="min-h-[100px]"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Statut de conformité</Label>
+              <div className="flex gap-2">
+                {RESPONSE_STATUSES.map(status => (
+                  <Button
+                    key={status.backend}
+                    variant={currentResponseValue === status.backend ? "default" : "outline"}
+                    className={currentResponseValue === status.backend ? status.color : ""}
+                    onClick={() => setCurrentResponseValue(status.backend)}
+                  >
+                    {status.ui}
+                  </Button>
+                ))}
               </div>
             </div>
 
-            {/* PÉRIMÈTRE MINIMAL */}
-            <div className="space-y-4">
-              <h3 className="font-semibold text-sm text-slate-700">Périmètre</h3>
-              
-              <div className="space-y-2">
-                <Label>Scope / Périmètre *</Label>
-                <Textarea
-                  value={auditScope}
-                  onChange={(e) => setAuditScope(e.target.value)}
-                  placeholder="Décrivez le périmètre de l'audit (ex: Dispositifs classe IIb, famille produits X)"
-                  className="min-h-20"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Méthode d'audit *</Label>
-                <Select value={auditMethod} onValueChange={setAuditMethod}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {AUDIT_METHODS.map(method => (
-                      <SelectItem key={method.value} value={method.value}>{method.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Processus à auditer</Label>
-                <Select value={selectedProcess} onValueChange={setSelectedProcess}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Tous les processus</SelectItem>
-                    {processesData?.processes?.map((p: any) => (
-                      <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+            <div className="space-y-2 border p-4 rounded-md bg-gray-50">
+              <Label>Documents justificatifs</Label>
+              <p className="text-sm text-gray-500">Fonctionnalité d\'upload non implémentée dans cette version.</p>
             </div>
 
-            {/* PLANIFICATION MINIMALE */}
-            <div className="space-y-4">
-              <h3 className="font-semibold text-sm text-slate-700">Planification</h3>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Date de démarrage prévue *</Label>
-                  <Input
-                    type="date"
-                    value={plannedStartDate}
-                    onChange={(e) => setPlannedStartDate(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Date de fin prévue</Label>
-                  <Input
-                    type="date"
-                    value={plannedEndDate}
-                    onChange={(e) => setPlannedEndDate(e.target.value)}
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* CONTACTS CRITIQUES */}
-            <div className="space-y-4">
-              <h3 className="font-semibold text-sm text-slate-700">Contacts</h3>
-              
-              <div className="space-y-2">
-                <Label>Auditeur responsable *</Label>
-                <Input
-                  value={auditLeader}
-                  onChange={(e) => setAuditLeader(e.target.value)}
-                  placeholder="Nom de l'auditeur responsable"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Contact auditée - Nom *</Label>
-                <Input
-                  value={auditeeMainContact}
-                  onChange={(e) => setAuditeeMainContact(e.target.value)}
-                  placeholder="Nom du contact principal"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Contact auditée - Email *</Label>
-                <Input
-                  type="email"
-                  value={auditeeContactEmail}
-                  onChange={(e) => setAuditeeContactEmail(e.target.value)}
-                  placeholder="email@example.com"
-                />
-              </div>
-            </div>
-
-            {/* ACTIONS */}
-            <div className="flex gap-4 pt-6">
-              <Button variant="outline" className="flex-1" onClick={() => setLocation("/")}>
-                Annuler
-              </Button>
-              <Button 
-                className="flex-1" 
-                onClick={handleStep1Submit}
-                disabled={!isStep1Valid() || createAudit.isPending}
+            <div className="space-y-2">
+              <Button
+                variant="outline"
+                onClick={handleGetAiSuggestion}
+                disabled={getAiSuggestionMutation.isPending}
               >
-                {createAudit.isPending ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Création...
-                  </>
+                {getAiSuggestionMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                 ) : (
-                  <>
-                    Continuer vers l'étape 2
-                    <ChevronRight className="h-4 w-4 ml-2" />
-                  </>
+                  <Lightbulb className="h-4 w-4 mr-2" />
                 )}
+                Obtenir une recommandation IA
               </Button>
-            </div>
-          </CardContent>
-        </Card>
-        <SiteCreationModal
-          isOpen={showSiteModal}
-          onClose={() => setShowSiteModal(false)}
-          onSiteCreated={handleSiteCreated}
-        />
-      </div>
-    );
-  }
-
-  // STEP 2: CONTEXT & METADATA
-  if (wizardStep === 2 && isAuditCreated && auditId) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
-        <Card className="w-full max-w-2xl shadow-lg">
-          <CardHeader className="text-center">
-            <div className="mx-auto bg-amber-100 w-16 h-16 rounded-full flex items-center justify-center mb-4">
-              <FileText className="h-8 w-8 text-amber-600" />
-            </div>
-            <CardTitle className="text-2xl">Enrichir les Métadonnées</CardTitle>
-            <CardDescription>Étape 2/3 - Contexte & détails (facultatif)</CardDescription>
-            <Progress value={66} className="mt-4" />
-          </CardHeader>
-          <CardContent className="space-y-6">
-            
-            {/* IDENTIFICATION AVANCÉE */}
-            <div className="space-y-4">
-              <h3 className="font-semibold text-sm text-slate-700">Identification Avancée</h3>
-              
-              <div className="space-y-2">
-                <Label>Entité auditée - Nom</Label>
-                <Input
-                  value={auditedEntityName}
-                  onChange={(e) => setAuditedEntityName(e.target.value)}
-                  placeholder="Nom complet de l'entité"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Entité auditée - Adresse</Label>
-                <Textarea
-                  value={auditedEntityAddress}
-                  onChange={(e) => setAuditedEntityAddress(e.target.value)}
-                  placeholder="Adresse complète"
-                  className="min-h-16"
-                />
-              </div>
+              {currentAiSuggestion && (
+                <Alert className="mt-2">
+                  <Lightbulb className="h-4 w-4" />
+                  <AlertDescription className="whitespace-pre-wrap">
+                    {currentAiSuggestion}
+                  </AlertDescription>
+                </Alert>
+              )}
             </div>
 
-            {/* PÉRIMÈTRE DÉTAILLÉ */}
-            <div className="space-y-4">
-              <h3 className="font-semibold text-sm text-slate-700">Périmètre Détaillé</h3>
-              
-              <div className="space-y-2">
-                <Label>Exclusions</Label>
-                <Textarea
-                  value={exclusions}
-                  onChange={(e) => setExclusions(e.target.value)}
-                  placeholder="Éléments exclus du périmètre"
-                  className="min-h-16"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Familles de produits</Label>
-                <Input
-                  value={productFamilies}
-                  onChange={(e) => setProductFamilies(e.target.value)}
-                  placeholder="Ex: Seringues, Cathéters, Implants"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Classification des dispositifs</Label>
-                <Input
-                  value={classDevices}
-                  onChange={(e) => setClassDevices(e.target.value)}
-                  placeholder="Ex: Classe IIb, Classe III"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Marchés visés</Label>
-                <Input
-                  value={markets}
-                  onChange={(e) => setMarkets(e.target.value)}
-                  placeholder="Ex: EU, US, ASEAN"
-                />
-              </div>
-            </div>
-
-            {/* ÉQUIPE & CRITÈRES */}
-            <div className="space-y-4">
-              <h3 className="font-semibold text-sm text-slate-700">Équipe & Critères</h3>
-              
-              <div className="space-y-2">
-                <Label>Membres de l'équipe d'audit</Label>
-                <Textarea
-                  value={auditTeamMembers}
-                  onChange={(e) => setAuditTeamMembers(e.target.value)}
-                  placeholder="Noms et rôles des auditeurs (un par ligne)"
-                  className="min-h-16"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Version des référentiels</Label>
-                <Input
-                  value={versionReferentials}
-                  onChange={(e) => setVersionReferentials(e.target.value)}
-                  placeholder="Ex: MDR 2017/745 v2.0"
-                />
-              </div>
-            </div>
-
-            {/* ACTIONS */}
-            <div className="flex gap-4 pt-6">
-              <Button 
-                variant="outline" 
-                className="flex-1"
-                onClick={() => setWizardStep(1)}
+            <div className="flex justify-between gap-4 pt-6">
+              <Button
+                variant="outline"
+                onClick={() => setCurrentQuestionIndex(prev => Math.max(0, prev - 1))}
+                disabled={currentQuestionIndex === 0}
               >
                 <ChevronLeft className="h-4 w-4 mr-2" />
-                Retour
+                Précédent
               </Button>
-              <Button 
-                className="flex-1"
-                onClick={handleStep2Submit}
-                disabled={updateAuditMetadata.isPending}
+              <Button
+                onClick={handleSaveAndContinue}
+                disabled={saveResponseMutation.isPending || !currentResponseValue}
               >
-                {updateAuditMetadata.isPending ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Mise à jour...
-                  </>
+                {saveResponseMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                 ) : (
-                  <>
-                    Continuer vers l'étape 3
-                    <ChevronRight className="h-4 w-4 ml-2" />
-                  </>
+                  <CheckCircle2 className="h-4 w-4 mr-2" />
                 )}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  // STEP 3: SUMMARY & START QUESTIONS
-  if (wizardStep === 3 && isAuditCreated && auditId) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
-        <Card className="w-full max-w-2xl shadow-lg">
-          <CardHeader className="text-center">
-            <div className="mx-auto bg-green-100 w-16 h-16 rounded-full flex items-center justify-center mb-4">
-              <CheckCircle2 className="h-8 w-8 text-green-600" />
-            </div>
-            <CardTitle className="text-2xl">Audit Prêt à Démarrer</CardTitle>
-            <CardDescription>Étape 3/3 - Résumé & démarrage</CardDescription>
-            <Progress value={100} className="mt-4" />
-          </CardHeader>
-          <CardContent className="space-y-6">
-            
-            <Alert>
-              <CheckCircle2 className="h-4 w-4 text-green-600" />
-              <AlertDescription>
-                Audit <strong>#{auditId}</strong> créé avec succès. Vous pouvez maintenant démarrer le questionnaire MDR.
-              </AlertDescription>
-            </Alert>
-
-            <div className="bg-slate-50 p-4 rounded-lg space-y-3 text-sm">
-              <div><strong>Rôle économique :</strong> {selectedRole}</div>
-              <div><strong>Scope :</strong> {auditScope}</div>
-              <div><strong>Méthode :</strong> {auditMethod}</div>
-              <div><strong>Auditeur responsable :</strong> {auditLeader}</div>
-              <div><strong>Contact auditée :</strong> {auditeeMainContact} ({auditeeContactEmail})</div>
-            </div>
-
-            {/* ACTIONS */}
-            <div className="flex gap-4 pt-6">
-              <Button 
-                variant="outline" 
-                className="flex-1"
-                onClick={() => setWizardStep(2)}
-              >
-                <ChevronLeft className="h-4 w-4 mr-2" />
-                Retour
-              </Button>
-              <Button 
-                className="flex-1 bg-green-600 hover:bg-green-700"
-                onClick={handleStartQuestions}
-              >
-                Démarrer le Questionnaire MDR
+                Enregistrer et Continuer
                 <ChevronRight className="h-4 w-4 ml-2" />
               </Button>
             </div>
@@ -648,5 +441,135 @@ export default function MDRAudit() {
     );
   }
 
-  return null;
+  // Render wizard UI if no auditId is present in URL
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
+      <Card className="w-full max-w-2xl shadow-lg">
+        <CardHeader className="text-center">
+          <div className="mx-auto bg-blue-100 w-16 h-16 rounded-full flex items-center justify-center mb-4">
+            <FileText className="h-8 w-8 text-blue-600" />
+          </div>
+          <CardTitle className="text-2xl">Démarrer un Audit MDR</CardTitle>
+          <CardDescription>Étape 1/1 - Informations critiques</CardDescription>
+          <Progress value={50} className="mt-4" />
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="space-y-4">
+            <h3 className="font-semibold text-sm text-slate-700">Identification</h3>
+            <div className="space-y-2">
+              <Label>Rôle Économique *</Label>
+              <Select value={selectedRole} onValueChange={setSelectedRole}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {ECONOMIC_ROLES.map(role => (
+                    <SelectItem key={role.value} value={role.value}>{role.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Site / Localisation *</Label>
+              {loadingSites ? (
+                <div className="flex items-center justify-center p-2 text-sm text-slate-500">
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" /> Chargement des sites...
+                </div>
+              ) : (
+                <Select value={selectedSiteId} onValueChange={setSelectedSiteId}>
+                  <SelectTrigger><SelectValue placeholder="Sélectionner un site" /></SelectTrigger>
+                  <SelectContent>
+                    {sitesData?.sites.map(site => (
+                      <SelectItem key={site.id} value={String(site.id)}>{site.name}</SelectItem>
+                    ))}
+                    <Button variant="ghost" className="w-full justify-start" onClick={() => setShowSiteModal(true)}>
+                      + Ajouter un nouveau site
+                    </Button>
+                  </SelectContent>
+                </Select>
+              )}
+              <SiteCreationModal isOpen={showSiteModal} onClose={() => setShowSiteModal(false)} onSiteCreated={handleSiteCreated} />
+            </div>
+            <div className="space-y-2">
+              <Label>Organisation (optionnel)</Label>
+              <Select value={selectedOrganizationId} onValueChange={setSelectedOrganizationId}>
+                <SelectTrigger><SelectValue placeholder="Sélectionner une organisation" /></SelectTrigger>
+                <SelectContent>
+                  {organizationsData?.organizations.map(org => (
+                    <SelectItem key={org.id} value={String(org.id)}>{org.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="audit-name">Nom de l\'Audit *</Label>
+              <Input id="audit-name" value={auditName} onChange={(e) => setAuditName(e.target.value)} placeholder="Ex: Audit MDR annuel 2024" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="audit-scope">Périmètre de l\'Audit *</Label>
+              <Textarea id="audit-scope" value={auditScope} onChange={(e) => setAuditScope(e.target.value)} placeholder="Ex: Conception, fabrication et distribution..." className="min-h-24" />
+            </div>
+            <div className="space-y-2">
+              <Label>Méthode d\'Audit *</Label>
+              <Select value={auditMethod} onValueChange={setAuditMethod}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {AUDIT_METHODS.map(method => (
+                    <SelectItem key={method.value} value={method.value}>{method.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex gap-4">
+              <div className="space-y-2 flex-1">
+                <Label htmlFor="planned-start-date">Date de début prévue *</Label>
+                <Input id="planned-start-date" type="date" value={plannedStartDate} onChange={(e) => setPlannedStartDate(e.target.value)} />
+              </div>
+              <div className="space-y-2 flex-1">
+                <Label htmlFor="planned-end-date">Date de fin prévue</Label>
+                <Input id="planned-end-date" type="date" value={plannedEndDate} onChange={(e) => setPlannedEndDate(e.target.value)} />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="audit-leader">Auditeur Responsable *</Label>
+              <Input id="audit-leader" value={auditLeader} onChange={(e) => setAuditLeader(e.target.value)} placeholder="Nom de l\'auditeur principal" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="auditee-main-contact">Contact Principal Audité *</Label>
+              <Input id="auditee-main-contact" value={auditeeMainContact} onChange={(e) => setAuditeeMainContact(e.target.value)} placeholder="Nom du contact principal" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="auditee-contact-email">Email du Contact Audité *</Label>
+              <Input id="auditee-contact-email" type="email" value={auditeeContactEmail} onChange={(e) => setAuditeeContactEmail(e.target.value)} placeholder="Email du contact principal" />
+            </div>
+            <div className="space-y-2">
+              <Label>Processus à auditer (optionnel)</Label>
+              {loadingProcesses ? (
+                <div className="flex items-center justify-center p-2 text-sm text-slate-500">
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" /> Chargement des processus...
+                </div>
+              ) : (
+                <Select value={selectedProcess} onValueChange={setSelectedProcess}>
+                  <SelectTrigger><SelectValue placeholder="Sélectionner un processus" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tous les processus</SelectItem>
+                    {processesData?.processes.map(process => (
+                      <SelectItem key={process.id} value={process.id}>{process.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+          </div>
+          <div className="flex justify-end pt-6">
+            <Button onClick={handleStep1Submit} disabled={createAudit.isPending}>
+              {createAudit.isPending ? (
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Création...</>
+              ) : (
+                <><ChevronRight className="h-4 w-4 mr-2" /> Démarrer l\'Audit</>
+              )}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
 }
