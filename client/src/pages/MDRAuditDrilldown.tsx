@@ -5,13 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, AlertCircle, FileText, ChevronLeft, ChevronRight, CheckCircle2, Lightbulb } from "lucide-react";
+import { Loader2, AlertCircle, ChevronLeft, ChevronRight, CheckCircle2, Lightbulb } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/_core/hooks/useAuth";
 
 const RESPONSE_STATUSES = [
@@ -48,39 +46,57 @@ interface AuditResponse {
 export default function MDRAuditDrilldown() {
   const { isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
-  const [match, params] = useRoute("/mdr/audit/:id");
 
-  const auditId = params?.id ? parseInt(params.id) : null;
+  // ✅ FIX: param name = auditId (cohérent avec /mdr/audit/:auditId)
+  const [match, params] = useRoute("/mdr/audit/:auditId");
+
+  // ✅ FIX: conversion robuste + blocage queries si invalide
+  const auditIdRaw = params?.auditId;
+  const auditIdNum = Number(auditIdRaw);
+  const auditId = auditIdRaw && !Number.isNaN(auditIdNum) ? auditIdNum : null;
+  const enabled = !!auditId;
 
   // Drill-down state
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [currentResponseValue, setCurrentResponseValue] = useState<string | undefined>(undefined);
   const [currentResponseComment, setCurrentResponseComment] = useState<string>("");
   const [currentAiSuggestion, setCurrentAiSuggestion] = useState<string | null>(null);
-  
+
   // Data fetching
-  const { data: auditContext, isLoading: loadingAuditContext, error: auditContextError } = trpc.mdr.getAuditContext.useQuery(
+  const {
+    data: auditContext,
+    isLoading: loadingAuditContext,
+    error: auditContextError,
+  } = trpc.mdr.getAuditContext.useQuery(
     { auditId: auditId as number },
-    { enabled: !!auditId }
+    { enabled }
   );
 
-  const { data: questionsData, isLoading: loadingQuestions, error: questionsError } = trpc.mdr.getQuestionsForAudit.useQuery(
+  const {
+    data: questionsData,
+    isLoading: loadingQuestions,
+    error: questionsError,
+  } = trpc.mdr.getQuestionsForAudit.useQuery(
     { auditId: auditId as number },
-    { enabled: !!auditId }
+    { enabled }
   );
 
-  const { data: existingResponses, refetch: refetchResponses, error: responsesError } = trpc.mdr.getResponses.useQuery(
+  const {
+    data: existingResponses,
+    refetch: refetchResponses,
+    error: responsesError,
+  } = trpc.mdr.getResponses.useQuery(
     { auditId: auditId as number },
-    { enabled: !!auditId }
+    { enabled }
   );
 
   const saveResponseMutation = trpc.mdr.saveResponse.useMutation({
     onSuccess: () => {
       toast.success("Réponse enregistrée !");
-      refetchResponses(); // Refresh responses after saving
+      refetchResponses();
     },
     onError: (error) => {
-      toast.error("Erreur lors de l\"enregistrement de la réponse: " + error.message);
+      toast.error('Erreur lors de l\'enregistrement de la réponse: ' + error.message);
     },
   });
 
@@ -98,10 +114,10 @@ export default function MDRAuditDrilldown() {
     if (questionsData?.questions && existingResponses) {
       const currentQuestion = questionsData.questions[currentQuestionIndex];
       if (currentQuestion) {
-        const response = existingResponses.find(r => r.questionKey === currentQuestion.questionKey);
+        const response = existingResponses.find((r: any) => r.questionKey === currentQuestion.questionKey);
         setCurrentResponseValue(response?.responseValue);
         setCurrentResponseComment(response?.responseComment || "");
-        setCurrentAiSuggestion(null); // Clear AI suggestion for new question
+        setCurrentAiSuggestion(null);
       }
     }
   }, [currentQuestionIndex, questionsData, existingResponses]);
@@ -127,12 +143,21 @@ export default function MDRAuditDrilldown() {
     });
 
     if (currentQuestionIndex < questionsData.questions.length - 1) {
-      setCurrentQuestionIndex(prev => prev + 1);
+      setCurrentQuestionIndex((prev) => prev + 1);
     } else {
       toast.success("Toutes les questions ont été traitées !");
       setLocation(`/audit/${auditId}/results`);
     }
-  }, [auditId, questionsData, currentQuestionIndex, currentResponseValue, currentResponseComment, saveResponseMutation, auditContext, setLocation]);
+  }, [
+    auditId,
+    questionsData,
+    currentQuestionIndex,
+    currentResponseValue,
+    currentResponseComment,
+    saveResponseMutation,
+    auditContext,
+    setLocation,
+  ]);
 
   const handleGetAiSuggestion = useCallback(() => {
     if (!auditId || !questionsData?.questions) return;
@@ -149,7 +174,15 @@ export default function MDRAuditDrilldown() {
         processId: String(currentQuestion.processId),
       },
     });
-  }, [auditId, questionsData, currentQuestionIndex, currentResponseValue, currentResponseComment, auditContext, getAiSuggestionMutation]);
+  }, [
+    auditId,
+    questionsData,
+    currentQuestionIndex,
+    currentResponseValue,
+    currentResponseComment,
+    auditContext,
+    getAiSuggestionMutation,
+  ]);
 
   if (!isAuthenticated) {
     return (
@@ -158,16 +191,19 @@ export default function MDRAuditDrilldown() {
           <CardHeader className="text-center">
             <AlertCircle className="h-8 w-8 text-red-600 mx-auto mb-4" />
             <CardTitle className="text-2xl">Authentification requise</CardTitle>
-            <CardDescription>Veuillez vous connecter pour accéder à l\"audit</CardDescription>
+            <CardDescription>Veuillez vous connecter pour accéder à l"audit</CardDescription>
           </CardHeader>
           <CardContent>
-            <Button onClick={() => setLocation("/login")} className="w-full">Se connecter</Button>
+            <Button onClick={() => setLocation("/login")} className="w-full">
+              Se connecter
+            </Button>
           </CardContent>
         </Card>
       </div>
     );
   }
 
+  // ✅ FIX: si route non matchée ou auditId invalide => pas de tRPC, message clair
   if (!match || !auditId) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
@@ -175,10 +211,12 @@ export default function MDRAuditDrilldown() {
           <CardHeader className="text-center">
             <AlertCircle className="h-8 w-8 text-red-600 mx-auto mb-4" />
             <CardTitle className="text-2xl">Audit non spécifié</CardTitle>
-            <CardDescription>Veuillez fournir un ID d\"audit valide dans l\"URL.</CardDescription>
+            <CardDescription>Veuillez fournir un ID d"audit valide dans l"URL.</CardDescription>
           </CardHeader>
           <CardContent>
-            <Button onClick={() => setLocation("/audits")} className="w-full">Retour à la liste des audits</Button>
+            <Button onClick={() => setLocation("/audits")} className="w-full">
+              Retour à la liste des audits
+            </Button>
           </CardContent>
         </Card>
       </div>
@@ -189,7 +227,7 @@ export default function MDRAuditDrilldown() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
         <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-        <p className="ml-2">Chargement de l\"audit...</p>
+        <p className="ml-2">Chargement de l"audit...</p>
       </div>
     );
   }
@@ -201,10 +239,14 @@ export default function MDRAuditDrilldown() {
           <CardHeader className="text-center">
             <AlertCircle className="h-8 w-8 text-red-600 mx-auto mb-4" />
             <CardTitle className="text-2xl">Erreur de chargement</CardTitle>
-            <CardDescription>Une erreur est survenue lors du chargement des données de l\"audit. Veuillez réessayer.</CardDescription>
+            <CardDescription>
+              Une erreur est survenue lors du chargement des données de l"audit. Veuillez réessayer.
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <Button onClick={() => setLocation("/audits")} className="w-full">Retour à la liste des audits</Button>
+            <Button onClick={() => setLocation("/audits")} className="w-full">
+              Retour à la liste des audits
+            </Button>
           </CardContent>
         </Card>
       </div>
@@ -222,10 +264,14 @@ export default function MDRAuditDrilldown() {
           <CardHeader className="text-center">
             <AlertCircle className="h-8 w-8 text-red-600 mx-auto mb-4" />
             <CardTitle className="text-2xl">Aucune question trouvée</CardTitle>
-            <CardDescription>Veuillez vérifier la configuration de l\"audit (rôle, processus) ou les questions disponibles.</CardDescription>
+            <CardDescription>
+              Veuillez vérifier la configuration de l"audit (rôle, processus) ou les questions disponibles.
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <Button onClick={() => setLocation("/audits")} className="w-full">Retour à la liste des audits</Button>
+            <Button onClick={() => setLocation("/audits")} className="w-full">
+              Retour à la liste des audits
+            </Button>
           </CardContent>
         </Card>
       </div>
@@ -279,7 +325,7 @@ export default function MDRAuditDrilldown() {
           <div className="space-y-2">
             <Label>Statut de conformité</Label>
             <div className="flex gap-2">
-              {RESPONSE_STATUSES.map(status => (
+              {RESPONSE_STATUSES.map((status) => (
                 <Button
                   key={status.backend}
                   variant={currentResponseValue === status.backend ? "default" : "outline"}
@@ -294,7 +340,7 @@ export default function MDRAuditDrilldown() {
 
           <div className="space-y-2 border p-4 rounded-md bg-gray-50">
             <Label>Documents justificatifs</Label>
-            <p className="text-sm text-gray-500">Fonctionnalité d\"upload non implémentée dans cette version.</p>
+            <p className="text-sm text-gray-500">Fonctionnalité d"upload non implémentée dans cette version.</p>
           </div>
 
           <div className="space-y-2">
@@ -310,6 +356,7 @@ export default function MDRAuditDrilldown() {
               )}
               Obtenir une recommandation IA
             </Button>
+
             {currentAiSuggestion && (
               <Alert className="mt-2">
                 <Lightbulb className="h-4 w-4" />
@@ -323,12 +370,13 @@ export default function MDRAuditDrilldown() {
           <div className="flex justify-between gap-4 pt-6">
             <Button
               variant="outline"
-              onClick={() => setCurrentQuestionIndex(prev => Math.max(0, prev - 1))}
+              onClick={() => setCurrentQuestionIndex((prev) => Math.max(0, prev - 1))}
               disabled={currentQuestionIndex === 0}
             >
               <ChevronLeft className="h-4 w-4 mr-2" />
               Précédent
             </Button>
+
             <Button
               onClick={handleSaveAndContinue}
               disabled={saveResponseMutation.isPending || !currentResponseValue}
