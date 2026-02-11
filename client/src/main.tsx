@@ -1,5 +1,5 @@
 import { trpc } from "@/lib/trpc";
-import { UNAUTHED_ERR_MSG } from '@shared/const';
+import { UNAUTHED_ERR_MSG } from "@shared/const";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { httpBatchLink, TRPCClientError } from "@trpc/client";
 import { createRoot } from "react-dom/client";
@@ -8,6 +8,26 @@ import App from "./App";
 import { getLoginUrl } from "./const";
 import "./index.css";
 import "./lib/i18n"; // Initialize i18n
+
+// ✅ DEBUG TEMP: trace + prevent removeChild crash (MDR)
+// À enlever une fois la cause trouvée
+const __origRemoveChild = Node.prototype.removeChild;
+Node.prototype.removeChild = function <T extends Node>(this: Node, child: T) {
+  try {
+    // Avoid crash: removing a node that is not a child of this node
+    if (!this.contains(child)) {
+      console.error("[DOM] removeChild called with non-child", { parent: this, child });
+      console.error(new Error("[DOM] removeChild stack").stack);
+      // prevent crash
+      return child;
+    }
+    return __origRemoveChild.call(this, child) as T;
+  } catch (e) {
+    console.error("[DOM] removeChild exception", e);
+    console.error(new Error("[DOM] removeChild stack").stack);
+    throw e;
+  }
+};
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -25,13 +45,12 @@ const redirectToLoginIfUnauthorized = (error: unknown) => {
   if (typeof window === "undefined") return;
 
   const isUnauthorized = error.message === UNAUTHED_ERR_MSG;
-
   if (!isUnauthorized) return;
 
   window.location.href = getLoginUrl();
 };
 
-queryClient.getQueryCache().subscribe(event => {
+queryClient.getQueryCache().subscribe((event) => {
   if (event.type === "updated" && event.action.type === "error") {
     const error = event.query.state.error;
     redirectToLoginIfUnauthorized(error);
@@ -39,7 +58,7 @@ queryClient.getQueryCache().subscribe(event => {
   }
 });
 
-queryClient.getMutationCache().subscribe(event => {
+queryClient.getMutationCache().subscribe((event) => {
   if (event.type === "updated" && event.action.type === "error") {
     const error = event.mutation.state.error;
     redirectToLoginIfUnauthorized(error);
@@ -72,4 +91,5 @@ createRoot(document.getElementById("root")!).render(
     </QueryClientProvider>
   </trpc.Provider>
 );
+
 // Force rebuild Thu Feb  5 15:12:48 EST 2026
