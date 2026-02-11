@@ -46,6 +46,18 @@ import AuditResults from "./pages/AuditResults";
 import AuditComparison from "./pages/AuditComparison";
 import SiteManagement from "./pages/SiteManagement";
 
+/**
+ * ✅ IMPORTANT ROUTING FIX (MDR)
+ *
+ * Objectif :
+ * - /mdr/audit         => Wizard ONLY (ne doit JAMAIS appeler mdr.getAuditContext)
+ * - /mdr/audit/:auditId => Questionnaire (là, getAuditContext est OK)
+ *
+ * ⚠️ Si ces imports ne matchent pas exactement tes fichiers, ajuste uniquement ces 2 lignes.
+ */
+import MDRAuditWizard from "./pages/MDRAudit"; // <-- ajuste le chemin/nom si besoin
+import MdrQuestionnaire from "./pages/MdrQuestionnaire"; // <-- ajuste le chemin/nom si besoin
+
 function Router() {
   return (
     <Switch>
@@ -61,6 +73,11 @@ function Router() {
       <Route path={"/fda/qualification"} component={FDAQualification} />
       <Route path={"/fda/audit"} component={FDAAuditNew} />
 
+      {/* ✅ MDR ROUTES - ORDER MATTERS */}
+      <Route path="/mdr/audit" component={MDRAuditWizard} />
+      <Route path="/mdr/audit/:auditId" component={MdrQuestionnaire} />
+
+      {/* Keep the MDR wildcard AFTER the explicit routes */}
       <Route path={"/mdr/*"} component={MdrRoutesErrorBoundary} />
 
       <Route path={"/iso/qualification"} component={ISOQualification} />
