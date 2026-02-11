@@ -15,6 +15,7 @@ export default defineConfig({
   publicDir: path.resolve(import.meta.dirname, "client", "public"),
   build: {
     outDir: path.resolve(import.meta.dirname, "dist"),
+    sourcemap: true,
     emptyOutDir: true,
     rollupOptions: {
       external: ["@assets"], // Ignorer l'alias assets s'il pose problème
