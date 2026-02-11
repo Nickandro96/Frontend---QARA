@@ -47,16 +47,15 @@ import AuditComparison from "./pages/AuditComparison";
 import SiteManagement from "./pages/SiteManagement";
 
 /**
- * ✅ IMPORTANT ROUTING FIX (MDR)
+ * ✅ MDR Wizard route must be isolated:
+ * - /mdr/audit => Wizard only (must NOT trigger mdr.getAuditContext)
+ * - /mdr/*     => everything else MDR (including /mdr/audit/:auditId) handled by MDR router
  *
- * Objectif :
- * - /mdr/audit         => Wizard ONLY (ne doit JAMAIS appeler mdr.getAuditContext)
- * - /mdr/audit/:auditId => Questionnaire (là, getAuditContext est OK)
- *
- * ⚠️ Si ces imports ne matchent pas exactement tes fichiers, ajuste uniquement ces 2 lignes.
+ * IMPORTANT:
+ * - Do NOT import a fake questionnaire page here (it broke Vercel build).
+ * - Keep /mdr/audit BEFORE /mdr/* (order matters in Wouter).
  */
-import MDRAuditWizard from "./pages/MDRAudit"; // <-- ajuste le chemin/nom si besoin
-import MdrQuestionnaire from "./pages/MdrQuestionnaire"; // <-- ajuste le chemin/nom si besoin
+import MDRAuditWizard from "./pages/MDRAudit";
 
 function Router() {
   return (
@@ -73,11 +72,8 @@ function Router() {
       <Route path={"/fda/qualification"} component={FDAQualification} />
       <Route path={"/fda/audit"} component={FDAAuditNew} />
 
-      {/* ✅ MDR ROUTES - ORDER MATTERS */}
+      {/* ✅ MDR ROUTING FIX (ORDER MATTERS) */}
       <Route path="/mdr/audit" component={MDRAuditWizard} />
-      <Route path="/mdr/audit/:auditId" component={MdrQuestionnaire} />
-
-      {/* Keep the MDR wildcard AFTER the explicit routes */}
       <Route path={"/mdr/*"} component={MdrRoutesErrorBoundary} />
 
       <Route path={"/iso/qualification"} component={ISOQualification} />
@@ -94,7 +90,7 @@ function Router() {
       <Route path="/audits" component={AuditsList} />
 
       {/* ✅ Aliases pour éviter les 404 (ORDER MATTERS)
-          IMPORTANT: on redirige vers /mdr/audit (wizard) — PAS de /mdr/audit/0
+          IMPORTANT: redirect to /mdr/audit (wizard) — NOT /mdr/audit/0
       */}
       <Route path="/audit/new">
         <Redirect to="/mdr/audit" />
