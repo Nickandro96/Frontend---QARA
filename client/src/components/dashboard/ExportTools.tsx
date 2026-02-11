@@ -84,7 +84,9 @@ export function ExportTools({ data, filters }: ExportToolsProps) {
       link.download = `audit-dashboard-${new Date().toISOString().split("T")[0]}.csv`;
       document.body.appendChild(link);
       link.click();
-      document.body.removeChild(link);
+      if (document.body.contains(link)) {
+        document.body.removeChild(link);
+      }
       URL.revokeObjectURL(url);
 
       toast({
@@ -167,7 +169,9 @@ export function ExportTools({ data, filters }: ExportToolsProps) {
       link.download = `Pack-DG-${new Date().toISOString().split('T')[0]}.pdf`;
       document.body.appendChild(link);
       link.click();
-      document.body.removeChild(link);
+      if (document.body.contains(link)) {
+        document.body.removeChild(link);
+      }
       window.URL.revokeObjectURL(url);
 
       toast({

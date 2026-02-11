@@ -42,7 +42,9 @@ export default function AuditResults() {
       link.download = result.filename;
       document.body.appendChild(link);
       link.click();
-      document.body.removeChild(link);
+      if (document.body.contains(link)) {
+        document.body.removeChild(link);
+      }
       window.URL.revokeObjectURL(url);
       
       toast.success("Rapport téléchargé avec succès");
