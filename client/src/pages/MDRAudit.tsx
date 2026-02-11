@@ -195,11 +195,7 @@ export default function MDRAudit() {
   // Handle Step 3 - Start audit questions
   const handleStartQuestions = () => {
     if (auditId) {
-      // Rediriger vers la liste des audits ou le détail de l'audit
-      // Étant donné que /mdr/audit/:id ne semble pas encore implémenté pour le questionnaire,
-      // on redirige vers /audits pour que l'utilisateur puisse voir son audit créé.
-      setLocation(`/audits`);
-      toast.info("Audit créé ! Vous pouvez maintenant le retrouver dans votre liste d'audits.");
+      setLocation(`/mdr/audit/${auditId}`);
     }
   };
 
@@ -259,7 +255,7 @@ export default function MDRAudit() {
                   <div className="flex items-center justify-center p-2 text-sm text-slate-500">
                     <Loader2 className="h-4 w-4 animate-spin mr-2" /> Chargement des sites...
                   </div>
-                ) : !sitesData || sitesData.length === 0 ? (
+                ) : !sitesData || (sitesData.sites ?? []).length === 0 ? (
                   <div className="space-y-2">
                     <Alert>
                       <AlertCircle className="h-4 w-4" />
