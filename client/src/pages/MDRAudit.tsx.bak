@@ -246,7 +246,7 @@ export default function MDRAudit() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {(ECONOMIC_ROLES ?? []).map(role => (
+                    {ECONOMIC_ROLES.map(role => (
                       <SelectItem key={role.value} value={role.value}>{role.label}</SelectItem>
                     ))}
                   </SelectContent>
@@ -280,7 +280,7 @@ export default function MDRAudit() {
                         <SelectValue placeholder="Sélectionnez un site" />
                       </SelectTrigger>
                       <SelectContent>
-                                {(sitesData?.sites ?? []).map(site => (
+                        {sitesData.map((site: any) => (
                           <SelectItem key={site.id} value={String(site.id)}>{site.name}</SelectItem>
                         ))}
                       </SelectContent>
@@ -303,7 +303,7 @@ export default function MDRAudit() {
                     <SelectValue placeholder="Sélectionnez une organisation" />
                   </SelectTrigger>
                   <SelectContent>
-                      {(organizationsData ?? []).map((org: any) => (
+                    {organizationsData?.map((org: any) => (
                       <SelectItem key={org.id} value={String(org.id)}>{org.name}</SelectItem>
                     ))}
                   </SelectContent>
@@ -356,8 +356,8 @@ export default function MDRAudit() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Tous les processus</SelectItem>
-                      {(processesData?.processes ?? []).map((process: any) => (
-                      <SelectItem key={process.id} value={String(process.id)}>{process.name}</SelectItem>
+                    {processesData?.processes?.map((p: any) => (
+                      <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

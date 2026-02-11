@@ -41,6 +41,7 @@ import ReportComparative from "./pages/ReportComparative";
 import AuditsList from "./pages/AuditsList";
 import MDRQualification from "./pages/MDRQualification";
 import MDRAudit from "./pages/MDRAudit";
+import MDRAuditDrilldown from "./pages/MDRAuditDrilldown";
 import ISOQualification from "./pages/ISOQualification";
 import ISOAudit from "./pages/ISOAudit";
 import AuditHistory from "./pages/AuditHistory";
@@ -63,7 +64,7 @@ function Router() {
       <Route path={"/fda/audit"} component={FDAAuditNew} />
       <Route path={"/mdr/qualification"} component={MDRQualification} />
       <Route path={"/mdr/audit"} component={MDRAudit} />
-      <Route path={"/mdr/audit/:id"} component={MDRAudit} />
+      <Route path={"/mdr/audit/:id"} component={MDRAuditDrilldown} />
       <Route path={"/iso/qualification"} component={ISOQualification} />
       <Route path="/iso/audit" component={ISOAudit} />
       <Route path="/audit-history" component={AuditHistory} />
