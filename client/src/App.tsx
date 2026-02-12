@@ -47,16 +47,6 @@ import AuditHistory from "./pages/AuditHistory";
 import AuditResults from "./pages/AuditResults";
 import AuditComparison from "./pages/AuditComparison";
 import SiteManagement from "./pages/SiteManagement";
-
-/**
- * ✅ MDR Wizard route must be isolated:
- * - /mdr/audit => Wizard only (must NOT trigger mdr.getAuditContext)
- * - /mdr/*     => everything else MDR (including /mdr/audit/:auditId) handled by MDR router
- *
- * IMPORTANT:
- * - Do NOT import a fake questionnaire page here (it broke Vercel build).
- * - Keep /mdr/audit BEFORE /mdr/* (order matters in Wouter).
- */
 import MDRAuditWizard from "./pages/MDRAudit";
 
 function Router() {
@@ -91,9 +81,6 @@ function Router() {
       <Route path="/reports/comparative" component={ReportComparative} />
       <Route path="/audits" component={AuditsList} />
 
-      {/* ✅ Aliases pour éviter les 404 (ORDER MATTERS)
-          IMPORTANT: redirect to /mdr/audit (wizard) — NOT /mdr/audit/0
-      */}
       <Route path="/audit/new">
         <Redirect to="/mdr/audit" />
       </Route>
@@ -141,8 +128,8 @@ const queryClient = new QueryClient();
 
 export default function App() {
   return (
-    <trpc.Provider client={trpcClient} queryClient={queryClient}>
-      <QueryClientProvider client={queryClient}>
+    <QueryClientProvider client={queryClient}>
+      <trpc.Provider client={trpcClient} queryClient={queryClient}>
         <ErrorBoundary>
           <ThemeProvider>
             <TooltipProvider>
@@ -151,7 +138,7 @@ export default function App() {
             </TooltipProvider>
           </ThemeProvider>
         </ErrorBoundary>
-      </QueryClientProvider>
-    </trpc.Provider>
+      </trpc.Provider>
+    </QueryClientProvider>
   );
 }
