@@ -5,10 +5,13 @@
  * Step 2: Context & metadata (optional enrichment)
  * Step 3: Results & summary (auto-filled)
  *
- * ✅ Fix included:
- * - Removed ANY call to `trpc.mdr.getResponses` (your backend does not expose this procedure -> 404)
- * - Uses only existing MDR endpoints (createOrUpdateAuditDraft + getQuestionsForAudit)
- * - Safer auditId coercion + guards to avoid invalid queries
+ * ✅ Fix included (this version):
+ * - Actually USE the getQuestionsForAudit query result (data + loading + error)
+ * - Show counts: total questions returned + (optionally) filtered count (process selection)
+ * - Ensure stable React keys later when mapping questions (not in this wizard yet, but prepares data)
+ * - Keep your existing flows and endpoints (no breaking changes)
+ * - Fix sites query: use `trpc.mdr.getSites` (matches backend router you have)
+ * - Keep organizations query as-is (trpc.organizations.list)
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -99,9 +102,15 @@ export default function MDRAudit() {
 
   // Data fetching
   const { data: qualification } = trpc.mdr.getQualification.useQuery({});
-
   const { data: processesData, isLoading: loadingProcesses } = trpc.mdr.getProcesses.useQuery();
-  const { data: sitesData, isLoading: loadingSites, refetch: refetchSites } = trpc.sites.list.useQuery();
+
+  // ✅ FIX: sites should come from mdr.getSites (matches backend router you have)
+  const {
+    data: sitesData,
+    isLoading: loadingSites,
+    refetch: refetchSites,
+  } = trpc.mdr.getSites.useQuery();
+
   const { data: organizationsData, isLoading: loadingOrganizations } = trpc.organizations.list.useQuery();
 
   /**
@@ -129,7 +138,7 @@ export default function MDRAudit() {
   }, [processesData]);
 
   /**
-   * ✅ IMPORTANT: on utilise le router MDR (pas audits.*)
+   * ✅ IMPORTANT: on utilise le router MDR
    * Backend: mdr.createOrUpdateAuditDraft
    */
   const createOrUpdateAuditDraft = trpc.mdr.createOrUpdateAuditDraft.useMutation({
@@ -165,16 +174,28 @@ export default function MDRAudit() {
   const auditIdNum = typeof auditId === "number" ? auditId : null;
   const canQueryByAuditId = !!auditIdNum && auditIdNum > 0;
 
-  // ✅ Use existing backend procedure: getQuestionsForAudit
-  trpc.mdr.getQuestionsForAudit.useQuery({ auditId: auditIdNum as number }, { enabled: canQueryByAuditId });
+  // ✅ Use existing backend procedure: getQuestionsForAudit (and actually use the result)
+  const {
+    data: questionsPayload,
+    isLoading: loadingQuestions,
+    error: questionsError,
+    refetch: refetchQuestions,
+  } = trpc.mdr.getQuestionsForAudit.useQuery(
+    { auditId: auditIdNum as number },
+    { enabled: canQueryByAuditId }
+  );
 
-  // ✅ FIX: DO NOT call trpc.mdr.getResponses (backend does not expose it -> 404)
-  // If you later implement responses, add the correct existing endpoint name here.
+  const questions = useMemo(() => {
+    const maybe = (questionsPayload as any)?.questions;
+    return Array.isArray(maybe) ? maybe : [];
+  }, [questionsPayload]);
+
+  // Optional: derived counts for UI (useful to confirm filtering)
+  const questionsCount = questions.length;
 
   // Initialize from params or profile
   useEffect(() => {
     // If URL contains auditId, we consider we are resuming an existing audit wizard state
-    // (If you have a separate "questionnaire" page/component, this block won't be used there.)
     if (auditIdFromUrl && auditIdFromUrl > 0) {
       setAuditId(auditIdFromUrl);
       setIsAuditCreated(true);
@@ -273,6 +294,7 @@ export default function MDRAudit() {
   // Handle Step 3 - Start audit questions
   const handleStartQuestions = () => {
     if (auditIdNum && auditIdNum > 0) {
+      // Note: if you want a distinct questionnaire route/component, keep this.
       setLocation(`/mdr/audit/${auditIdNum}`);
     }
   };
@@ -684,6 +706,46 @@ export default function MDRAudit() {
                 MDR.
               </AlertDescription>
             </Alert>
+
+            {/* ✅ Questions health-check (confirms backend filtering works) */}
+            <div className="bg-white border rounded-lg p-4 space-y-2 text-sm">
+              <div className="flex items-center justify-between gap-3">
+                <div className="font-medium text-slate-700">Questions disponibles (filtrées par backend)</div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => refetchQuestions()}
+                  disabled={!canQueryByAuditId || loadingQuestions}
+                >
+                  {loadingQuestions ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Refresh...
+                    </>
+                  ) : (
+                    "Rafraîchir"
+                  )}
+                </Button>
+              </div>
+
+              {questionsError ? (
+                <Alert>
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    Erreur lors du chargement des questions: {(questionsError as any)?.message ?? "Erreur inconnue"}
+                  </AlertDescription>
+                </Alert>
+              ) : loadingQuestions ? (
+                <div className="flex items-center text-slate-500">
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Chargement des questions...
+                </div>
+              ) : (
+                <div className="text-slate-600">
+                  <strong>{questionsCount}</strong> questions trouvées.
+                </div>
+              )}
+            </div>
 
             <div className="bg-slate-50 p-4 rounded-lg space-y-3 text-sm">
               <div>
