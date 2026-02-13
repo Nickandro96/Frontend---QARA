@@ -62,87 +62,98 @@ export default function MDRAuditDrilldown() {
   const [currentResponseComment, setCurrentResponseComment] = useState<string>("");
   const [currentAiSuggestion, setCurrentAiSuggestion] = useState<string | null>(null);
 
+  // ✅ Local responses cache (frontend-only) to replace missing mdr.getResponses
+  const [responsesByKey, setResponsesByKey] = useState<Record<string, AuditResponse>>({});
+
   // Data fetching
   const {
     data: auditContext,
     isLoading: loadingAuditContext,
     error: auditContextError,
-  } = trpc.mdr.getAuditContext.useQuery(
-    { auditId: auditId as number },
-    { enabled }
-  );
+  } = trpc.mdr.getAuditContext.useQuery({ auditId: auditId as number }, { enabled });
 
+  // ✅ Your backend returns an ARRAY (not { questions: [...] })
   const {
     data: questionsData,
     isLoading: loadingQuestions,
     error: questionsError,
-  } = trpc.mdr.getQuestionsForAudit.useQuery(
-    { auditId: auditId as number },
-    { enabled }
-  );
+  } = trpc.mdr.getQuestionsForAudit.useQuery({ auditId: auditId as number }, { enabled });
 
-  const {
-    data: existingResponses,
-    refetch: refetchResponses,
-    error: responsesError,
-  } = trpc.mdr.getResponses.useQuery(
-    { auditId: auditId as number },
-    { enabled }
-  );
+  // ❌ Removed: trpc.mdr.getResponses (does not exist on backend -> 404)
+  // const { data: existingResponses, refetch: refetchResponses, error: responsesError } =
+  //   trpc.mdr.getResponses.useQuery({ auditId: auditId as number }, { enabled });
 
   const saveResponseMutation = trpc.mdr.saveResponse.useMutation({
     onSuccess: () => {
       toast.success("Réponse enregistrée !");
-      refetchResponses();
+      // ✅ no refetch needed (we keep local cache)
     },
     onError: (error) => {
-      toast.error('Erreur lors de l\'enregistrement de la réponse: ' + error.message);
+      toast.error("Erreur lors de l'enregistrement de la réponse: " + error.message);
     },
   });
 
   const getAiSuggestionMutation = trpc.mdr.getAiSuggestion.useMutation({
     onSuccess: (data) => {
-      setCurrentAiSuggestion(data.suggestion);
+      setCurrentAiSuggestion((data as any)?.suggestion ?? null);
     },
     onError: (error) => {
       toast.error("Erreur lors de la génération de la suggestion IA: " + error.message);
     },
   });
 
-  // Update current response state when question or existing responses change
+  // ✅ Normalize questions array regardless of backend shape
+  const questions: Question[] = Array.isArray(questionsData)
+    ? (questionsData as any[])
+    : Array.isArray((questionsData as any)?.questions)
+      ? ((questionsData as any).questions as any[])
+      : [];
+
+  // Update current response state when question or stored responses change
   useEffect(() => {
-    if (questionsData?.questions && existingResponses) {
-      const currentQuestion = questionsData.questions[currentQuestionIndex];
-      if (currentQuestion) {
-        const response = existingResponses.find((r: any) => r.questionKey === currentQuestion.questionKey);
-        setCurrentResponseValue(response?.responseValue);
-        setCurrentResponseComment(response?.responseComment || "");
-        setCurrentAiSuggestion(null);
-      }
-    }
-  }, [currentQuestionIndex, questionsData, existingResponses]);
+    const currentQuestion = questions[currentQuestionIndex];
+    if (!currentQuestion?.questionKey) return;
+
+    const existing = responsesByKey[currentQuestion.questionKey];
+    setCurrentResponseValue(existing?.responseValue);
+    setCurrentResponseComment(existing?.responseComment || "");
+    setCurrentAiSuggestion(null);
+  }, [currentQuestionIndex, questions, responsesByKey]);
 
   const handleSaveAndContinue = useCallback(async () => {
-    if (!auditId || !questionsData?.questions) return;
+    if (!auditId || !questions.length) return;
 
-    const currentQuestion = questionsData.questions[currentQuestionIndex];
+    const currentQuestion = questions[currentQuestionIndex];
     if (!currentQuestion || !currentResponseValue) {
       toast.error("Veuillez sélectionner une réponse pour continuer.");
       return;
     }
 
+    // ✅ Persist to backend (if your backend supports mdr.saveResponse)
     await saveResponseMutation.mutateAsync({
       auditId,
       questionKey: currentQuestion.questionKey,
       responseValue: currentResponseValue as any,
       responseComment: currentResponseComment,
       note: currentResponseComment,
-      role: auditContext?.economicRole,
-      processId: String(currentQuestion.processId),
+      role: (auditContext as any)?.economicRole,
+      processId: currentQuestion.processId ? String(currentQuestion.processId) : null,
       evidenceFiles: [],
-    });
+    } as any);
 
-    if (currentQuestionIndex < questionsData.questions.length - 1) {
+    // ✅ Keep local cache so UI behaves like "existingResponses"
+    setResponsesByKey((prev) => ({
+      ...prev,
+      [currentQuestion.questionKey]: {
+        questionKey: currentQuestion.questionKey,
+        responseValue: currentResponseValue,
+        responseComment: currentResponseComment,
+        note: currentResponseComment,
+        evidenceFiles: [],
+      },
+    }));
+
+    if (currentQuestionIndex < questions.length - 1) {
       setCurrentQuestionIndex((prev) => prev + 1);
     } else {
       toast.success("Toutes les questions ont été traitées !");
@@ -150,7 +161,7 @@ export default function MDRAuditDrilldown() {
     }
   }, [
     auditId,
-    questionsData,
+    questions,
     currentQuestionIndex,
     currentResponseValue,
     currentResponseComment,
@@ -160,8 +171,8 @@ export default function MDRAuditDrilldown() {
   ]);
 
   const handleGetAiSuggestion = useCallback(() => {
-    if (!auditId || !questionsData?.questions) return;
-    const currentQuestion = questionsData.questions[currentQuestionIndex];
+    if (!auditId || !questions.length) return;
+    const currentQuestion = questions[currentQuestionIndex];
     if (!currentQuestion) return;
 
     getAiSuggestionMutation.mutate({
@@ -170,13 +181,13 @@ export default function MDRAuditDrilldown() {
       current: {
         responseValue: currentResponseValue as any,
         responseComment: currentResponseComment,
-        role: auditContext?.economicRole,
-        processId: String(currentQuestion.processId),
+        role: (auditContext as any)?.economicRole,
+        processId: currentQuestion.processId ? String(currentQuestion.processId) : null,
       },
-    });
+    } as any);
   }, [
     auditId,
-    questionsData,
+    questions,
     currentQuestionIndex,
     currentResponseValue,
     currentResponseComment,
@@ -232,7 +243,7 @@ export default function MDRAuditDrilldown() {
     );
   }
 
-  if (auditContextError || questionsError || responsesError) {
+  if (auditContextError || questionsError) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
         <Card className="w-full max-w-2xl shadow-lg">
@@ -253,7 +264,6 @@ export default function MDRAuditDrilldown() {
     );
   }
 
-  const questions = questionsData?.questions ?? [];
   const totalQuestions = questions.length;
   const currentQuestion = questions[currentQuestionIndex];
 
@@ -278,13 +288,13 @@ export default function MDRAuditDrilldown() {
     );
   }
 
-  const progress = ((currentQuestionIndex + 1) / totalQuestions) * 100;
+  const progress = totalQuestions > 0 ? ((currentQuestionIndex + 1) / totalQuestions) * 100 : 0;
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
       <Card className="w-full max-w-3xl shadow-lg">
         <CardHeader>
-          <CardTitle className="text-2xl">Audit MDR: {auditContext?.auditName || `ID ${auditId}`}</CardTitle>
+          <CardTitle className="text-2xl">Audit MDR: {(auditContext as any)?.auditName || `ID ${auditId}`}</CardTitle>
           <CardDescription>
             Question {currentQuestionIndex + 1} / {totalQuestions}
             <Progress value={progress} className="mt-2" />
@@ -344,11 +354,7 @@ export default function MDRAuditDrilldown() {
           </div>
 
           <div className="space-y-2">
-            <Button
-              variant="outline"
-              onClick={handleGetAiSuggestion}
-              disabled={getAiSuggestionMutation.isPending}
-            >
+            <Button variant="outline" onClick={handleGetAiSuggestion} disabled={getAiSuggestionMutation.isPending}>
               {getAiSuggestionMutation.isPending ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               ) : (
@@ -360,9 +366,7 @@ export default function MDRAuditDrilldown() {
             {currentAiSuggestion && (
               <Alert className="mt-2">
                 <Lightbulb className="h-4 w-4" />
-                <AlertDescription className="whitespace-pre-wrap">
-                  {currentAiSuggestion}
-                </AlertDescription>
+                <AlertDescription className="whitespace-pre-wrap">{currentAiSuggestion}</AlertDescription>
               </Alert>
             )}
           </div>
@@ -377,10 +381,7 @@ export default function MDRAuditDrilldown() {
               Précédent
             </Button>
 
-            <Button
-              onClick={handleSaveAndContinue}
-              disabled={saveResponseMutation.isPending || !currentResponseValue}
-            >
+            <Button onClick={handleSaveAndContinue} disabled={saveResponseMutation.isPending || !currentResponseValue}>
               {saveResponseMutation.isPending ? (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               ) : (
