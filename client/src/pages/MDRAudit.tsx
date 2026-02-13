@@ -35,12 +35,25 @@ const AUDIT_METHODS = [
   { value: "hybrid", label: "Hybride" },
 ];
 
+function coerceAuditId(raw: unknown): number | null {
+  if (typeof raw === "number" && Number.isFinite(raw) && raw > 0) return raw;
+  if (typeof raw === "string") {
+    const n = Number(raw);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  if (raw && typeof raw === "object" && "id" in (raw as any)) {
+    const n = Number((raw as any).id);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  return null;
+}
+
 export default function MDRAudit() {
   const { isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
 
   // ✅ Route param name = auditId
-  const [match, params] = useRoute("/mdr/audit/:auditId");
+  const [, params] = useRoute("/mdr/audit/:auditId");
 
   // Wizard state
   const [wizardStep, setWizardStep] = useState(1);
@@ -93,18 +106,14 @@ export default function MDRAudit() {
    * - ou un objet: { organizations: [...] } / { sites: [...] } / { processes: [...] }
    */
   const organizations = useMemo(() => {
-    // cas 1: tableau direct
     if (Array.isArray(organizationsData)) return organizationsData as any[];
-    // cas 2: objet { organizations: [] }
     const maybe = (organizationsData as any)?.organizations;
     return Array.isArray(maybe) ? maybe : [];
   }, [organizationsData]);
 
   const sites = useMemo(() => {
-    // cas attendu: { sites: [] }
     const maybe = (sitesData as any)?.sites;
     if (Array.isArray(maybe)) return maybe;
-    // fallback si jamais le backend renvoie un tableau direct
     return Array.isArray(sitesData as any) ? (sitesData as any) : [];
   }, [sitesData]);
 
@@ -114,21 +123,30 @@ export default function MDRAudit() {
     return Array.isArray(processesData as any) ? (processesData as any) : [];
   }, [processesData]);
 
-  const createAudit = trpc.audits.create.useMutation({
+  /**
+   * ✅ IMPORTANT: on utilise le router MDR (pas audits.*)
+   * Backend: mdr.createOrUpdateAuditDraft (création + update)
+   */
+  const createOrUpdateAuditDraft = trpc.mdr.createOrUpdateAuditDraft.useMutation({
     onSuccess: (data) => {
-      if (data?.auditId) {
-        setAuditId(data.auditId);
-        setIsAuditCreated(true);
-        toast.success("✅ Audit créé avec succès");
-        setWizardStep(2);
+      const id = coerceAuditId((data as any)?.auditId);
+      if (!id) {
+        console.error("Bad createOrUpdateAuditDraft response:", data);
+        toast.error("❌ Réponse API invalide: auditId introuvable");
+        return;
       }
+
+      setAuditId(id);
+      setIsAuditCreated(true);
+      toast.success("✅ Audit enregistré");
+      setWizardStep(2);
     },
     onError: (error) => {
-      toast.error("❌ Erreur lors de la création de l'audit: " + error.message);
+      toast.error("❌ Erreur lors de l'enregistrement de l'audit: " + error.message);
     },
   });
 
-  const updateAuditMetadata = trpc.audits.updateMetadata.useMutation({
+  const updateAuditMetadata = trpc.mdr.createOrUpdateAuditDraft.useMutation({
     onSuccess: () => {
       toast.success("✅ Métadonnées mises à jour");
       setWizardStep(3);
@@ -138,23 +156,18 @@ export default function MDRAudit() {
     },
   });
 
-  // ✅ IMPORTANT: getQuestions must NOT run unless auditId is valid (>0)
+  // ✅ IMPORTANT: queries MDR must NOT run unless auditId is valid (>0)
   const auditIdNum = typeof auditId === "number" ? auditId : null;
   const canQueryByAuditId = !!auditIdNum && auditIdNum > 0;
 
-  trpc.mdr.getQuestions.useQuery(
-    {
-      auditId: auditIdNum as number,
-      selectedProcesses: selectedProcess === "all" ? [] : [selectedProcess],
-    },
-    { enabled: canQueryByAuditId }
-  );
+  // ✅ Use the real router name from backend: getQuestionsForAudit
+  trpc.mdr.getQuestionsForAudit.useQuery({ auditId: auditIdNum as number }, { enabled: canQueryByAuditId });
 
-  trpc.mdr.getResponses.useQuery({ auditId: auditIdNum as number }, { enabled: canQueryByAuditId });
+  // ❌ Removed: trpc.mdr.getResponses (not present in your backend snippet, caused silent failures/crashes)
 
   // Initialize from params or profile
   useEffect(() => {
-    // ✅ if URL contains auditId -> direct open summary step 3
+    // ✅ if URL contains auditId -> open summary step 3
     if (auditIdFromUrl && auditIdFromUrl > 0) {
       setAuditId(auditIdFromUrl);
       setIsAuditCreated(true);
@@ -201,22 +214,25 @@ export default function MDRAudit() {
       return;
     }
 
-    createAudit.mutate({
-      auditType: "internal", // Default for MDR Wizard
-      standard: "MDR",
+    createOrUpdateAuditDraft.mutate({
+      // CREATE (auditId omitted)
+      siteId: parseInt(selectedSiteId, 10),
       name: auditName,
-      siteId: parseInt(selectedSiteId),
-      organizationId: selectedOrganizationId ? parseInt(selectedOrganizationId) : undefined,
+      auditType: "internal",
+      status: "draft",
+
+      // Important: arrays expected by backend
       referentialIds: [1],
-      economicRole: selectedRole,
-      processesSelected: selectedProcess === "all" ? [] : [selectedProcess],
-      scope: auditScope,
-      auditMethod: auditMethod as "on_site" | "remote" | "hybrid",
-      plannedStartDate: new Date(plannedStartDate),
-      plannedEndDate: plannedEndDate ? new Date(plannedEndDate) : undefined,
-      auditLeader: auditLeader,
-      auditeeMainContact: auditeeMainContact,
-      auditeeContactEmail: auditeeContactEmail,
+      processIds: selectedProcess === "all" ? [] : [selectedProcess],
+
+      economicRole: selectedRole as any,
+
+      // Store what we can safely map to existing columns in DB
+      clientOrganization: selectedOrganizationId ? String(selectedOrganizationId) : null,
+      siteLocation: null,
+
+      auditorName: auditLeader || null,
+      auditorEmail: auditeeContactEmail || null,
     });
   };
 
@@ -225,15 +241,28 @@ export default function MDRAudit() {
     if (!auditIdNum || auditIdNum <= 0) return;
 
     updateAuditMetadata.mutate({
+      // UPDATE
       auditId: auditIdNum,
-      auditedEntityName: auditedEntityName || undefined,
-      auditedEntityAddress: auditedEntityAddress || undefined,
-      exclusions: exclusions || undefined,
-      productFamilies: productFamilies || undefined,
-      classDevices: classDevices || undefined,
-      markets: markets || undefined,
-      auditTeamMembers: auditTeamMembers || undefined,
-      versionReferentials: versionReferentials || undefined,
+      siteId: parseInt(selectedSiteId, 10),
+      name: auditName,
+      auditType: "internal",
+      status: "draft",
+
+      referentialIds: [1],
+      processIds: selectedProcess === "all" ? [] : [selectedProcess],
+
+      economicRole: selectedRole as any,
+
+      /**
+       * ⚠️ Tant que ta table audits n'a pas de colonnes dédiées (auditedEntityName, exclusions, etc.),
+       * on ne les envoie pas ici pour éviter de casser le backend.
+       * Si tu veux les persister, on fera un mapping propre côté DB + router.
+       */
+      clientOrganization: auditedEntityName ? auditedEntityName : (selectedOrganizationId ? String(selectedOrganizationId) : null),
+      siteLocation: auditedEntityAddress ? auditedEntityAddress : null,
+
+      auditorName: auditLeader || null,
+      auditorEmail: auditeeContactEmail || null,
     });
   };
 
@@ -474,11 +503,15 @@ export default function MDRAudit() {
               <Button variant="outline" className="flex-1" onClick={() => setLocation("/")}>
                 Annuler
               </Button>
-              <Button className="flex-1" onClick={handleStep1Submit} disabled={!isStep1Valid() || createAudit.isPending}>
-                {createAudit.isPending ? (
+              <Button
+                className="flex-1"
+                onClick={handleStep1Submit}
+                disabled={!isStep1Valid() || createOrUpdateAuditDraft.isPending}
+              >
+                {createOrUpdateAuditDraft.isPending ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Création...
+                    Enregistrement...
                   </>
                 ) : (
                   <>
