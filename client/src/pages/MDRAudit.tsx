@@ -4,9 +4,14 @@
  * Step 1: Critical fields (required to start audit)
  * Step 2: Context & metadata (optional enrichment)
  * Step 3: Results & summary (auto-filled)
+ *
+ * ✅ Fix included:
+ * - Removed ANY call to `trpc.mdr.getResponses` (your backend does not expose this procedure -> 404)
+ * - Uses only existing MDR endpoints (createOrUpdateAuditDraft + getQuestionsForAudit)
+ * - Safer auditId coercion + guards to avoid invalid queries
  */
 
-import { useState, useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation, useRoute } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -52,13 +57,13 @@ export default function MDRAudit() {
   const { isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
 
-  // ✅ Route param name = auditId
+  // Route param (if this component is also mounted on /mdr/audit/:auditId)
   const [, params] = useRoute("/mdr/audit/:auditId");
 
   // Wizard state
   const [wizardStep, setWizardStep] = useState(1);
 
-  // ✅ Parse auditId safely
+  // Parse auditId safely (if present)
   const auditIdFromUrlRaw = params?.auditId;
   const auditIdFromUrlNum = auditIdFromUrlRaw ? Number(auditIdFromUrlRaw) : NaN;
   const auditIdFromUrl = auditIdFromUrlRaw && !Number.isNaN(auditIdFromUrlNum) ? auditIdFromUrlNum : null;
@@ -101,7 +106,7 @@ export default function MDRAudit() {
 
   /**
    * ✅ NORMALISATION SAFE DES DONNÉES
-   * Selon ton backend, ces endpoints peuvent renvoyer:
+   * Les endpoints peuvent renvoyer:
    * - un tableau direct: [...]
    * - ou un objet: { organizations: [...] } / { sites: [...] } / { processes: [...] }
    */
@@ -125,7 +130,7 @@ export default function MDRAudit() {
 
   /**
    * ✅ IMPORTANT: on utilise le router MDR (pas audits.*)
-   * Backend: mdr.createOrUpdateAuditDraft (création + update)
+   * Backend: mdr.createOrUpdateAuditDraft
    */
   const createOrUpdateAuditDraft = trpc.mdr.createOrUpdateAuditDraft.useMutation({
     onSuccess: (data) => {
@@ -160,14 +165,16 @@ export default function MDRAudit() {
   const auditIdNum = typeof auditId === "number" ? auditId : null;
   const canQueryByAuditId = !!auditIdNum && auditIdNum > 0;
 
-  // ✅ Use the real router name from backend: getQuestionsForAudit
+  // ✅ Use existing backend procedure: getQuestionsForAudit
   trpc.mdr.getQuestionsForAudit.useQuery({ auditId: auditIdNum as number }, { enabled: canQueryByAuditId });
 
-  // ❌ Removed: trpc.mdr.getResponses (not present in your backend snippet, caused silent failures/crashes)
+  // ✅ FIX: DO NOT call trpc.mdr.getResponses (backend does not expose it -> 404)
+  // If you later implement responses, add the correct existing endpoint name here.
 
   // Initialize from params or profile
   useEffect(() => {
-    // ✅ if URL contains auditId -> open summary step 3
+    // If URL contains auditId, we consider we are resuming an existing audit wizard state
+    // (If you have a separate "questionnaire" page/component, this block won't be used there.)
     if (auditIdFromUrl && auditIdFromUrl > 0) {
       setAuditId(auditIdFromUrl);
       setIsAuditCreated(true);
@@ -221,13 +228,11 @@ export default function MDRAudit() {
       auditType: "internal",
       status: "draft",
 
-      // Important: arrays expected by backend
       referentialIds: [1],
       processIds: selectedProcess === "all" ? [] : [selectedProcess],
 
       economicRole: selectedRole as any,
 
-      // Store what we can safely map to existing columns in DB
       clientOrganization: selectedOrganizationId ? String(selectedOrganizationId) : null,
       siteLocation: null,
 
@@ -241,7 +246,6 @@ export default function MDRAudit() {
     if (!auditIdNum || auditIdNum <= 0) return;
 
     updateAuditMetadata.mutate({
-      // UPDATE
       auditId: auditIdNum,
       siteId: parseInt(selectedSiteId, 10),
       name: auditName,
@@ -253,12 +257,12 @@ export default function MDRAudit() {
 
       economicRole: selectedRole as any,
 
-      /**
-       * ⚠️ Tant que ta table audits n'a pas de colonnes dédiées (auditedEntityName, exclusions, etc.),
-       * on ne les envoie pas ici pour éviter de casser le backend.
-       * Si tu veux les persister, on fera un mapping propre côté DB + router.
-       */
-      clientOrganization: auditedEntityName ? auditedEntityName : (selectedOrganizationId ? String(selectedOrganizationId) : null),
+      // Mapping safe (won't break DB if columns exist as string/blob fields)
+      clientOrganization: auditedEntityName
+        ? auditedEntityName
+        : selectedOrganizationId
+          ? String(selectedOrganizationId)
+          : null,
       siteLocation: auditedEntityAddress ? auditedEntityAddress : null,
 
       auditorName: auditLeader || null,
