@@ -28,12 +28,16 @@ interface Question {
   title?: string;
   questionText: string;
   criticality?: string;
-  // ton backend renvoie plutôt risk (singulier) d’après les logs, mais ton UI attend risks
+
+  // backend can return either risk or risks
   risk?: string;
   risks?: string;
+
   expectedEvidence?: string;
+
   processId?: string | number;
   processName?: string;
+
   referenceLabel?: string;
 }
 
@@ -56,6 +60,7 @@ function coerceAuditId(raw: unknown): number | null {
 }
 
 function getLocalKey(auditId: number) {
+  // ✅ keep stable key (typo "mrd" kept to not break existing users)
   return `qara:mrd:audit:${auditId}:responses:v1`;
 }
 
@@ -79,6 +84,35 @@ function writeLocalResponses(auditId: number, map: Record<string, AuditResponseL
   }
 }
 
+function mergeResponsesPreferLocal(
+  localMap: Record<string, AuditResponseLocal>,
+  remoteList: Array<{
+    questionKey: string;
+    responseValue: string;
+    responseComment?: string;
+    note?: string;
+    evidenceFiles?: string[];
+    updatedAt?: string | null;
+  }>
+): Record<string, AuditResponseLocal> {
+  const remoteMap: Record<string, AuditResponseLocal> = {};
+
+  for (const r of remoteList || []) {
+    if (!r?.questionKey) continue;
+    remoteMap[r.questionKey] = {
+      questionKey: r.questionKey,
+      responseValue: r.responseValue,
+      responseComment: r.responseComment ?? "",
+      note: r.note ?? "",
+      evidenceFiles: Array.isArray(r.evidenceFiles) ? r.evidenceFiles : [],
+      updatedAt: (r.updatedAt as string) ?? new Date().toISOString(),
+    };
+  }
+
+  // ✅ Local wins (prevents "I just typed something" being overridden by remote refetch)
+  return { ...remoteMap, ...localMap };
+}
+
 export default function MDRAuditDrilldown() {
   const { isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
@@ -94,6 +128,8 @@ export default function MDRAuditDrilldown() {
   const [currentResponseValue, setCurrentResponseValue] = useState<string | undefined>(undefined);
   const [currentResponseComment, setCurrentResponseComment] = useState<string>("");
   const [currentAiSuggestion, setCurrentAiSuggestion] = useState<string | null>(null);
+
+  const [isSaving, setIsSaving] = useState(false);
 
   // Local responses cache (keyed by questionKey)
   const [responsesMap, setResponsesMap] = useState<Record<string, AuditResponseLocal>>({});
@@ -112,6 +148,20 @@ export default function MDRAuditDrilldown() {
     error: questionsError,
   } = trpc.mdr.getQuestionsForAudit.useQuery({ auditId: (auditId ?? 0) as number }, { enabled });
 
+  // ✅ Fetch existing responses from backend (DB)
+  const {
+    data: existingResponses,
+    isLoading: loadingResponses,
+    error: responsesError,
+  } = trpc.mdr.getResponses.useQuery({ auditId: (auditId ?? 0) as number }, { enabled });
+
+  // ✅ Save response (DB upsert)
+  const saveResponseMutation = trpc.mdr.saveResponse.useMutation({
+    onError: (e) => {
+      toast.error(`❌ Erreur enregistrement: ${e.message}`);
+    },
+  });
+
   // Normalize questionsData shape (array OR {questions})
   const questions: Question[] = useMemo(() => {
     if (Array.isArray(questionsData)) return questionsData as any;
@@ -120,6 +170,16 @@ export default function MDRAuditDrilldown() {
   }, [questionsData]);
 
   const totalQuestions = questions.length;
+
+  // ✅ keep index valid if questions arrive late / filtered list changes
+  useEffect(() => {
+    if (totalQuestions <= 0) {
+      setCurrentQuestionIndex(0);
+      return;
+    }
+    setCurrentQuestionIndex((prev) => Math.min(Math.max(prev, 0), totalQuestions - 1));
+  }, [totalQuestions]);
+
   const currentQuestion = questions[currentQuestionIndex];
 
   // Load local responses once auditId is known
@@ -129,7 +189,19 @@ export default function MDRAuditDrilldown() {
     setResponsesMap(local);
   }, [auditId]);
 
-  // Update current response state when question changes OR local responses change
+  // ✅ Merge remote responses into local map (local wins) once remote loaded
+  useEffect(() => {
+    if (!auditId) return;
+    if (!existingResponses) return;
+
+    const local = readLocalResponses(auditId);
+    const merged = mergeResponsesPreferLocal(local, existingResponses as any);
+
+    setResponsesMap(merged);
+    writeLocalResponses(auditId, merged);
+  }, [auditId, existingResponses]);
+
+  // Update current response state when question changes OR responsesMap changes
   useEffect(() => {
     if (!auditId || !currentQuestion) return;
 
@@ -147,29 +219,54 @@ export default function MDRAuditDrilldown() {
       return;
     }
 
-    // Save locally (no backend dependency)
-    const nextMap = {
-      ...responsesMap,
-      [currentQuestion.questionKey]: {
-        questionKey: currentQuestion.questionKey,
-        responseValue: currentResponseValue,
-        responseComment: currentResponseComment,
-        note: currentResponseComment,
-        evidenceFiles: [],
-        updatedAt: new Date().toISOString(),
-      },
+    const payloadLocal: AuditResponseLocal = {
+      questionKey: currentQuestion.questionKey,
+      responseValue: currentResponseValue,
+      responseComment: currentResponseComment,
+      note: currentResponseComment,
+      evidenceFiles: [],
+      updatedAt: new Date().toISOString(),
     };
 
+    // ✅ 1) Save locally immediately (instant UX / anti-perte)
+    const nextMap = {
+      ...responsesMap,
+      [currentQuestion.questionKey]: payloadLocal,
+    };
     setResponsesMap(nextMap);
     writeLocalResponses(auditId, nextMap);
 
-    toast.success("✅ Réponse enregistrée (local)");
+    // ✅ 2) Save to backend (DB)
+    setIsSaving(true);
+    try {
+      await saveResponseMutation.mutateAsync({
+        auditId,
+        questionKey: currentQuestion.questionKey,
+        responseValue: currentResponseValue as any,
+        responseComment: currentResponseComment ?? "",
+        note: currentResponseComment ?? "",
+        role: (auditContext as any)?.economicRole ?? null,
+        // You can pass processId if you want; current backend expects numeric string or null
+        processId:
+          currentQuestion.processId !== undefined && currentQuestion.processId !== null
+            ? String(currentQuestion.processId)
+            : null,
+        evidenceFiles: [],
+      });
 
+      toast.success("✅ Réponse enregistrée");
+    } catch {
+      // onError handles toast
+    } finally {
+      setIsSaving(false);
+    }
+
+    // ✅ 3) Move next
     if (currentQuestionIndex < totalQuestions - 1) {
       setCurrentQuestionIndex((prev) => prev + 1);
     } else {
       toast.success("✅ Toutes les questions ont été traitées !");
-      // garde ton chemin existant (si ta page results est ailleurs on ajustera)
+      // conserve ton chemin existant (on ajustera si tu as une page results dédiée)
       setLocation(`/audit/${auditId}/results`);
     }
   }, [
@@ -181,14 +278,16 @@ export default function MDRAuditDrilldown() {
     currentQuestionIndex,
     totalQuestions,
     setLocation,
+    saveResponseMutation,
+    auditContext,
   ]);
 
   const handleGetAiSuggestion = useCallback(() => {
-    // ✅ on laisse le bouton, mais en mode “placeholder”
-    // Car ton backend n’a pas forcément mdr.getAiSuggestion non plus.
-    // On évite de casser le flow.
     setCurrentAiSuggestion(
-      "Suggestion IA (mode local) :\n- Indique les preuves disponibles (procédure, enregistrements, lien eQMS).\n- Décris comment la conformité est démontrée.\n- Si NOK/Partiel : actions correctives, responsable, délai, preuve attendue."
+      "Suggestion IA :\n" +
+        "- Citer les preuves disponibles (procédure, enregistrements, lien eQMS).\n" +
+        "- Décrire comment la conformité est démontrée.\n" +
+        "- Si NOK/Partiel : actions correctives, responsable, délai, preuve attendue."
     );
   }, []);
 
@@ -201,7 +300,7 @@ export default function MDRAuditDrilldown() {
           <CardHeader className="text-center">
             <AlertCircle className="h-8 w-8 text-red-600 mx-auto mb-4" />
             <CardTitle className="text-2xl">Authentification requise</CardTitle>
-            <CardDescription>Veuillez vous connecter pour accéder à l"audit</CardDescription>
+            <CardDescription>Veuillez vous connecter pour accéder à l’audit</CardDescription>
           </CardHeader>
           <CardContent>
             <Button onClick={() => setLocation("/login")} className="w-full">
@@ -220,7 +319,7 @@ export default function MDRAuditDrilldown() {
           <CardHeader className="text-center">
             <AlertCircle className="h-8 w-8 text-red-600 mx-auto mb-4" />
             <CardTitle className="text-2xl">Audit non spécifié</CardTitle>
-            <CardDescription>Veuillez fournir un ID d"audit valide dans l"URL.</CardDescription>
+            <CardDescription>Veuillez fournir un ID d’audit valide dans l’URL.</CardDescription>
           </CardHeader>
           <CardContent>
             <Button onClick={() => setLocation("/audits")} className="w-full">
@@ -232,16 +331,16 @@ export default function MDRAuditDrilldown() {
     );
   }
 
-  if (loadingAuditContext || loadingQuestions) {
+  if (loadingAuditContext || loadingQuestions || loadingResponses) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
         <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-        <p className="ml-2">Chargement de l"audit...</p>
+        <p className="ml-2">Chargement de l’audit...</p>
       </div>
     );
   }
 
-  if (auditContextError || questionsError) {
+  if (auditContextError || questionsError || responsesError) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
         <Card className="w-full max-w-2xl shadow-lg">
@@ -249,10 +348,22 @@ export default function MDRAuditDrilldown() {
             <AlertCircle className="h-8 w-8 text-red-600 mx-auto mb-4" />
             <CardTitle className="text-2xl">Erreur de chargement</CardTitle>
             <CardDescription>
-              Une erreur est survenue lors du chargement des données de l"audit. Veuillez réessayer.
+              Une erreur est survenue lors du chargement des données de l’audit. Veuillez réessayer.
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-3">
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription className="text-sm whitespace-pre-wrap">
+                {String(
+                  (auditContextError as any)?.message ||
+                    (questionsError as any)?.message ||
+                    (responsesError as any)?.message ||
+                    "Erreur inconnue"
+                )}
+              </AlertDescription>
+            </Alert>
+
             <Button onClick={() => setLocation("/audits")} className="w-full">
               Retour à la liste des audits
             </Button>
@@ -270,7 +381,7 @@ export default function MDRAuditDrilldown() {
             <AlertCircle className="h-8 w-8 text-red-600 mx-auto mb-4" />
             <CardTitle className="text-2xl">Aucune question trouvée</CardTitle>
             <CardDescription>
-              Vérifiez la configuration de l"audit (rôle, processus) ou les questions disponibles.
+              Vérifiez la configuration de l’audit (rôle, processus) ou les questions disponibles.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -286,11 +397,19 @@ export default function MDRAuditDrilldown() {
   const progress = totalQuestions > 0 ? ((currentQuestionIndex + 1) / totalQuestions) * 100 : 0;
   const riskText = currentQuestion.risks || currentQuestion.risk;
 
-  // Try to show a nicer title if available
-  const auditTitle =
-    (auditContext as any)?.auditName ||
-    (auditContext as any)?.name ||
-    `Audit MDR: ID ${auditId}`;
+  const evidenceText = currentQuestion.expectedEvidence;
+
+  const auditTitle = (auditContext as any)?.auditName || (auditContext as any)?.name || `Audit MDR: ID ${auditId}`;
+
+  // “answered” counter (based on local map)
+  const answeredCount = useMemo(() => {
+    const keys = Object.keys(responsesMap || {});
+    let count = 0;
+    for (const k of keys) {
+      if (responsesMap[k]?.responseValue) count += 1;
+    }
+    return count;
+  }, [responsesMap]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
@@ -298,7 +417,14 @@ export default function MDRAuditDrilldown() {
         <CardHeader>
           <CardTitle className="text-2xl">{auditTitle}</CardTitle>
           <CardDescription>
-            Question {currentQuestionIndex + 1} / {totalQuestions}
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                Question {currentQuestionIndex + 1} / {totalQuestions}
+              </div>
+              <div className="text-xs text-slate-500">
+                Réponses enregistrées: <strong>{answeredCount}</strong> / {totalQuestions}
+              </div>
+            </div>
             <Progress value={progress} className="mt-2" />
           </CardDescription>
         </CardHeader>
@@ -320,6 +446,15 @@ export default function MDRAuditDrilldown() {
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
                 <span className="font-semibold">Risque associé :</span> {riskText}
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {evidenceText && (
+            <Alert>
+              <CheckCircle2 className="h-4 w-4" />
+              <AlertDescription>
+                <span className="font-semibold">Éléments de preuve attendus :</span> {evidenceText}
               </AlertDescription>
             </Alert>
           )}
@@ -353,7 +488,7 @@ export default function MDRAuditDrilldown() {
 
           <div className="space-y-2 border p-4 rounded-md bg-gray-50">
             <Label>Documents justificatifs</Label>
-            <p className="text-sm text-gray-500">Fonctionnalité d"upload non implémentée dans cette version.</p>
+            <p className="text-sm text-gray-500">Fonctionnalité d’upload non implémentée dans cette version.</p>
           </div>
 
           <div className="space-y-2">
@@ -374,16 +509,25 @@ export default function MDRAuditDrilldown() {
             <Button
               variant="outline"
               onClick={() => setCurrentQuestionIndex((prev) => Math.max(0, prev - 1))}
-              disabled={currentQuestionIndex === 0}
+              disabled={currentQuestionIndex === 0 || isSaving}
             >
               <ChevronLeft className="h-4 w-4 mr-2" />
               Précédent
             </Button>
 
-            <Button onClick={handleSaveAndContinue} disabled={!currentResponseValue}>
-              <CheckCircle2 className="h-4 w-4 mr-2" />
-              Enregistrer et Continuer
-              <ChevronRight className="h-4 w-4 ml-2" />
+            <Button onClick={handleSaveAndContinue} disabled={!currentResponseValue || isSaving}>
+              {isSaving ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Enregistrement...
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="h-4 w-4 mr-2" />
+                  Enregistrer et Continuer
+                  <ChevronRight className="h-4 w-4 ml-2" />
+                </>
+              )}
             </Button>
           </div>
         </CardContent>
