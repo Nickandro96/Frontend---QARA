@@ -9,7 +9,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Loader2, AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
@@ -20,7 +27,11 @@ interface SiteCreationModalProps {
   onSiteCreated?: (siteId: number) => void;
 }
 
-export function SiteCreationModal({ isOpen, onClose, onSiteCreated }: SiteCreationModalProps) {
+export function SiteCreationModal({
+  isOpen,
+  onClose,
+  onSiteCreated,
+}: SiteCreationModalProps) {
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
   const [city, setCity] = useState("");
@@ -44,7 +55,7 @@ export function SiteCreationModal({ isOpen, onClose, onSiteCreated }: SiteCreati
       const errorMessage = error.message || "Erreur lors de la création du site";
       setError(errorMessage);
       toast.error("❌ " + errorMessage);
-    }
+    },
   });
 
   const handleClose = () => {
@@ -68,12 +79,23 @@ export function SiteCreationModal({ isOpen, onClose, onSiteCreated }: SiteCreati
     }
 
     setError(null);
+
+    // ✅ Important: ensure optional fields are either a real value or null/undefined (never "")
+    // This prevents backend/DB issues (e.g., organisationId being sent as an empty string somewhere).
     createSite.mutate({
       name: name.trim(),
+
+      // ✅ Force organisationId to null if your backend supports it (recommended)
+      // If the backend schema doesn't include it, it will be ignored (or you will see a validation error).
+      organisationId: null as any,
+
       addressLine1: address.trim() || undefined,
+      addressLine2: state.trim() || undefined, // using "state" as a second address line / region info
       city: city.trim() || undefined,
       postalCode: zipCode.trim() || undefined,
       country: country.trim() || undefined,
+      phone: phone.trim() || undefined,
+      email: email.trim() || undefined,
       notes: notes.trim() || undefined,
     });
   };
@@ -83,7 +105,9 @@ export function SiteCreationModal({ isOpen, onClose, onSiteCreated }: SiteCreati
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Créer un nouveau site</DialogTitle>
-          <DialogDescription>Ajoutez les informations de votre site</DialogDescription>
+          <DialogDescription>
+            Ajoutez les informations de votre site
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
