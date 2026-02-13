@@ -6,13 +6,12 @@
  * Step 3: Results & summary (auto-filled)
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useLocation, useRoute } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Loader2, AlertCircle, FileText, ChevronLeft, ChevronRight, CheckCircle2 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -82,9 +81,38 @@ export default function MDRAudit() {
 
   // Data fetching
   const { data: qualification } = trpc.mdr.getQualification.useQuery({});
+
   const { data: processesData, isLoading: loadingProcesses } = trpc.mdr.getProcesses.useQuery();
   const { data: sitesData, isLoading: loadingSites, refetch: refetchSites } = trpc.sites.list.useQuery();
-  const { data: organizationsData } = trpc.organizations.list.useQuery();
+  const { data: organizationsData, isLoading: loadingOrganizations } = trpc.organizations.list.useQuery();
+
+  /**
+   * ✅ NORMALISATION SAFE DES DONNÉES
+   * Selon ton backend, ces endpoints peuvent renvoyer:
+   * - un tableau direct: [...]
+   * - ou un objet: { organizations: [...] } / { sites: [...] } / { processes: [...] }
+   */
+  const organizations = useMemo(() => {
+    // cas 1: tableau direct
+    if (Array.isArray(organizationsData)) return organizationsData as any[];
+    // cas 2: objet { organizations: [] }
+    const maybe = (organizationsData as any)?.organizations;
+    return Array.isArray(maybe) ? maybe : [];
+  }, [organizationsData]);
+
+  const sites = useMemo(() => {
+    // cas attendu: { sites: [] }
+    const maybe = (sitesData as any)?.sites;
+    if (Array.isArray(maybe)) return maybe;
+    // fallback si jamais le backend renvoie un tableau direct
+    return Array.isArray(sitesData as any) ? (sitesData as any) : [];
+  }, [sitesData]);
+
+  const processes = useMemo(() => {
+    const maybe = (processesData as any)?.processes;
+    if (Array.isArray(maybe)) return maybe;
+    return Array.isArray(processesData as any) ? (processesData as any) : [];
+  }, [processesData]);
 
   const createAudit = trpc.audits.create.useMutation({
     onSuccess: (data) => {
@@ -114,20 +142,15 @@ export default function MDRAudit() {
   const auditIdNum = typeof auditId === "number" ? auditId : null;
   const canQueryByAuditId = !!auditIdNum && auditIdNum > 0;
 
-  const { data: questionsDataRaw, isLoading: loadingQuestions } = trpc.mdr.getQuestions.useQuery(
+  trpc.mdr.getQuestions.useQuery(
     {
       auditId: auditIdNum as number,
       selectedProcesses: selectedProcess === "all" ? [] : [selectedProcess],
     },
-    {
-      enabled: canQueryByAuditId,
-    }
-  );
-
-  const { data: existingResponses } = trpc.mdr.getResponses.useQuery(
-    { auditId: auditIdNum as number },
     { enabled: canQueryByAuditId }
   );
+
+  trpc.mdr.getResponses.useQuery({ auditId: auditIdNum as number }, { enabled: canQueryByAuditId });
 
   // Initialize from params or profile
   useEffect(() => {
@@ -150,7 +173,7 @@ export default function MDRAudit() {
     if (!auditName) {
       setAuditName(`Audit MDR (${selectedRole}) - ${new Date().toLocaleDateString("fr-FR")}`);
     }
-  }, [selectedRole]);
+  }, [selectedRole]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Handle site creation
   const handleSiteCreated = (siteId: number) => {
@@ -280,7 +303,7 @@ export default function MDRAudit() {
                   <div className="flex items-center justify-center p-2 text-sm text-slate-500">
                     <Loader2 className="h-4 w-4 animate-spin mr-2" /> Chargement des sites...
                   </div>
-                ) : !sitesData || (sitesData.sites ?? []).length === 0 ? (
+                ) : sites.length === 0 ? (
                   <div className="space-y-2">
                     <Alert>
                       <AlertCircle className="h-4 w-4" />
@@ -297,7 +320,7 @@ export default function MDRAudit() {
                         <SelectValue placeholder="Sélectionnez un site" />
                       </SelectTrigger>
                       <SelectContent>
-                        {(sitesData?.sites ?? []).map((site) => (
+                        {sites.map((site: any) => (
                           <SelectItem key={site.id} value={String(site.id)}>
                             {site.name}
                           </SelectItem>
@@ -313,18 +336,24 @@ export default function MDRAudit() {
 
               <div className="space-y-2">
                 <Label>Organisation (optionnel)</Label>
-                <Select value={selectedOrganizationId} onValueChange={setSelectedOrganizationId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Sélectionnez une organisation" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(organizationsData ?? []).map((org: any) => (
-                      <SelectItem key={org.id} value={String(org.id)}>
-                        {org.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {loadingOrganizations ? (
+                  <div className="flex items-center justify-center p-2 text-sm text-slate-500">
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" /> Chargement des organisations...
+                  </div>
+                ) : (
+                  <Select value={selectedOrganizationId} onValueChange={setSelectedOrganizationId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Sélectionnez une organisation" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {organizations.map((org: any) => (
+                        <SelectItem key={org.id} value={String(org.id)}>
+                          {org.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -369,19 +398,25 @@ export default function MDRAudit() {
 
               <div className="space-y-2">
                 <Label>Processus à auditer</Label>
-                <Select value={selectedProcess} onValueChange={setSelectedProcess}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Tous les processus</SelectItem>
-                    {(processesData?.processes ?? []).map((process: any) => (
-                      <SelectItem key={process.id} value={String(process.id)}>
-                        {process.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {loadingProcesses ? (
+                  <div className="flex items-center justify-center p-2 text-sm text-slate-500">
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" /> Chargement des processus...
+                  </div>
+                ) : (
+                  <Select value={selectedProcess} onValueChange={setSelectedProcess}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Tous les processus</SelectItem>
+                      {processes.map((process: any) => (
+                        <SelectItem key={process.id} value={String(process.id)}>
+                          {process.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
             </div>
 
@@ -455,7 +490,12 @@ export default function MDRAudit() {
             </div>
           </CardContent>
         </Card>
-        <SiteCreationModal isOpen={showSiteModal} onClose={() => setShowSiteModal(false)} onSiteCreated={handleSiteCreated} />
+
+        <SiteCreationModal
+          isOpen={showSiteModal}
+          onClose={() => setShowSiteModal(false)}
+          onSiteCreated={handleSiteCreated}
+        />
       </div>
     );
   }
@@ -523,7 +563,11 @@ export default function MDRAudit() {
 
               <div className="space-y-2">
                 <Label>Classification des dispositifs</Label>
-                <Input value={classDevices} onChange={(e) => setClassDevices(e.target.value)} placeholder="Ex: Classe IIb, Classe III" />
+                <Input
+                  value={classDevices}
+                  onChange={(e) => setClassDevices(e.target.value)}
+                  placeholder="Ex: Classe IIb, Classe III"
+                />
               </div>
 
               <div className="space-y-2">
@@ -599,7 +643,8 @@ export default function MDRAudit() {
             <Alert>
               <CheckCircle2 className="h-4 w-4 text-green-600" />
               <AlertDescription>
-                Audit <strong>#{auditIdNum}</strong> créé avec succès. Vous pouvez maintenant démarrer le questionnaire MDR.
+                Audit <strong>#{auditIdNum}</strong> créé avec succès. Vous pouvez maintenant démarrer le questionnaire
+                MDR.
               </AlertDescription>
             </Alert>
 
