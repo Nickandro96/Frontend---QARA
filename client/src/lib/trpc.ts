@@ -1,6 +1,10 @@
 import { createTRPCReact } from "@trpc/react-query";
 import { httpLink } from "@trpc/client";
 import superjson from "superjson";
+
+// NOTE: This import must be type-only.
+// If Vercel build fails due to monorepo path resolution,
+// move AppRouter type into a shared package (recommended).
 import type { AppRouter } from "../../../backend-QARA-new/server/routers";
 
 export const trpc = createTRPCReact<AppRouter>();
