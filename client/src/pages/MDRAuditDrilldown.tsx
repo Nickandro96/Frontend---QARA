@@ -29,9 +29,9 @@ interface Question {
   questionText: string;
   criticality?: string;
 
-  // backend can return either risk or risks
-  risk?: string;
-  risks?: string;
+  // backend can return either risk or risks (string, array, object, JSON-string)
+  risk?: any;
+  risks?: any;
 
   expectedEvidence?: string;
 
@@ -111,6 +111,59 @@ function mergeResponsesPreferLocal(
 
   // ✅ Local wins (prevents "I just typed something" being overridden by remote refetch)
   return { ...remoteMap, ...localMap };
+}
+
+/**
+ * ✅ Robust formatter for risk/risk(s) fields:
+ * - accepts string | JSON-string | array | object
+ * - returns a readable multi-line string or null
+ */
+function formatRisk(v: any): string | null {
+  if (v === null || v === undefined) return null;
+
+  // string
+  if (typeof v === "string") {
+    const s = v.trim();
+    if (!s) return null;
+
+    // try parse JSON strings: ["..."] or {"..."}
+    if ((s.startsWith("[") && s.endsWith("]")) || (s.startsWith("{") && s.endsWith("}"))) {
+      try {
+        const parsed = JSON.parse(s);
+        return formatRisk(parsed);
+      } catch {
+        return s;
+      }
+    }
+    return s;
+  }
+
+  // array
+  if (Array.isArray(v)) {
+    const parts = v
+      .map((x) => formatRisk(x))
+      .filter(Boolean) as string[];
+    if (!parts.length) return null;
+
+    // render as bullet-like lines
+    return parts.length === 1 ? parts[0] : `- ${parts.join("\n- ")}`;
+  }
+
+  // object
+  if (typeof v === "object") {
+    const candidate = (v.text ?? v.risk ?? v.risks ?? v.description ?? v.value ?? null) as any;
+    const inner = formatRisk(candidate);
+    if (inner) return inner;
+
+    try {
+      const str = JSON.stringify(v);
+      return str && str !== "{}" ? str : null;
+    } catch {
+      return String(v);
+    }
+  }
+
+  return String(v);
 }
 
 export default function MDRAuditDrilldown() {
@@ -224,6 +277,17 @@ export default function MDRAuditDrilldown() {
     setCurrentResponseComment(stored?.responseComment || "");
     setCurrentAiSuggestion(null);
   }, [auditId, currentQuestionIndex, currentQuestion?.questionKey, responsesMap, currentQuestion]);
+
+  // ✅ Debug log: verify risk changes when question changes
+  useEffect(() => {
+    if (!currentQuestion) return;
+    // eslint-disable-next-line no-console
+    console.log("[MDR] currentQuestion", currentQuestion.questionKey, {
+      text: currentQuestion.questionText,
+      risk: (currentQuestion as any).risk,
+      risks: (currentQuestion as any).risks,
+    });
+  }, [currentQuestion?.questionKey]);
 
   const handleSaveAndContinue = useCallback(async () => {
     if (!auditId || !currentQuestion) return;
@@ -408,7 +472,14 @@ export default function MDRAuditDrilldown() {
   }
 
   const progress = totalQuestions > 0 ? ((currentQuestionIndex + 1) / totalQuestions) * 100 : 0;
-  const riskText = currentQuestion.risks || currentQuestion.risk;
+
+  // ✅ FIX: robust risk rendering (handles JSON, arrays, objects)
+  const riskText = useMemo(() => {
+    if (!currentQuestion) return null;
+    // prioritize .risk then .risks (adapt if your backend uses the opposite)
+    return formatRisk((currentQuestion as any).risk ?? (currentQuestion as any).risks);
+  }, [currentQuestion?.questionKey]);
+
   const evidenceText = currentQuestion.expectedEvidence;
   const auditTitle = (auditContext as any)?.auditName || (auditContext as any)?.name || `Audit MDR: ID ${auditId}`;
 
@@ -445,7 +516,7 @@ export default function MDRAuditDrilldown() {
           {riskText && (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
+              <AlertDescription className="whitespace-pre-wrap">
                 <span className="font-semibold">Risque associé :</span> {riskText}
               </AlertDescription>
             </Alert>
@@ -454,7 +525,7 @@ export default function MDRAuditDrilldown() {
           {evidenceText && (
             <Alert>
               <CheckCircle2 className="h-4 w-4" />
-              <AlertDescription>
+              <AlertDescription className="whitespace-pre-wrap">
                 <span className="font-semibold">Éléments de preuve attendus :</span> {evidenceText}
               </AlertDescription>
             </Alert>
