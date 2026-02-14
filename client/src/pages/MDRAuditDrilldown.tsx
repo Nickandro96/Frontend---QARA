@@ -182,6 +182,20 @@ export default function MDRAuditDrilldown() {
 
   const currentQuestion = questions[currentQuestionIndex];
 
+  // ✅ answered counter (NO HOOK) -> évite le crash hooks (#310)
+  const answeredCount = (() => {
+    try {
+      const vals = Object.values(responsesMap || {});
+      let c = 0;
+      for (const v of vals) {
+        if (v?.responseValue) c += 1;
+      }
+      return c;
+    } catch {
+      return 0;
+    }
+  })();
+
   // Load local responses once auditId is known
   useEffect(() => {
     if (!auditId) return;
@@ -246,7 +260,7 @@ export default function MDRAuditDrilldown() {
         responseComment: currentResponseComment ?? "",
         note: currentResponseComment ?? "",
         role: (auditContext as any)?.economicRole ?? null,
-        // You can pass processId if you want; current backend expects numeric string or null
+        // backend expects numeric string or null
         processId:
           currentQuestion.processId !== undefined && currentQuestion.processId !== null
             ? String(currentQuestion.processId)
@@ -266,7 +280,6 @@ export default function MDRAuditDrilldown() {
       setCurrentQuestionIndex((prev) => prev + 1);
     } else {
       toast.success("✅ Toutes les questions ont été traitées !");
-      // conserve ton chemin existant (on ajustera si tu as une page results dédiée)
       setLocation(`/audit/${auditId}/results`);
     }
   }, [
@@ -396,20 +409,8 @@ export default function MDRAuditDrilldown() {
 
   const progress = totalQuestions > 0 ? ((currentQuestionIndex + 1) / totalQuestions) * 100 : 0;
   const riskText = currentQuestion.risks || currentQuestion.risk;
-
   const evidenceText = currentQuestion.expectedEvidence;
-
   const auditTitle = (auditContext as any)?.auditName || (auditContext as any)?.name || `Audit MDR: ID ${auditId}`;
-
-  // “answered” counter (based on local map)
-  const answeredCount = useMemo(() => {
-    const keys = Object.keys(responsesMap || {});
-    let count = 0;
-    for (const k of keys) {
-      if (responsesMap[k]?.responseValue) count += 1;
-    }
-    return count;
-  }, [responsesMap]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
