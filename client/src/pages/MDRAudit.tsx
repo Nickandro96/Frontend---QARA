@@ -1,6 +1,18 @@
 /**
  * MDR Audit Page - WIZARD VERSION (V6)
  * Professional 3-step wizard for audit creation
+ * Step 1: Critical fields (required to start audit)
+ * Step 2: Context & metadata (optional enrichment)
+ * Step 3: Results & summary (auto-filled)
+ *
+ * ✅ Fix included (this version):
+ * - Actually USE the getQuestionsForAudit query result (data + loading + error)
+ * - Ensure stable auditId usage and step transitions
+ * - Fix sites query: use `trpc.mdr.getSites`
+ * - Keep organizations query as-is (trpc.organizations.list)
+ *
+ * ✅ NEW FIX:
+ * - On "Start Questionnaire" -> set audit status to "in_progress" BEFORE redirect
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -49,10 +61,13 @@ export default function MDRAudit() {
   const { isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
 
+  // Route param (if this component is also mounted on /mdr/audit/:auditId)
   const [, params] = useRoute("/mdr/audit/:auditId");
 
+  // Wizard state
   const [wizardStep, setWizardStep] = useState(1);
 
+  // Parse auditId safely (if present)
   const auditIdFromUrlRaw = params?.auditId;
   const auditIdFromUrlNum = auditIdFromUrlRaw ? Number(auditIdFromUrlRaw) : NaN;
   const auditIdFromUrl = auditIdFromUrlRaw && !Number.isNaN(auditIdFromUrlNum) ? auditIdFromUrlNum : null;
@@ -62,7 +77,7 @@ export default function MDRAudit() {
   const [isAuditCreated, setIsAuditCreated] = useState(false);
   const [showSiteModal, setShowSiteModal] = useState(false);
 
-  // Step 1
+  // Step 1: Critical fields
   const [selectedRole, setSelectedRole] = useState<string>("fabricant");
   const [selectedSiteId, setSelectedSiteId] = useState<string>("");
   const [selectedOrganizationId, setSelectedOrganizationId] = useState<string>("");
@@ -76,7 +91,7 @@ export default function MDRAudit() {
   const [auditeeContactEmail, setAuditeeContactEmail] = useState<string>("");
   const [selectedProcess, setSelectedProcess] = useState<string>("all");
 
-  // Step 2
+  // Step 2: Context fields
   const [auditedEntityName, setAuditedEntityName] = useState<string>("");
   const [auditedEntityAddress, setAuditedEntityAddress] = useState<string>("");
   const [exclusions, setExclusions] = useState<string>("");
@@ -86,6 +101,7 @@ export default function MDRAudit() {
   const [auditTeamMembers, setAuditTeamMembers] = useState<string>("");
   const [versionReferentials, setVersionReferentials] = useState<string>("");
 
+  // Data fetching
   const { data: qualification } = trpc.mdr.getQualification.useQuery({});
   const { data: processesData, isLoading: loadingProcesses } = trpc.mdr.getProcesses.useQuery();
 
@@ -115,12 +131,7 @@ export default function MDRAudit() {
     return Array.isArray(processesData as any) ? (processesData as any) : [];
   }, [processesData]);
 
-  const selectedProcessLabel = useMemo(() => {
-    if (selectedProcess === "all") return "Tous les processus";
-    const p = processes.find((x: any) => String(x.id) === String(selectedProcess));
-    return p?.name ?? selectedProcess;
-  }, [selectedProcess, processes]);
-
+  // date -> ISO string
   const toIsoOrNull = (dateStr: string) => {
     if (!dateStr) return null;
     const d = new Date(dateStr);
@@ -140,7 +151,6 @@ export default function MDRAudit() {
       setIsAuditCreated(true);
 
       toast.success("✅ Audit enregistré");
-
       setWizardStep(2);
     },
     onError: (error) => {
@@ -155,6 +165,13 @@ export default function MDRAudit() {
     },
     onError: (error) => {
       toast.error("❌ Erreur lors de la mise à jour: " + error.message);
+    },
+  });
+
+  // used for "start questionnaire" status update
+  const setAuditInProgress = trpc.mdr.createOrUpdateAuditDraft.useMutation({
+    onError: (error) => {
+      toast.error("❌ Impossible de démarrer l'audit: " + error.message);
     },
   });
 
@@ -190,14 +207,6 @@ export default function MDRAudit() {
       setSelectedRole(qualification.economicRole);
     }
   }, [auditIdFromUrl, qualification]);
-
-  // ✅ Auto refetch once if we land directly on step3 via URL
-  useEffect(() => {
-    if (wizardStep === 3 && canQueryByAuditId) {
-      refetchQuestions();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wizardStep, canQueryByAuditId]);
 
   useEffect(() => {
     if (!auditName) {
@@ -292,10 +301,51 @@ export default function MDRAudit() {
     });
   };
 
-  const handleStartQuestions = () => {
-    if (auditIdNum && auditIdNum > 0) {
-      setLocation(`/mdr/audit/${auditIdNum}`);
+  /**
+   * ✅ NEW: set audit status to in_progress then redirect
+   */
+  const handleStartQuestions = async () => {
+    if (!auditIdNum || auditIdNum <= 0) return;
+
+    const startIso = toIsoOrNull(plannedStartDate) ?? new Date().toISOString();
+    const endIso = toIsoOrNull(plannedEndDate);
+
+    try {
+      await setAuditInProgress.mutateAsync({
+        auditId: auditIdNum,
+        siteId: parseInt(selectedSiteId || "0", 10) || 1, // fallback safe
+        name: auditName || `Audit MDR (${selectedRole}) - ${new Date().toLocaleDateString("fr-FR")}`,
+
+        auditType: "internal",
+        type: "internal",
+
+        status: "in_progress",
+
+        referentialIds: [1],
+        processIds: selectedProcess === "all" ? [] : [selectedProcess],
+
+        economicRole: selectedRole as any,
+
+        clientOrganization: auditedEntityName
+          ? auditedEntityName
+          : selectedOrganizationId
+            ? String(selectedOrganizationId)
+            : null,
+        siteLocation: auditedEntityAddress ? auditedEntityAddress : null,
+
+        auditorName: auditLeader || null,
+        auditorEmail: auditeeContactEmail || null,
+
+        startDate: startIso,
+        endDate: endIso,
+      });
+    } catch {
+      // toast handled in onError
+      // still allow navigation if you want; but safer to stop
+      return;
     }
+
+    setLocation(`/mdr/audit/${auditIdNum}`);
   };
 
   if (!isAuthenticated) {
@@ -426,7 +476,7 @@ export default function MDRAudit() {
                 <Textarea
                   value={auditScope}
                   onChange={(e) => setAuditScope(e.target.value)}
-                  placeholder="Décrivez le périmètre de l'audit (ex: Dispositifs classe IIb, famille produits X)"
+                  placeholder="Décrivez le périmètre de l'audit"
                   className="min-h-20"
                 />
               </div>
@@ -738,7 +788,7 @@ export default function MDRAudit() {
                 <strong>Rôle économique :</strong> {selectedRole}
               </div>
               <div>
-                <strong>Processus :</strong> {selectedProcessLabel}
+                <strong>Processus sélectionné :</strong> {selectedProcess}
               </div>
               <div>
                 <strong>Scope :</strong> {auditScope}
@@ -759,9 +809,22 @@ export default function MDRAudit() {
                 <ChevronLeft className="h-4 w-4 mr-2" />
                 Retour
               </Button>
-              <Button className="flex-1 bg-green-600 hover:bg-green-700" onClick={handleStartQuestions}>
-                Démarrer le Questionnaire MDR
-                <ChevronRight className="h-4 w-4 ml-2" />
+              <Button
+                className="flex-1 bg-green-600 hover:bg-green-700"
+                onClick={handleStartQuestions}
+                disabled={setAuditInProgress.isPending}
+              >
+                {setAuditInProgress.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Démarrage...
+                  </>
+                ) : (
+                  <>
+                    Démarrer le Questionnaire MDR
+                    <ChevronRight className="h-4 w-4 ml-2" />
+                  </>
+                )}
               </Button>
             </div>
           </CardContent>
