@@ -1,22 +1,6 @@
 /**
  * MDR Audit Page - WIZARD VERSION (V6)
  * Professional 3-step wizard for audit creation
- * Step 1: Critical fields (required to start audit)
- * Step 2: Context & metadata (optional enrichment)
- * Step 3: Results & summary (auto-filled)
- *
- * ✅ Fix included (this version):
- * - Actually USE the getQuestionsForAudit query result (data + loading + error)
- * - Show counts: total questions returned + (optionally) filtered count (process selection)
- * - Ensure stable React keys later when mapping questions (not in this wizard yet, but prepares data)
- * - Keep your existing flows and endpoints (no breaking changes)
- * - Fix sites query: use `trpc.mdr.getSites` (matches backend router you have)
- * - Keep organizations query as-is (trpc.organizations.list)
- *
- * ✅ NEW SAFE PATCH (Wizard Step2 block fix):
- * - Send `type` in addition to `auditType` (DB expects `type`)
- * - Keep startDate/endDate in payload
- * - Stronger guards around auditId creation + step transitions
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -65,13 +49,10 @@ export default function MDRAudit() {
   const { isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
 
-  // Route param (if this component is also mounted on /mdr/audit/:auditId)
   const [, params] = useRoute("/mdr/audit/:auditId");
 
-  // Wizard state
   const [wizardStep, setWizardStep] = useState(1);
 
-  // Parse auditId safely (if present)
   const auditIdFromUrlRaw = params?.auditId;
   const auditIdFromUrlNum = auditIdFromUrlRaw ? Number(auditIdFromUrlRaw) : NaN;
   const auditIdFromUrl = auditIdFromUrlRaw && !Number.isNaN(auditIdFromUrlNum) ? auditIdFromUrlNum : null;
@@ -81,7 +62,7 @@ export default function MDRAudit() {
   const [isAuditCreated, setIsAuditCreated] = useState(false);
   const [showSiteModal, setShowSiteModal] = useState(false);
 
-  // Step 1: Critical fields
+  // Step 1
   const [selectedRole, setSelectedRole] = useState<string>("fabricant");
   const [selectedSiteId, setSelectedSiteId] = useState<string>("");
   const [selectedOrganizationId, setSelectedOrganizationId] = useState<string>("");
@@ -95,7 +76,7 @@ export default function MDRAudit() {
   const [auditeeContactEmail, setAuditeeContactEmail] = useState<string>("");
   const [selectedProcess, setSelectedProcess] = useState<string>("all");
 
-  // Step 2: Context fields
+  // Step 2
   const [auditedEntityName, setAuditedEntityName] = useState<string>("");
   const [auditedEntityAddress, setAuditedEntityAddress] = useState<string>("");
   const [exclusions, setExclusions] = useState<string>("");
@@ -105,11 +86,9 @@ export default function MDRAudit() {
   const [auditTeamMembers, setAuditTeamMembers] = useState<string>("");
   const [versionReferentials, setVersionReferentials] = useState<string>("");
 
-  // Data fetching
   const { data: qualification } = trpc.mdr.getQualification.useQuery({});
   const { data: processesData, isLoading: loadingProcesses } = trpc.mdr.getProcesses.useQuery();
 
-  // ✅ FIX: sites should come from mdr.getSites (matches backend router you have)
   const {
     data: sitesData,
     isLoading: loadingSites,
@@ -118,9 +97,6 @@ export default function MDRAudit() {
 
   const { data: organizationsData, isLoading: loadingOrganizations } = trpc.organizations.list.useQuery();
 
-  /**
-   * ✅ NORMALISATION SAFE DES DONNÉES
-   */
   const organizations = useMemo(() => {
     if (Array.isArray(organizationsData)) return organizationsData as any[];
     const maybe = (organizationsData as any)?.organizations;
@@ -139,17 +115,18 @@ export default function MDRAudit() {
     return Array.isArray(processesData as any) ? (processesData as any) : [];
   }, [processesData]);
 
-  // ✅ Helper date -> ISO string
+  const selectedProcessLabel = useMemo(() => {
+    if (selectedProcess === "all") return "Tous les processus";
+    const p = processes.find((x: any) => String(x.id) === String(selectedProcess));
+    return p?.name ?? selectedProcess;
+  }, [selectedProcess, processes]);
+
   const toIsoOrNull = (dateStr: string) => {
     if (!dateStr) return null;
     const d = new Date(dateStr);
     return Number.isNaN(d.getTime()) ? null : d.toISOString();
   };
 
-  /**
-   * ✅ IMPORTANT: on utilise le router MDR
-   * Backend: mdr.createOrUpdateAuditDraft
-   */
   const createOrUpdateAuditDraft = trpc.mdr.createOrUpdateAuditDraft.useMutation({
     onSuccess: async (data) => {
       const id = coerceAuditId((data as any)?.auditId);
@@ -164,18 +141,7 @@ export default function MDRAudit() {
 
       toast.success("✅ Audit enregistré");
 
-      // ✅ Avoid "step2 appears blocked": move to step2 ONLY after auditId is definitely set
       setWizardStep(2);
-
-      // ✅ Optional: preload questions so step3 has instant count
-      // (safe; doesn't affect flow if it fails)
-      try {
-        // Only refetch if query is enabled by auditId state; we call after setting state,
-        // but state update is async, so this is best-effort.
-        // Step3 has its own refresh button anyway.
-      } catch {
-        // ignore
-      }
     },
     onError: (error) => {
       toast.error("❌ Erreur lors de l'enregistrement de l'audit: " + error.message);
@@ -192,11 +158,9 @@ export default function MDRAudit() {
     },
   });
 
-  // ✅ IMPORTANT: queries MDR must NOT run unless auditId is valid (>0)
   const auditIdNum = typeof auditId === "number" ? auditId : null;
   const canQueryByAuditId = !!auditIdNum && auditIdNum > 0;
 
-  // ✅ Use existing backend procedure: getQuestionsForAudit (and actually use the result)
   const {
     data: questionsPayload,
     isLoading: loadingQuestions,
@@ -214,13 +178,10 @@ export default function MDRAudit() {
 
   const questionsCount = questions.length;
 
-  // Initialize from params or profile
   useEffect(() => {
-    // If user lands here with auditId in URL, consider audit "created"
     if (auditIdFromUrl && auditIdFromUrl > 0) {
       setAuditId(auditIdFromUrl);
       setIsAuditCreated(true);
-      // ✅ keep your behavior: land on step3 summary when coming from URL
       setWizardStep(3);
       return;
     }
@@ -230,7 +191,14 @@ export default function MDRAudit() {
     }
   }, [auditIdFromUrl, qualification]);
 
-  // Auto-generate audit name
+  // ✅ Auto refetch once if we land directly on step3 via URL
+  useEffect(() => {
+    if (wizardStep === 3 && canQueryByAuditId) {
+      refetchQuestions();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wizardStep, canQueryByAuditId]);
+
   useEffect(() => {
     if (!auditName) {
       setAuditName(`Audit MDR (${selectedRole}) - ${new Date().toLocaleDateString("fr-FR")}`);
@@ -263,7 +231,6 @@ export default function MDRAudit() {
     const startIso = toIsoOrNull(plannedStartDate) ?? new Date().toISOString();
     const endIso = toIsoOrNull(plannedEndDate);
 
-    // ✅ Send both `auditType` AND `type` to be compatible with DB expecting `type`
     createOrUpdateAuditDraft.mutate({
       siteId: parseInt(selectedSiteId, 10),
       name: auditName,
@@ -295,7 +262,6 @@ export default function MDRAudit() {
     const startIso = toIsoOrNull(plannedStartDate) ?? new Date().toISOString();
     const endIso = toIsoOrNull(plannedEndDate);
 
-    // ✅ Same compatibility payload
     updateAuditMetadata.mutate({
       auditId: auditIdNum,
       siteId: parseInt(selectedSiteId, 10),
@@ -770,6 +736,9 @@ export default function MDRAudit() {
             <div className="bg-slate-50 p-4 rounded-lg space-y-3 text-sm">
               <div>
                 <strong>Rôle économique :</strong> {selectedRole}
+              </div>
+              <div>
+                <strong>Processus :</strong> {selectedProcessLabel}
               </div>
               <div>
                 <strong>Scope :</strong> {auditScope}
