@@ -49,6 +49,11 @@ import AuditComparison from "./pages/AuditComparison";
 import SiteManagement from "./pages/SiteManagement";
 import MDRAuditWizard from "./pages/MDRAudit";
 
+// ✅ Ajout routes directes drilldown/review
+// Si tes fichiers sont dans ./pages/, remplace par "./pages/MDRAuditDrilldown" / "./pages/MDRAuditReview"
+import MDRAuditDrilldown from "./MDRAuditDrilldown";
+import MDRAuditReview from "./MDRAuditReview";
+
 function Router() {
   return (
     <Switch>
@@ -65,6 +70,8 @@ function Router() {
       <Route path={"/fda/audit"} component={FDAAuditNew} />
 
       {/* ✅ MDR ROUTING FIX (ORDER MATTERS) */}
+      <Route path="/mdr/audit/:auditId/review" component={MDRAuditReview} />
+      <Route path="/mdr/audit/:auditId" component={MDRAuditDrilldown} />
       <Route path="/mdr/audit" component={MDRAuditWizard} />
       <Route path={"/mdr/*"} component={MdrRoutesErrorBoundary} />
 
