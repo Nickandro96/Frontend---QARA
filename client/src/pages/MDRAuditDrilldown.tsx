@@ -634,8 +634,13 @@ export default function MDRAuditDrilldown() {
               <div className="text-sm font-medium">Statut de conformité</div>
               <div className="grid grid-cols-1 gap-2 md:grid-cols-4">
                 <Button
-                  variant={valueNow === "compliant" ? "default" : "outline"}
-                  className={cn("h-11 justify-center", valueNow === "compliant" && "shadow-sm")}
+                  variant="outline"
+                  className={cn(
+                    "h-11 justify-center",
+                    valueNow === "compliant"
+                      ? "border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-600 hover:text-white"
+                      : "border-slate-200 text-slate-700",
+                  )}
                   onClick={() => handleSetCompliance("compliant")}
                 >
                   <CheckCircle2 className="mr-2 h-4 w-4" />
@@ -643,16 +648,26 @@ export default function MDRAuditDrilldown() {
                 </Button>
 
                 <Button
-                  variant={valueNow === "partial" ? "default" : "outline"}
-                  className={cn("h-11 justify-center", valueNow === "partial" && "shadow-sm")}
+                  variant="outline"
+                  className={cn(
+                    "h-11 justify-center",
+                    valueNow === "partial"
+                      ? "border-amber-500 bg-amber-500 text-white hover:bg-amber-500 hover:text-white"
+                      : "border-slate-200 text-slate-700",
+                  )}
                   onClick={() => handleSetCompliance("partial")}
                 >
                   Partiel
                 </Button>
 
                 <Button
-                  variant={valueNow === "non_compliant" ? "destructive" : "outline"}
-                  className={cn("h-11 justify-center", valueNow === "non_compliant" && "shadow-sm")}
+                  variant="outline"
+                  className={cn(
+                    "h-11 justify-center",
+                    valueNow === "non_compliant"
+                      ? "border-rose-600 bg-rose-600 text-white hover:bg-rose-600 hover:text-white"
+                      : "border-slate-200 text-slate-700",
+                  )}
                   onClick={() => handleSetCompliance("non_compliant")}
                 >
                   <AlertCircle className="mr-2 h-4 w-4" />
@@ -660,8 +675,13 @@ export default function MDRAuditDrilldown() {
                 </Button>
 
                 <Button
-                  variant={valueNow === "not_applicable" ? "default" : "outline"}
-                  className={cn("h-11 justify-center", valueNow === "not_applicable" && "shadow-sm")}
+                  variant="outline"
+                  className={cn(
+                    "h-11 justify-center",
+                    valueNow === "not_applicable"
+                      ? "border-slate-500 bg-slate-500 text-white hover:bg-slate-500 hover:text-white"
+                      : "border-slate-200 text-slate-700",
+                  )}
                   onClick={() => handleSetCompliance("not_applicable")}
                 >
                   N/A
