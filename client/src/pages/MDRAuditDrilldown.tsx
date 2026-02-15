@@ -1,606 +1,656 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useRoute } from "wouter";
 import { trpc } from "@/lib/trpc";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, AlertCircle, ChevronLeft, ChevronRight, CheckCircle2, Lightbulb } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
-import { toast } from "sonner";
-import { useAuth } from "@/_core/hooks/useAuth";
+import {
+  AlertCircle,
+  ArrowLeft,
+  ArrowRight,
+  CheckCircle2,
+  ClipboardList,
+  FileText,
+  Info,
+  Loader2,
+  Save,
+} from "lucide-react";
 
-const RESPONSE_STATUSES = [
-  { ui: "Conforme", backend: "compliant", color: "bg-green-500" },
-  { ui: "NOK", backend: "non_compliant", color: "bg-red-500" },
-  { ui: "N/A", backend: "not_applicable", color: "bg-gray-500" },
-  { ui: "Partiel", backend: "partial", color: "bg-yellow-500" },
-  { ui: "En cours", backend: "in_progress", color: "bg-blue-500" },
-];
+type ResponseValue = "compliant" | "non_compliant" | "not_applicable" | "partial" | "in_progress";
 
-interface Question {
-  id: string | number;
+type Question = {
+  id: number;
   questionKey: string;
-  article?: string;
-  annexe?: string;
-  title?: string;
   questionText: string;
-  criticality?: string;
-
-  // backend can return either risk or risks (string, array, object, JSON-string)
-  risk?: any;
+  questionType?: string | null;
+  article?: string | null;
+  annexe?: string | null;
+  title?: string | null;
+  expectedEvidence?: string | null;
+  criticality?: string | null;
   risks?: any;
+  interviewFunctions?: any[];
+  economicRole?: string | null;
+  applicableProcesses?: any[];
+  referentialId?: number | null;
+  processId?: number | null;
+  displayOrder?: number | null;
+};
 
-  expectedEvidence?: string;
-
-  processId?: string | number;
-  processName?: string;
-
-  referenceLabel?: string;
-}
-
-interface AuditResponseLocal {
+type ResponseRow = {
   questionKey: string;
-  responseValue: string;
+  responseValue: ResponseValue;
   responseComment?: string;
   note?: string;
   evidenceFiles?: string[];
-  updatedAt: string;
+  role?: string | null;
+  processId?: string | null;
+  updatedAt?: any;
+};
+
+function safeArray<T>(v: any): T[] {
+  return Array.isArray(v) ? v : [];
 }
 
-function coerceAuditId(raw: unknown): number | null {
-  if (typeof raw === "number" && Number.isFinite(raw) && raw > 0) return raw;
-  if (typeof raw === "string") {
-    const n = Number(raw);
-    if (Number.isFinite(n) && n > 0) return n;
-  }
-  return null;
-}
+function mergeResponsesPreferLocal(localList: ResponseRow[], remoteList: ResponseRow[]) {
+  const map = new Map<string, ResponseRow>();
 
-function getLocalKey(auditId: number) {
-  // ✅ keep stable key (typo "mrd" kept to not break existing users)
-  return `qara:mrd:audit:${auditId}:responses:v1`;
-}
-
-function readLocalResponses(auditId: number): Record<string, AuditResponseLocal> {
-  try {
-    const raw = localStorage.getItem(getLocalKey(auditId));
-    if (!raw) return {};
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object") return {};
-    return parsed as Record<string, AuditResponseLocal>;
-  } catch {
-    return {};
-  }
-}
-
-function writeLocalResponses(auditId: number, map: Record<string, AuditResponseLocal>) {
-  try {
-    localStorage.setItem(getLocalKey(auditId), JSON.stringify(map));
-  } catch {
-    // ignore
-  }
-}
-
-function mergeResponsesPreferLocal(
-  localMap: Record<string, AuditResponseLocal>,
-  remoteList: Array<{
-    questionKey: string;
-    responseValue: string;
-    responseComment?: string;
-    note?: string;
-    evidenceFiles?: string[];
-    updatedAt?: string | null;
-  }>
-): Record<string, AuditResponseLocal> {
-  const remoteMap: Record<string, AuditResponseLocal> = {};
-
-  for (const r of remoteList || []) {
+  for (const r of safeArray<ResponseRow>(remoteList || [])) {
     if (!r?.questionKey) continue;
-    remoteMap[r.questionKey] = {
-      questionKey: r.questionKey,
-      responseValue: r.responseValue,
-      responseComment: r.responseComment ?? "",
-      note: r.note ?? "",
-      evidenceFiles: Array.isArray(r.evidenceFiles) ? r.evidenceFiles : [],
-      updatedAt: (r.updatedAt as string) ?? new Date().toISOString(),
-    };
+    map.set(r.questionKey, r);
   }
 
-  // ✅ Local wins (prevents "I just typed something" being overridden by remote refetch)
-  return { ...remoteMap, ...localMap };
+  // local overwrites remote
+  for (const r of safeArray<ResponseRow>(localList || [])) {
+    if (!r?.questionKey) continue;
+    map.set(r.questionKey, r);
+  }
+
+  return map;
 }
 
-/**
- * ✅ Robust formatter for risk/risk(s) fields:
- * - accepts string | JSON-string | array | object
- * - returns a readable multi-line string or null
- */
-function formatRisk(v: any): string | null {
-  if (v === null || v === undefined) return null;
+function cn(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(" ");
+}
 
-  // string
-  if (typeof v === "string") {
-    const s = v.trim();
-    if (!s) return null;
+function CriticalityBadge({ level }: { level?: string | null }) {
+  const v = (level || "").toLowerCase();
+  const label = level || "n/a";
 
-    // try parse JSON strings: ["..."] or {"..."}
-    if ((s.startsWith("[") && s.endsWith("]")) || (s.startsWith("{") && s.endsWith("}"))) {
-      try {
-        const parsed = JSON.parse(s);
-        return formatRisk(parsed);
-      } catch {
-        return s;
-      }
-    }
-    return s;
-  }
+  const variant =
+    v === "critical" || v === "very_high"
+      ? "destructive"
+      : v === "high"
+      ? "destructive"
+      : v === "medium"
+      ? "secondary"
+      : "outline";
 
-  // array
-  if (Array.isArray(v)) {
-    const parts = v
-      .map((x) => formatRisk(x))
-      .filter(Boolean) as string[];
-    if (!parts.length) return null;
+  return (
+    <Badge variant={variant as any} className="whitespace-nowrap">
+      {label}
+    </Badge>
+  );
+}
 
-    // render as bullet-like lines
-    return parts.length === 1 ? parts[0] : `- ${parts.join("\n- ")}`;
-  }
+function ResponseBadge({ value }: { value?: ResponseValue | null }) {
+  const v = value || "in_progress";
+  const map: Record<string, { label: string; cls: string; icon?: React.ReactNode }> = {
+    compliant: { label: "Conforme", cls: "bg-green-600 text-white", icon: <CheckCircle2 className="h-4 w-4" /> },
+    non_compliant: { label: "Non conforme", cls: "bg-red-600 text-white", icon: <AlertCircle className="h-4 w-4" /> },
+    partial: { label: "Partiel", cls: "bg-amber-600 text-white" },
+    not_applicable: { label: "N/A", cls: "bg-slate-500 text-white" },
+    in_progress: { label: "En cours", cls: "bg-blue-600 text-white" },
+  };
 
-  // object
-  if (typeof v === "object") {
-    const candidate = (v.text ?? v.risk ?? v.risks ?? v.description ?? v.value ?? null) as any;
-    const inner = formatRisk(candidate);
-    if (inner) return inner;
+  const cfg = map[v] || map.in_progress;
 
-    try {
-      const str = JSON.stringify(v);
-      return str && str !== "{}" ? str : null;
-    } catch {
-      return String(v);
-    }
-  }
-
-  return String(v);
+  return (
+    <span className={cn("inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm", cfg.cls)}>
+      {cfg.icon}
+      {cfg.label}
+    </span>
+  );
 }
 
 export default function MDRAuditDrilldown() {
-  const { isAuthenticated } = useAuth();
+  const [, params] = useRoute("/mdr/audit/:auditId");
+  const auditId = params?.auditId ? Number(params.auditId) : null;
+
+  const enabled = !!auditId && Number.isFinite(auditId);
+
   const [, setLocation] = useLocation();
 
-  // ✅ param name = auditId (cohérent avec /mdr/audit/:auditId)
-  const [match, params] = useRoute("/mdr/audit/:auditId");
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [localDrafts, setLocalDrafts] = useState<Record<string, ResponseRow>>({});
+  const [saving, setSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
-  const auditId = useMemo(() => coerceAuditId(params?.auditId), [params?.auditId]);
-  const enabled = !!auditId;
+  const lastSaveRef = useRef<number>(0);
 
-  // Drill-down state
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [currentResponseValue, setCurrentResponseValue] = useState<string | undefined>(undefined);
-  const [currentResponseComment, setCurrentResponseComment] = useState<string>("");
-  const [currentAiSuggestion, setCurrentAiSuggestion] = useState<string | null>(null);
-
-  const [isSaving, setIsSaving] = useState(false);
-
-  // Local responses cache (keyed by questionKey)
-  const [responsesMap, setResponsesMap] = useState<Record<string, AuditResponseLocal>>({});
-
-  // Fetch audit context
+  // ✅ Audit context (role, processes, etc.)
   const {
     data: auditContext,
-    isLoading: loadingAuditContext,
-    error: auditContextError,
+    isLoading: loadingContext,
+    error: contextError,
   } = trpc.mdr.getAuditContext.useQuery({ auditId: (auditId ?? 0) as number }, { enabled });
 
-  // Fetch questions
+  // ✅ Questions for this audit
   const {
-    data: questionsData,
+    data: questionsPayload,
     isLoading: loadingQuestions,
     error: questionsError,
   } = trpc.mdr.getQuestionsForAudit.useQuery({ auditId: (auditId ?? 0) as number }, { enabled });
 
+  const questions: Question[] = useMemo(() => {
+    const q = (questionsPayload as any)?.questions;
+    return Array.isArray(q) ? q : [];
+  }, [questionsPayload]);
+
   // ✅ Fetch existing responses from backend (DB)
+  // Backend may return either:
+  //   - an array of responses (legacy)
+  //   - an object wrapper { responses: [...] }
+  // Normalize here so the questionnaire never crashes due to shape drift.
   const {
-    data: existingResponses,
+    data: responsesData,
     isLoading: loadingResponses,
     error: responsesError,
   } = trpc.mdr.getResponses.useQuery({ auditId: (auditId ?? 0) as number }, { enabled });
 
-  // ✅ Save response (DB upsert)
-  const saveResponseMutation = trpc.mdr.saveResponse.useMutation({
-    onError: (e) => {
-      toast.error(`❌ Erreur enregistrement: ${e.message}`);
-    },
-  });
+  const existingResponses: ResponseRow[] = useMemo(() => {
+    if (Array.isArray(responsesData)) return responsesData as any;
+    const wrapped = (responsesData as any)?.responses;
+    return Array.isArray(wrapped) ? wrapped : [];
+  }, [responsesData]);
 
-  // Normalize questionsData shape (array OR {questions})
-  const questions: Question[] = useMemo(() => {
-    if (Array.isArray(questionsData)) return questionsData as any;
-    const maybe = (questionsData as any)?.questions;
-    return Array.isArray(maybe) ? (maybe as any) : [];
-  }, [questionsData]);
+  // ✅ Save response mutation
+  const saveResponseMutation = trpc.mdr.saveResponse.useMutation();
+
+  // Merge remote + local
+  const responsesMap = useMemo(() => {
+    const localList = Object.values(localDrafts);
+    return mergeResponsesPreferLocal(localList, existingResponses || []);
+  }, [localDrafts, existingResponses]);
 
   const totalQuestions = questions.length;
 
-  // ✅ keep index valid if questions arrive late / filtered list changes
-  useEffect(() => {
-    if (totalQuestions <= 0) {
-      setCurrentQuestionIndex(0);
-      return;
+  const currentQuestion = useMemo(() => {
+    if (!questions || questions.length === 0) return null;
+    return questions[Math.min(Math.max(currentIndex, 0), questions.length - 1)];
+  }, [questions, currentIndex]);
+
+  const currentResponse = useMemo(() => {
+    if (!currentQuestion?.questionKey) return null;
+    return responsesMap.get(currentQuestion.questionKey) || null;
+  }, [responsesMap, currentQuestion]);
+
+  const answeredCount = useMemo(() => {
+    let c = 0;
+    for (const q of questions) {
+      const r = responsesMap.get(q.questionKey);
+      if (r?.responseValue && r.responseValue !== "in_progress") c++;
     }
-    setCurrentQuestionIndex((prev) => Math.min(Math.max(prev, 0), totalQuestions - 1));
-  }, [totalQuestions]);
+    return c;
+  }, [questions, responsesMap]);
 
-  const currentQuestion = questions[currentQuestionIndex];
+  const progressPct = totalQuestions > 0 ? Math.round((answeredCount / totalQuestions) * 100) : 0;
 
-  // ✅ answered counter (NO HOOK) -> évite le crash hooks (#310)
-  const answeredCount = (() => {
-    try {
-      const vals = Object.values(responsesMap || {});
-      let c = 0;
-      for (const v of vals) {
-        if (v?.responseValue) c += 1;
-      }
-      return c;
-    } catch {
-      return 0;
-    }
-  })();
-
-  // Load local responses once auditId is known
   useEffect(() => {
-    if (!auditId) return;
-    const local = readLocalResponses(auditId);
-    setResponsesMap(local);
-  }, [auditId]);
+    if (!enabled) return;
+    if (!auditContext) return;
+    // reset index on new audit load
+    setCurrentIndex(0);
+  }, [enabled, auditContext?.auditId]);
 
-  // ✅ Merge remote responses into local map (local wins) once remote loaded
+  // Autosave message clear
   useEffect(() => {
-    if (!auditId) return;
-    if (!existingResponses) return;
+    if (!saveMessage) return;
+    const t = window.setTimeout(() => setSaveMessage(null), 2500);
+    return () => window.clearTimeout(t);
+  }, [saveMessage]);
 
-    const local = readLocalResponses(auditId);
-    const merged = mergeResponsesPreferLocal(local, existingResponses as any);
-
-    setResponsesMap(merged);
-    writeLocalResponses(auditId, merged);
-  }, [auditId, existingResponses]);
-
-  // Update current response state when question changes OR responsesMap changes
-  useEffect(() => {
-    if (!auditId || !currentQuestion) return;
-
-    const stored = responsesMap[currentQuestion.questionKey];
-    setCurrentResponseValue(stored?.responseValue);
-    setCurrentResponseComment(stored?.responseComment || "");
-    setCurrentAiSuggestion(null);
-  }, [auditId, currentQuestionIndex, currentQuestion?.questionKey, responsesMap, currentQuestion]);
-
-  // ✅ Debug log: verify risk changes when question changes
-  useEffect(() => {
-    if (!currentQuestion) return;
-    // eslint-disable-next-line no-console
-    console.log("[MDR] currentQuestion", currentQuestion.questionKey, {
-      text: currentQuestion.questionText,
-      risk: (currentQuestion as any).risk,
-      risks: (currentQuestion as any).risks,
+  const setDraft = (questionKey: string, patch: Partial<ResponseRow>) => {
+    setLocalDrafts((prev) => {
+      const existing = prev[questionKey] || ({ questionKey } as ResponseRow);
+      return {
+        ...prev,
+        [questionKey]: {
+          ...existing,
+          ...patch,
+          questionKey,
+        },
+      };
     });
-  }, [currentQuestion?.questionKey]);
+  };
 
-  const handleSaveAndContinue = useCallback(async () => {
-    if (!auditId || !currentQuestion) return;
+  const handleSetResponseValue = (value: ResponseValue) => {
+    if (!currentQuestion?.questionKey) return;
+    setDraft(currentQuestion.questionKey, {
+      responseValue: value,
+      role: auditContext?.economicRole ?? null,
+      processId: (auditContext as any)?.processIds?.[0] ?? null,
+    });
+  };
 
-    if (!currentResponseValue) {
-      toast.error("Veuillez sélectionner une réponse pour continuer.");
+  const handleSetComment = (v: string) => {
+    if (!currentQuestion?.questionKey) return;
+    setDraft(currentQuestion.questionKey, { responseComment: v });
+  };
+
+  const handleSetNote = (v: string) => {
+    if (!currentQuestion?.questionKey) return;
+    setDraft(currentQuestion.questionKey, { note: v });
+  };
+
+  const persistOne = async (row: ResponseRow) => {
+    if (!enabled || !auditId) return;
+
+    await saveResponseMutation.mutateAsync({
+      auditId,
+      questionKey: row.questionKey,
+      responseValue: row.responseValue || "in_progress",
+      responseComment: row.responseComment ?? "",
+      note: row.note ?? "",
+      evidenceFiles: row.evidenceFiles ?? [],
+      role: row.role ?? null,
+      processId: row.processId ?? null,
+    });
+  };
+
+  const handleSaveCurrent = async () => {
+    if (!currentQuestion?.questionKey) return;
+    const row = localDrafts[currentQuestion.questionKey];
+    if (!row) {
+      setSaveMessage("Rien à enregistrer");
       return;
     }
 
-    const payloadLocal: AuditResponseLocal = {
-      questionKey: currentQuestion.questionKey,
-      responseValue: currentResponseValue,
-      responseComment: currentResponseComment,
-      note: currentResponseComment,
-      evidenceFiles: [],
-      updatedAt: new Date().toISOString(),
-    };
-
-    // ✅ 1) Save locally immediately (instant UX / anti-perte)
-    const nextMap = {
-      ...responsesMap,
-      [currentQuestion.questionKey]: payloadLocal,
-    };
-    setResponsesMap(nextMap);
-    writeLocalResponses(auditId, nextMap);
-
-    // ✅ 2) Save to backend (DB)
-    setIsSaving(true);
     try {
-      await saveResponseMutation.mutateAsync({
-        auditId,
-        questionKey: currentQuestion.questionKey,
-        responseValue: currentResponseValue as any,
-        responseComment: currentResponseComment ?? "",
-        note: currentResponseComment ?? "",
-        role: (auditContext as any)?.economicRole ?? null,
-        // backend expects numeric string or null
-        processId:
-          currentQuestion.processId !== undefined && currentQuestion.processId !== null
-            ? String(currentQuestion.processId)
-            : null,
-        evidenceFiles: [],
+      setSaving(true);
+      await persistOne(row);
+      lastSaveRef.current = Date.now();
+      setSaveMessage("Enregistré ✅");
+      // Clear local draft after successful save (optional)
+      setLocalDrafts((prev) => {
+        const next = { ...prev };
+        delete next[currentQuestion.questionKey];
+        return next;
       });
-
-      toast.success("✅ Réponse enregistrée");
-    } catch {
-      // onError handles toast
+    } catch (e) {
+      console.error(e);
+      setSaveMessage("Erreur d’enregistrement");
     } finally {
-      setIsSaving(false);
+      setSaving(false);
+    }
+  };
+
+  const handleSaveAllDrafts = async () => {
+    const list = Object.values(localDrafts || {});
+    if (!list.length) {
+      setSaveMessage("Aucun brouillon à enregistrer");
+      return;
     }
 
-    // ✅ 3) Move next
-    if (currentQuestionIndex < totalQuestions - 1) {
-      setCurrentQuestionIndex((prev) => prev + 1);
-    } else {
-      toast.success("✅ Toutes les questions ont été traitées !");
-      setLocation(`/audit/${auditId}/results`);
+    try {
+      setSaving(true);
+      for (const row of list) {
+        await persistOne(row);
+      }
+      lastSaveRef.current = Date.now();
+      setSaveMessage("Tout enregistré ✅");
+      setLocalDrafts({});
+    } catch (e) {
+      console.error(e);
+      setSaveMessage("Erreur d’enregistrement");
+    } finally {
+      setSaving(false);
     }
-  }, [
-    auditId,
-    currentQuestion,
-    currentResponseValue,
-    currentResponseComment,
-    responsesMap,
-    currentQuestionIndex,
-    totalQuestions,
-    setLocation,
-    saveResponseMutation,
-    auditContext,
-  ]);
+  };
 
-  const handleGetAiSuggestion = useCallback(() => {
-    setCurrentAiSuggestion(
-      "Suggestion IA :\n" +
-        "- Citer les preuves disponibles (procédure, enregistrements, lien eQMS).\n" +
-        "- Décrire comment la conformité est démontrée.\n" +
-        "- Si NOK/Partiel : actions correctives, responsable, délai, preuve attendue."
-    );
-  }, []);
+  const goPrev = () => setCurrentIndex((i) => Math.max(0, i - 1));
+  const goNext = () => setCurrentIndex((i) => Math.min(totalQuestions - 1, i + 1));
 
-  // -------- UI guards --------
+  const goBackToWizard = () => setLocation("/mdr");
 
-  if (!isAuthenticated) {
+  const loading = loadingContext || loadingQuestions || loadingResponses;
+
+  if (!enabled) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
-        <Card className="w-full max-w-md shadow-lg">
-          <CardHeader className="text-center">
-            <AlertCircle className="h-8 w-8 text-red-600 mx-auto mb-4" />
-            <CardTitle className="text-2xl">Authentification requise</CardTitle>
-            <CardDescription>Veuillez vous connecter pour accéder à l’audit</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button onClick={() => setLocation("/login")} className="w-full">
-              Se connecter
-            </Button>
+      <div className="p-6">
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center gap-3">
+              <AlertCircle className="h-6 w-6 text-red-600" />
+              <div>
+                <div className="font-semibold">Audit invalide</div>
+                <div className="text-sm text-muted-foreground">ID d’audit manquant ou incorrect.</div>
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <Button onClick={goBackToWizard} variant="secondary">
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Retour
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>
     );
   }
 
-  if (!match || !auditId) {
+  if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
-        <Card className="w-full max-w-md shadow-lg">
-          <CardHeader className="text-center">
-            <AlertCircle className="h-8 w-8 text-red-600 mx-auto mb-4" />
-            <CardTitle className="text-2xl">Audit non spécifié</CardTitle>
-            <CardDescription>Veuillez fournir un ID d’audit valide dans l’URL.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button onClick={() => setLocation("/audits")} className="w-full">
-              Retour à la liste des audits
-            </Button>
+      <div className="p-6">
+        <Card>
+          <CardContent className="p-10 flex items-center justify-center gap-3">
+            <Loader2 className="h-5 w-5 animate-spin" />
+            <div>Chargement du questionnaire…</div>
           </CardContent>
         </Card>
       </div>
     );
   }
 
-  if (loadingAuditContext || loadingQuestions || loadingResponses) {
+  if (contextError || questionsError || responsesError) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-        <p className="ml-2">Chargement de l’audit...</p>
-      </div>
-    );
-  }
-
-  if (auditContextError || questionsError || responsesError) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
-        <Card className="w-full max-w-2xl shadow-lg">
-          <CardHeader className="text-center">
-            <AlertCircle className="h-8 w-8 text-red-600 mx-auto mb-4" />
-            <CardTitle className="text-2xl">Erreur de chargement</CardTitle>
-            <CardDescription>
-              Une erreur est survenue lors du chargement des données de l’audit. Veuillez réessayer.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <Alert>
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription className="text-sm whitespace-pre-wrap">
-                {String(
-                  (auditContextError as any)?.message ||
+      <div className="p-6">
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center gap-3">
+              <AlertCircle className="h-6 w-6 text-red-600" />
+              <div>
+                <div className="font-semibold">Erreur de chargement</div>
+                <div className="text-sm text-muted-foreground">
+                  {(contextError as any)?.message ||
                     (questionsError as any)?.message ||
                     (responsesError as any)?.message ||
-                    "Erreur inconnue"
-                )}
-              </AlertDescription>
-            </Alert>
+                    "Une erreur est survenue."}
+                </div>
+              </div>
+            </div>
 
-            <Button onClick={() => setLocation("/audits")} className="w-full">
-              Retour à la liste des audits
-            </Button>
+            <div className="mt-4">
+              <Button onClick={goBackToWizard} variant="secondary">
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Retour
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>
     );
   }
 
-  if (!currentQuestion) {
+  if (!questions || questions.length === 0) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
-        <Card className="w-full max-w-2xl shadow-lg">
-          <CardHeader className="text-center">
-            <AlertCircle className="h-8 w-8 text-red-600 mx-auto mb-4" />
-            <CardTitle className="text-2xl">Aucune question trouvée</CardTitle>
-            <CardDescription>
-              Vérifiez la configuration de l’audit (rôle, processus) ou les questions disponibles.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button onClick={() => setLocation("/audits")} className="w-full">
-              Retour à la liste des audits
-            </Button>
+      <div className="p-6">
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center gap-3">
+              <ClipboardList className="h-6 w-6 text-muted-foreground" />
+              <div>
+                <div className="font-semibold">Aucune question</div>
+                <div className="text-sm text-muted-foreground">
+                  Aucune question n’a été trouvée pour cet audit (filtrage rôle/process/référentiel).
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 flex gap-2">
+              <Button onClick={goBackToWizard} variant="secondary">
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Retour
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>
     );
   }
-
-  const progress = totalQuestions > 0 ? ((currentQuestionIndex + 1) / totalQuestions) * 100 : 0;
-
-  // ✅ FIX: robust risk rendering (handles JSON, arrays, objects)
-  const riskText = useMemo(() => {
-    if (!currentQuestion) return null;
-    // prioritize .risk then .risks (adapt if your backend uses the opposite)
-    return formatRisk((currentQuestion as any).risk ?? (currentQuestion as any).risks);
-  }, [currentQuestion?.questionKey]);
-
-  const evidenceText = currentQuestion.expectedEvidence;
-  const auditTitle = (auditContext as any)?.auditName || (auditContext as any)?.name || `Audit MDR: ID ${auditId}`;
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
-      <Card className="w-full max-w-3xl shadow-lg">
-        <CardHeader>
-          <CardTitle className="text-2xl">{auditTitle}</CardTitle>
-          <CardDescription>
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                Question {currentQuestionIndex + 1} / {totalQuestions}
+    <div className="p-6 space-y-4">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <Button variant="secondary" onClick={goBackToWizard}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Wizard
+          </Button>
+
+          <div>
+            <div className="text-xl font-semibold">
+              {(auditContext as any)?.auditName || "Audit MDR"}
+            </div>
+            <div className="text-sm text-muted-foreground">
+              Rôle: <span className="font-medium">{(auditContext as any)?.economicRole || "—"}</span> · Référentiel:{" "}
+              <span className="font-medium">{safeArray<number>((auditContext as any)?.referentialIds).join(", ") || "—"}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <div className="hidden sm:flex items-center gap-3">
+            <div className="text-sm text-muted-foreground">
+              {answeredCount}/{totalQuestions} répondu
+            </div>
+            <div className="w-40">
+              <Progress value={progressPct} />
+            </div>
+            <Badge variant="outline">{progressPct}%</Badge>
+          </div>
+
+          <Button onClick={handleSaveAllDrafts} disabled={saving || Object.keys(localDrafts).length === 0}>
+            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+            Enregistrer tout
+          </Button>
+        </div>
+      </div>
+
+      <Card>
+        <CardContent className="p-6 space-y-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <div className="text-sm text-muted-foreground whitespace-nowrap">
+                Question {currentIndex + 1} / {totalQuestions}
               </div>
-              <div className="text-xs text-slate-500">
-                Réponses enregistrées: <strong>{answeredCount}</strong> / {totalQuestions}
+              <Separator orientation="vertical" className="h-5" />
+              <CriticalityBadge level={currentQuestion?.criticality ?? null} />
+              {currentResponse?.responseValue ? <ResponseBadge value={currentResponse.responseValue} /> : null}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button variant="secondary" onClick={goPrev} disabled={currentIndex === 0}>
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Précédent
+              </Button>
+              <Button variant="secondary" onClick={goNext} disabled={currentIndex >= totalQuestions - 1}>
+                Suivant
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <div className="text-lg font-semibold">{currentQuestion?.title || "Question"}</div>
+            <div className="text-sm text-muted-foreground flex flex-wrap items-center gap-2">
+              {currentQuestion?.article ? (
+                <Badge variant="outline" className="whitespace-nowrap">
+                  <FileText className="mr-2 h-3.5 w-3.5" />
+                  {currentQuestion.article}
+                </Badge>
+              ) : null}
+              {currentQuestion?.annexe ? (
+                <Badge variant="outline" className="whitespace-nowrap">
+                  {currentQuestion.annexe}
+                </Badge>
+              ) : null}
+              {currentQuestion?.questionType ? (
+                <Badge variant="outline" className="whitespace-nowrap">
+                  {currentQuestion.questionType}
+                </Badge>
+              ) : null}
+            </div>
+
+            <div className="mt-2 whitespace-pre-wrap leading-relaxed">{currentQuestion?.questionText}</div>
+          </div>
+
+          <Separator />
+
+          <div className="space-y-3">
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant={currentResponse?.responseValue === "compliant" ? "default" : "secondary"}
+                onClick={() => handleSetResponseValue("compliant")}
+              >
+                Conforme
+              </Button>
+              <Button
+                variant={currentResponse?.responseValue === "non_compliant" ? "destructive" : "secondary"}
+                onClick={() => handleSetResponseValue("non_compliant")}
+              >
+                Non conforme
+              </Button>
+              <Button
+                variant={currentResponse?.responseValue === "partial" ? "default" : "secondary"}
+                onClick={() => handleSetResponseValue("partial")}
+              >
+                Partiel
+              </Button>
+              <Button
+                variant={currentResponse?.responseValue === "not_applicable" ? "outline" : "secondary"}
+                onClick={() => handleSetResponseValue("not_applicable")}
+              >
+                N/A
+              </Button>
+              <Button
+                variant={currentResponse?.responseValue === "in_progress" ? "outline" : "secondary"}
+                onClick={() => handleSetResponseValue("in_progress")}
+              >
+                En cours
+              </Button>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <div className="text-sm font-medium">Commentaire / Constat</div>
+                <Textarea
+                  value={localDrafts[currentQuestion!.questionKey]?.responseComment ?? currentResponse?.responseComment ?? ""}
+                  onChange={(e) => handleSetComment(e.target.value)}
+                  placeholder="Décris les preuves, observations terrain, écarts…"
+                  className="min-h-[140px]"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <div className="text-sm font-medium">Note / Action</div>
+                <Textarea
+                  value={localDrafts[currentQuestion!.questionKey]?.note ?? currentResponse?.note ?? ""}
+                  onChange={(e) => handleSetNote(e.target.value)}
+                  placeholder="Plan d’action, responsables, délais…"
+                  className="min-h-[140px]"
+                />
               </div>
             </div>
-            <Progress value={progress} className="mt-2" />
-          </CardDescription>
-        </CardHeader>
 
-        <CardContent className="space-y-6">
-          <div className="flex flex-wrap gap-2 mb-4">
-            {currentQuestion.article && <Badge variant="secondary">Article: {currentQuestion.article}</Badge>}
-            {currentQuestion.annexe && <Badge variant="secondary">Annexe: {currentQuestion.annexe}</Badge>}
-            {currentQuestion.criticality && <Badge variant="secondary">Criticité: {currentQuestion.criticality}</Badge>}
-            {currentQuestion.processName && <Badge variant="secondary">Processus: {currentQuestion.processName}</Badge>}
+            <div className="flex items-center justify-between">
+              <div className="text-sm text-muted-foreground flex items-center gap-2">
+                <Info className="h-4 w-4" />
+                {saveMessage ? <span className="font-medium">{saveMessage}</span> : <span>Les modifications sont en brouillon tant que tu n’enregistres pas.</span>}
+              </div>
+
+              <Button onClick={handleSaveCurrent} disabled={saving || !localDrafts[currentQuestion!.questionKey]}>
+                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                Enregistrer
+              </Button>
+            </div>
+
+            {currentQuestion?.expectedEvidence ? (
+              <>
+                <Separator />
+                <div className="space-y-2">
+                  <div className="text-sm font-medium flex items-center gap-2">
+                    <ClipboardList className="h-4 w-4" />
+                    Éléments de preuve attendus
+                  </div>
+                  <div className="text-sm whitespace-pre-wrap text-muted-foreground">{currentQuestion.expectedEvidence}</div>
+                </div>
+              </>
+            ) : null}
+
+            {currentQuestion?.risks ? (
+              <>
+                <Separator />
+                <div className="space-y-2">
+                  <div className="text-sm font-medium flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4" />
+                    Risques
+                  </div>
+                  <div className="text-sm whitespace-pre-wrap text-muted-foreground">
+                    {typeof currentQuestion.risks === "string" ? currentQuestion.risks : JSON.stringify(currentQuestion.risks, null, 2)}
+                  </div>
+                </div>
+              </>
+            ) : null}
+
+            {(currentQuestion?.interviewFunctions && currentQuestion.interviewFunctions.length > 0) ? (
+              <>
+                <Separator />
+                <div className="space-y-2">
+                  <div className="text-sm font-medium">Fonctions à interviewer</div>
+                  <div className="flex flex-wrap gap-2">
+                    {safeArray<any>(currentQuestion.interviewFunctions).map((f, idx) => (
+                      <Badge key={idx} variant="outline">
+                        {String(f)}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              </>
+            ) : null}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-6 space-y-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="text-sm text-muted-foreground">
+              Navigation rapide (index) · Clique pour aller à une question
+            </div>
+            <div className="text-sm text-muted-foreground">
+              Dernier enregistrement:{" "}
+              <span className="font-medium">
+                {lastSaveRef.current ? new Date(lastSaveRef.current).toLocaleTimeString() : "—"}
+              </span>
+            </div>
           </div>
 
-          <div className="space-y-2">
-            <Label className="text-lg font-semibold">{currentQuestion.questionText}</Label>
-          </div>
-
-          {riskText && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription className="whitespace-pre-wrap">
-                <span className="font-semibold">Risque associé :</span> {riskText}
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {evidenceText && (
-            <Alert>
-              <CheckCircle2 className="h-4 w-4" />
-              <AlertDescription className="whitespace-pre-wrap">
-                <span className="font-semibold">Éléments de preuve attendus :</span> {evidenceText}
-              </AlertDescription>
-            </Alert>
-          )}
-
-          <div className="space-y-2">
-            <Label htmlFor="response-comment">Réponse / Note</Label>
-            <Textarea
-              id="response-comment"
-              value={currentResponseComment}
-              onChange={(e) => setCurrentResponseComment(e.target.value)}
-              placeholder="Saisissez votre réponse ou vos notes ici..."
-              className="min-h-[100px]"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label>Statut de conformité</Label>
-            <div className="flex gap-2 flex-wrap">
-              {RESPONSE_STATUSES.map((status) => (
+          <div className="flex flex-wrap gap-2">
+            {questions.slice(0, 120).map((q, idx) => {
+              const r = responsesMap.get(q.questionKey);
+              const done = r?.responseValue && r.responseValue !== "in_progress";
+              return (
                 <Button
-                  key={status.backend}
-                  variant={currentResponseValue === status.backend ? "default" : "outline"}
-                  className={currentResponseValue === status.backend ? status.color : ""}
-                  onClick={() => setCurrentResponseValue(status.backend)}
+                  key={q.questionKey}
+                  variant={idx === currentIndex ? "default" : done ? "secondary" : "outline"}
+                  className="h-8 px-3 text-xs"
+                  onClick={() => setCurrentIndex(idx)}
                 >
-                  {status.ui}
+                  {idx + 1}
                 </Button>
-              ))}
-            </div>
-          </div>
-
-          <div className="space-y-2 border p-4 rounded-md bg-gray-50">
-            <Label>Documents justificatifs</Label>
-            <p className="text-sm text-gray-500">Fonctionnalité d’upload non implémentée dans cette version.</p>
-          </div>
-
-          <div className="space-y-2">
-            <Button variant="outline" onClick={handleGetAiSuggestion}>
-              <Lightbulb className="h-4 w-4 mr-2" />
-              Obtenir une recommandation IA
-            </Button>
-
-            {currentAiSuggestion && (
-              <Alert className="mt-2">
-                <Lightbulb className="h-4 w-4" />
-                <AlertDescription className="whitespace-pre-wrap">{currentAiSuggestion}</AlertDescription>
-              </Alert>
-            )}
-          </div>
-
-          <div className="flex justify-between gap-4 pt-6">
-            <Button
-              variant="outline"
-              onClick={() => setCurrentQuestionIndex((prev) => Math.max(0, prev - 1))}
-              disabled={currentQuestionIndex === 0 || isSaving}
-            >
-              <ChevronLeft className="h-4 w-4 mr-2" />
-              Précédent
-            </Button>
-
-            <Button onClick={handleSaveAndContinue} disabled={!currentResponseValue || isSaving}>
-              {isSaving ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Enregistrement...
-                </>
-              ) : (
-                <>
-                  <CheckCircle2 className="h-4 w-4 mr-2" />
-                  Enregistrer et Continuer
-                  <ChevronRight className="h-4 w-4 ml-2" />
-                </>
-              )}
-            </Button>
+              );
+            })}
+            {questions.length > 120 ? (
+              <Badge variant="outline" className="h-8 flex items-center">
+                +{questions.length - 120}…
+              </Badge>
+            ) : null}
           </div>
         </CardContent>
       </Card>
