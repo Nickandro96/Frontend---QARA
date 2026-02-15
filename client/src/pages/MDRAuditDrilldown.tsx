@@ -66,7 +66,6 @@ function mergeResponsesPreferLocal(localList: ResponseRow[], remoteList: Respons
     map.set(r.questionKey, r);
   }
 
-  // local overwrites remote
   for (const r of safeArray<ResponseRow>(localList || [])) {
     if (!r?.questionKey) continue;
     map.set(r.questionKey, r);
@@ -81,10 +80,8 @@ function cn(...classes: Array<string | false | null | undefined>) {
 
 function extractArticleBadge(article?: string | null) {
   if (!article) return null;
-  // exemples possibles: "MDR 2017/745 – Article 113", "Article 2", "MDR ... Article 1"
   const m = String(article).match(/article\s*([0-9]{1,3})/i);
   if (m?.[1]) return `Article ${m[1]}`;
-  // fallback: si déjà court
   if (String(article).toLowerCase().includes("article")) return String(article).replace(/MDR.*?–\s*/i, "").trim();
   return String(article).trim();
 }
@@ -95,8 +92,65 @@ function formatCriticality(level?: string | null) {
   if (v === "critical" || v === "very_high" || v === "high") return { label: "Criticité élevée", variant: "destructive" as const };
   if (v === "medium") return { label: "Criticité moyenne", variant: "secondary" as const };
   if (v === "low") return { label: "Criticité faible", variant: "outline" as const };
-  // fallback
   return { label: `Criticité ${level}`, variant: "outline" as const };
+}
+
+function complianceScoreFromResponses(rows: ResponseRow[]) {
+  if (!rows.length) return 100;
+
+  const scoreMap: Record<ResponseValue, number> = {
+    compliant: 100,
+    partial: 60,
+    non_compliant: 20,
+    not_applicable: 100,
+    in_progress: 50,
+  };
+
+  const avg = rows.reduce((acc, r) => acc + scoreMap[r.responseValue || "in_progress"], 0) / rows.length;
+  return Math.round(avg);
+}
+
+function aiInsightsForQuestion(
+  question: Question | null,
+  valueNow: ResponseValue,
+  expertMode: boolean,
+  inspectorMode: boolean,
+) {
+  if (!question) return [] as string[];
+
+  const base = [
+    `Ce que l'ON cherche : preuve d'exécution réelle sur ${extractArticleBadge(question.article) || "l'exigence visée"}.`,
+    "Où creuser : cohérence entre procédure, enregistrements et pratiques terrain.",
+    "Qui interviewer : responsable process, PRRC et opérateur de première ligne.",
+  ];
+
+  if (valueNow === "partial") {
+    return [
+      ...base,
+      "Risque probable : NC mineure évoluant en majeure si le pattern se répète.",
+      "Impact certification : action corrective exigée avec délai contraint.",
+      "Question complémentaire : montrer une preuve terrain datée des 90 derniers jours.",
+    ];
+  }
+
+  if (valueNow === "non_compliant") {
+    return [
+      ...base,
+      "Risque probable : NC majeure.",
+      "Impact patient : signal faible de détection tardive possible.",
+      "Priorité : vérifier cohérence PMS vs CER et déclenchement CAPA.",
+    ];
+  }
+
+  if (expertMode || inspectorMode) {
+    return [
+      ...base,
+      "Angle mort classique ON : procédure valide mais non appliquée en routine.",
+      "Piège réglementaire : KPI sans seuil d'alerte opérationnel.",
+    ];
+  }
+
+  return base;
 }
 
 export default function MDRAuditDrilldown() {
@@ -111,17 +165,20 @@ export default function MDRAuditDrilldown() {
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
+  const [aiEnabled, setAiEnabled] = useState(true);
+  const [expertMode, setExpertMode] = useState(false);
+  const [inspectorMode, setInspectorMode] = useState(false);
+  const [activeTab, setActiveTab] = useState<"context" | "copilot" | "evidence">("context");
+
   const lastSaveRef = useRef<number>(0);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // ✅ Audit context (role, processes, etc.)
   const {
     data: auditContext,
     isLoading: loadingContext,
     error: contextError,
   } = trpc.mdr.getAuditContext.useQuery({ auditId: (auditId ?? 0) as number }, { enabled });
 
-  // ✅ Questions for this audit
   const {
     data: questionsPayload,
     isLoading: loadingQuestions,
@@ -133,7 +190,6 @@ export default function MDRAuditDrilldown() {
     return Array.isArray(q) ? q : [];
   }, [questionsPayload]);
 
-  // ✅ Existing responses
   const {
     data: responsesData,
     isLoading: loadingResponses,
@@ -141,16 +197,13 @@ export default function MDRAuditDrilldown() {
   } = trpc.mdr.getResponses.useQuery({ auditId: (auditId ?? 0) as number }, { enabled });
 
   const existingResponses: ResponseRow[] = useMemo(() => {
-    // compat: array legacy OU wrapper { responses: [...] }
     if (Array.isArray(responsesData)) return responsesData as any;
     const wrapped = (responsesData as any)?.responses;
     return Array.isArray(wrapped) ? wrapped : [];
   }, [responsesData]);
 
-  // ✅ Save response mutation
   const saveResponseMutation = trpc.mdr.saveResponse.useMutation();
 
-  // Merge remote + local
   const responsesMap = useMemo(() => {
     const localList = Object.values(localDrafts);
     return mergeResponsesPreferLocal(localList, existingResponses || []);
@@ -179,6 +232,15 @@ export default function MDRAuditDrilldown() {
 
   const progressPct = totalQuestions > 0 ? Math.round((answeredCount / totalQuestions) * 100) : 0;
 
+  const complianceScore = useMemo(() => {
+    const rows: ResponseRow[] = [];
+    for (const q of questions) {
+      const r = responsesMap.get(q.questionKey);
+      if (r) rows.push(r);
+    }
+    return complianceScoreFromResponses(rows);
+  }, [questions, responsesMap]);
+
   useEffect(() => {
     if (!enabled) return;
     if (!auditContext) return;
@@ -205,20 +267,16 @@ export default function MDRAuditDrilldown() {
     });
   };
 
-  // ---- UI setters (capture-style fields) ----
-  // "Réponse / Note" (champ principal)
   const handleSetMainAnswer = (v: string) => {
     if (!currentQuestion?.questionKey) return;
     setDraft(currentQuestion.questionKey, { responseComment: v });
   };
 
-  // "Commentaire (optionnel)"
   const handleSetOptionalComment = (v: string) => {
     if (!currentQuestion?.questionKey) return;
     setDraft(currentQuestion.questionKey, { note: v });
   };
 
-  // Conformité : Conforme / NOK / N/A
   const handleSetCompliance = (value: ResponseValue) => {
     if (!currentQuestion?.questionKey) return;
     setDraft(currentQuestion.questionKey, {
@@ -270,7 +328,6 @@ export default function MDRAuditDrilldown() {
       processId: localDrafts[currentQuestion.questionKey]?.processId ?? currentResponse?.processId ?? ((auditContext as any)?.processIds?.[0] ?? null),
     };
 
-    // si rien n’a changé localement et que c’est déjà en DB, on laisse passer sans bloquer
     const hasLocal = !!localDrafts[currentQuestion.questionKey];
     const hasAnyValue =
       !!mergedRow.responseComment ||
@@ -289,7 +346,6 @@ export default function MDRAuditDrilldown() {
       lastSaveRef.current = Date.now();
       setSaveMessage("Enregistré ✅");
 
-      // clear local draft for this question
       setLocalDrafts((prev) => {
         const next = { ...prev };
         delete next[currentQuestion.questionKey];
@@ -308,8 +364,6 @@ export default function MDRAuditDrilldown() {
 
   const handleSaveAndContinue = async () => {
     await handleSaveCurrent();
-    // si save fail, on ne force pas le next
-    // (saveMessage est mis à jour)
     if (saveResponseMutation.isError) return;
     goNext();
   };
@@ -318,7 +372,6 @@ export default function MDRAuditDrilldown() {
 
   const loading = loadingContext || loadingQuestions || loadingResponses;
 
-  // ---- STATES ----
   if (!enabled) {
     return (
       <div className="p-6">
@@ -414,7 +467,6 @@ export default function MDRAuditDrilldown() {
     );
   }
 
-  // ---- DERIVED UI VALUES ----
   const articleBadge = extractArticleBadge(currentQuestion?.article ?? null);
   const crit = formatCriticality(currentQuestion?.criticality ?? null);
 
@@ -437,235 +489,378 @@ export default function MDRAuditDrilldown() {
     localDrafts[currentQuestion!.questionKey]?.evidenceFiles ??
     safeArray<string>(currentResponse?.evidenceFiles);
 
+  const aiInsights = aiEnabled
+    ? aiInsightsForQuestion(currentQuestion, valueNow, expertMode, inspectorMode)
+    : ["Copilot désactivé. Activez IA ON pour obtenir des suggestions contextuelles."];
+
+  const weakSignals = Array.from(responsesMap.values()).filter(
+    (r) => r.responseValue === "partial" || r.responseValue === "non_compliant",
+  ).length;
+
+  const showCoherenceAlert = weakSignals >= 2 || valueNow === "non_compliant";
+
   return (
     <div className="p-6 space-y-4">
-      {/* Header (minimal comme capture) */}
-      <div className="flex items-center justify-between">
-        <div className="text-sm text-muted-foreground">
-          Question {currentIndex + 1} sur {totalQuestions}
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Button variant="secondary" onClick={goPrev} disabled={currentIndex === 0}>
-            Précédent
-          </Button>
-          <Button variant="secondary" onClick={goNext} disabled={currentIndex >= totalQuestions - 1}>
-            Suivant
-          </Button>
-        </div>
-      </div>
-
-      <Card className="shadow-sm">
-        <CardContent className="p-6 space-y-6">
-          {/* Badges + Question */}
-          <div className="space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
-              {articleBadge ? (
-                <Badge variant="outline" className="rounded-full px-3 py-1">
-                  {articleBadge}
-                </Badge>
-              ) : null}
-              <Badge variant={crit.variant as any} className="rounded-full px-3 py-1">
-                {crit.label}
-              </Badge>
-            </div>
-
-            <div className="text-2xl font-semibold leading-snug">
-              {currentQuestion?.questionText || currentQuestion?.title || "Question"}
-            </div>
-          </div>
-
-          {/* Réponse / Note (champ principal) */}
-          <div className="space-y-2">
-            <div className="text-sm font-medium">Réponse / Note</div>
-            <Input
-              value={mainAnswerValue}
-              onChange={(e) => handleSetMainAnswer(e.target.value)}
-              placeholder="Décrivez votre réponse, les mesures mises en place, ou les éléments de contexte..."
-              className="h-11"
-            />
-            <div className="text-xs text-muted-foreground">
-              Documentez votre réponse avant de définir le statut de conformité
-            </div>
-          </div>
-
-          {/* Statut de conformité (3 boutons larges) */}
-          <div className="space-y-2">
-            <div className="text-sm font-medium">Statut de conformité</div>
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-              <Button
-                variant={valueNow === "compliant" ? "default" : "outline"}
-                className={cn("h-11 justify-center", valueNow === "compliant" && "shadow-sm")}
-                onClick={() => handleSetCompliance("compliant")}
-              >
-                <CheckCircle2 className="mr-2 h-4 w-4" />
-                Conforme
-              </Button>
-
-              <Button
-                variant={valueNow === "non_compliant" ? "default" : "outline"}
-                className={cn("h-11 justify-center", valueNow === "non_compliant" && "shadow-sm")}
-                onClick={() => handleSetCompliance("non_compliant")}
-              >
-                <AlertCircle className="mr-2 h-4 w-4" />
-                NOK
-              </Button>
-
-              <Button
-                variant={valueNow === "not_applicable" ? "default" : "outline"}
-                className={cn("h-11 justify-center", valueNow === "not_applicable" && "shadow-sm")}
-                onClick={() => handleSetCompliance("not_applicable")}
-              >
-                N/A
-              </Button>
-            </div>
-          </div>
-
-          {/* Documents justificatifs */}
-          <div className="space-y-2">
-            <div className="text-sm font-medium">Documents justificatifs</div>
-
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              className="hidden"
-              onChange={(e) => handleFilesSelected(e.target.files)}
-            />
-
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full h-11 justify-center"
-              onClick={handlePickFiles}
-            >
-              <Upload className="mr-2 h-4 w-4" />
-              Ajouter des documents
-            </Button>
-
-            <div className="text-xs text-muted-foreground">
-              Ajoutez des preuves documentaires pour justifier votre réponse
-            </div>
-
-            {evidenceNames.length > 0 ? (
-              <div className="flex flex-wrap gap-2 pt-1">
-                {evidenceNames.slice(0, 8).map((name, idx) => (
-                  <Badge key={`${name}-${idx}`} variant="secondary" className="max-w-full truncate">
-                    {name}
-                  </Badge>
-                ))}
-                {evidenceNames.length > 8 ? (
-                  <Badge variant="outline">+{evidenceNames.length - 8}</Badge>
-                ) : null}
+      <Card className="shadow-sm border-slate-200">
+        <CardContent className="p-4 md:p-5 flex flex-col gap-4">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+            <div>
+              <div className="text-base font-semibold text-slate-900">
+                {(auditContext as any)?.auditName || `Audit MDR #${auditId}`}
               </div>
-            ) : null}
+              <div className="text-sm text-muted-foreground">
+                Progression {progressPct}% • Score conformité live {complianceScore}%
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant={crit.variant as any}>{crit.label}</Badge>
+              <Button
+                type="button"
+                variant={expertMode ? "default" : "outline"}
+                size="sm"
+                onClick={() => setExpertMode((v) => !v)}
+              >
+                Mode Expert
+              </Button>
+              <Button
+                type="button"
+                variant={aiEnabled ? "default" : "outline"}
+                size="sm"
+                onClick={() => setAiEnabled((v) => !v)}
+              >
+                <Sparkles className="mr-2 h-4 w-4" />
+                IA ON/OFF
+              </Button>
+            </div>
           </div>
 
-          {/* Commentaire optionnel */}
-          <div className="space-y-2">
-            <div className="text-sm font-medium">Commentaire (optionnel)</div>
-            <Textarea
-              value={optionalCommentValue}
-              onChange={(e) => handleSetOptionalComment(e.target.value)}
-              placeholder="Ajoutez des notes ou des précisions..."
-              className="min-h-[120px]"
-            />
+          <div className="flex items-center gap-3">
+            <Progress value={progressPct} className="h-2" />
+            <Badge variant="outline">{answeredCount}/{totalQuestions}</Badge>
           </div>
+        </CardContent>
+      </Card>
 
-          {/* Bouton IA (placeholder) */}
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full h-11 justify-center"
-            onClick={() => {
-              // Placeholder safe (aucune API)
-              setSaveMessage("IA: bientôt (Copilot V3) ✨");
-            }}
-          >
-            <Sparkles className="mr-2 h-4 w-4" />
-            Obtenir une recommandation IA
-          </Button>
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
+        <Card className="xl:col-span-8 shadow-sm border-slate-200">
+          <CardContent className="p-6 space-y-6">
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                {articleBadge ? <Badge variant="outline">{articleBadge}</Badge> : null}
+                <Badge variant="secondary">Question {currentIndex + 1} / {totalQuestions}</Badge>
+              </div>
 
-          {/* Footer actions */}
-          <div className="pt-2 space-y-3">
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <h2 className="text-2xl leading-snug font-semibold text-slate-900">
+                {currentQuestion?.questionText || currentQuestion?.title || "Question"}
+              </h2>
+            </div>
+
+            <div className="space-y-2">
+              <div className="text-sm font-medium">Analyse auditeur / observations terrain</div>
+              <Textarea
+                value={mainAnswerValue}
+                onChange={(e) => handleSetMainAnswer(e.target.value)}
+                placeholder="Décrivez les constats terrain, la cohérence documentaire, les preuves vérifiées et les écarts observés."
+                className="min-h-[150px]"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <div className="text-sm font-medium">Statut de conformité</div>
+              <div className="grid grid-cols-1 gap-2 md:grid-cols-4">
+                <Button
+                  variant={valueNow === "compliant" ? "default" : "outline"}
+                  className={cn("h-11 justify-center", valueNow === "compliant" && "shadow-sm")}
+                  onClick={() => handleSetCompliance("compliant")}
+                >
+                  <CheckCircle2 className="mr-2 h-4 w-4" />
+                  Conforme
+                </Button>
+
+                <Button
+                  variant={valueNow === "partial" ? "default" : "outline"}
+                  className={cn("h-11 justify-center", valueNow === "partial" && "shadow-sm")}
+                  onClick={() => handleSetCompliance("partial")}
+                >
+                  Partiel
+                </Button>
+
+                <Button
+                  variant={valueNow === "non_compliant" ? "destructive" : "outline"}
+                  className={cn("h-11 justify-center", valueNow === "non_compliant" && "shadow-sm")}
+                  onClick={() => handleSetCompliance("non_compliant")}
+                >
+                  <AlertCircle className="mr-2 h-4 w-4" />
+                  Non conforme
+                </Button>
+
+                <Button
+                  variant={valueNow === "not_applicable" ? "default" : "outline"}
+                  className={cn("h-11 justify-center", valueNow === "not_applicable" && "shadow-sm")}
+                  onClick={() => handleSetCompliance("not_applicable")}
+                >
+                  N/A
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="text-sm font-medium">Commentaire (optionnel)</div>
+              <Input
+                value={optionalCommentValue}
+                onChange={(e) => handleSetOptionalComment(e.target.value)}
+                placeholder="Ex: périmètre limité, justification d'applicabilité, point à revalider..."
+                className="h-11"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <div className="text-sm font-medium">Preuves / documents</div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={(e) => handleFilesSelected(e.target.files)}
+              />
+
+              <Button type="button" variant="outline" className="w-full h-11 justify-center" onClick={handlePickFiles}>
+                <Upload className="mr-2 h-4 w-4" />
+                Ajouter des documents
+              </Button>
+
+              {evidenceNames.length > 0 ? (
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {evidenceNames.slice(0, 8).map((name, idx) => (
+                    <Badge key={`${name}-${idx}`} variant="secondary" className="max-w-full truncate">
+                      {name}
+                    </Badge>
+                  ))}
+                  {evidenceNames.length > 8 ? <Badge variant="outline">+{evidenceNames.length - 8}</Badge> : null}
+                </div>
+              ) : (
+                <div className="text-xs text-muted-foreground">Aucun document sélectionné.</div>
+              )}
+            </div>
+
+            <div className="flex flex-col md:flex-row gap-2 md:justify-between">
+              <div className="flex gap-2">
+                <Button variant="secondary" onClick={goPrev} disabled={currentIndex === 0}>
+                  <ArrowLeft className="mr-2 h-4 w-4" />
+                  Précédent
+                </Button>
+                <Button variant="secondary" onClick={goNext} disabled={currentIndex >= totalQuestions - 1}>
+                  Suivant
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </div>
+
+              <Button onClick={handleSaveAndContinue} disabled={saving} className="h-11 px-5">
+                {saving ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Save className="mr-2 h-5 w-5" />}
+                Enregistrer et continuer
+              </Button>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
               <div className="flex items-center gap-2">
                 <Info className="h-4 w-4" />
-                {saveMessage ? <span className="font-medium">{saveMessage}</span> : <span>Les modifications restent en brouillon tant que vous n’enregistrez pas.</span>}
+                {saveMessage ? <span className="font-medium">{saveMessage}</span> : <span>Brouillon local actif jusqu’à enregistrement.</span>}
               </div>
+              <Button variant="ghost" size="sm" onClick={goBackToWizard}>
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Retour wizard
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
 
-              {/* petit indicateur discret (facultatif) */}
-              <div className="hidden md:flex items-center gap-2">
-                <span>{answeredCount}/{totalQuestions}</span>
-                <div className="w-28">
-                  <Progress value={progressPct} />
-                </div>
-                <Badge variant="outline">{progressPct}%</Badge>
-              </div>
+        <Card className="xl:col-span-4 shadow-sm border-slate-200">
+          <CardContent className="p-4 space-y-4">
+            <div className="grid grid-cols-3 gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant={activeTab === "context" ? "default" : "outline"}
+                onClick={() => setActiveTab("context")}
+              >
+                Contexte
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={activeTab === "copilot" ? "default" : "outline"}
+                onClick={() => setActiveTab("copilot")}
+              >
+                IA Copilot
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={activeTab === "evidence" ? "default" : "outline"}
+                onClick={() => setActiveTab("evidence")}
+              >
+                Preuves
+              </Button>
             </div>
 
-            <Button
-              onClick={handleSaveAndContinue}
-              disabled={saving}
-              className="w-full h-12 text-base"
-            >
-              {saving ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Save className="mr-2 h-5 w-5" />}
-              Enregistrer et continuer
+            {activeTab === "context" && (
+              <div className="space-y-3 text-sm">
+                <div>
+                  <div className="text-muted-foreground">Article MDR</div>
+                  <div className="font-medium">{currentQuestion?.article || "n/a"}</div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground">Rôle économique</div>
+                  <div className="font-medium">{currentQuestion?.economicRole || (auditContext as any)?.economicRole || "n/a"}</div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground">Processus</div>
+                  <div className="font-medium">
+                    {safeArray<any>(currentQuestion?.applicableProcesses).length > 0
+                      ? safeArray<any>(currentQuestion?.applicableProcesses).join(", ")
+                      : "n/a"}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground">Annexe</div>
+                  <div className="font-medium">{currentQuestion?.annexe || "n/a"}</div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === "copilot" && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-medium">Audit Copilot</div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={inspectorMode ? "destructive" : "outline"}
+                    onClick={() => setInspectorMode((v) => !v)}
+                  >
+                    Mode Inspecteur ON
+                  </Button>
+                </div>
+
+                <ul className="space-y-2 text-sm text-slate-700">
+                  {aiInsights.map((insight, idx) => (
+                    <li key={`${idx}-${insight}`} className="rounded-md border border-slate-200 p-2 bg-slate-50">
+                      {insight}
+                    </li>
+                  ))}
+                </ul>
+
+                {inspectorMode ? (
+                  <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm">
+                    <div className="font-medium mb-1">Simulation audit ON</div>
+                    <div>"Montrez la preuve terrain la plus récente qui contredit le moins votre procédure."</div>
+                  </div>
+                ) : null}
+
+                {showCoherenceAlert ? (
+                  <div className="rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-800">
+                    Attention : signaux faibles détectés. Vérifier cohérence PMS / CER / CAPA avant clôture.
+                  </div>
+                ) : null}
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => setSaveMessage("IA : recommandations générées localement (mode soft)")}
+                >
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  Rafraîchir suggestions
+                </Button>
+              </div>
+            )}
+
+            {activeTab === "evidence" && (
+              <div className="space-y-3 text-sm">
+                <div className="font-medium flex items-center gap-2">
+                  <FileText className="h-4 w-4" />
+                  Documents attendus
+                </div>
+
+                <div className="whitespace-pre-wrap text-muted-foreground">
+                  {currentQuestion?.expectedEvidence || "Aucune preuve attendue spécifiée pour cette question."}
+                </div>
+
+                {currentQuestion?.interviewFunctions && currentQuestion.interviewFunctions.length > 0 ? (
+                  <>
+                    <Separator />
+                    <div className="space-y-2">
+                      <div className="font-medium">Fonctions à interviewer</div>
+                      <div className="flex flex-wrap gap-2">
+                        {safeArray<any>(currentQuestion.interviewFunctions).map((f, idx) => (
+                          <Badge key={idx} variant="outline">
+                            {String(f)}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                ) : null}
+
+                {currentQuestion?.risks ? (
+                  <>
+                    <Separator />
+                    <div className="space-y-2">
+                      <div className="font-medium">Risques associés</div>
+                      <div className="whitespace-pre-wrap text-muted-foreground">
+                        {typeof currentQuestion.risks === "string"
+                          ? currentQuestion.risks
+                          : JSON.stringify(currentQuestion.risks, null, 2)}
+                      </div>
+                    </div>
+                  </>
+                ) : null}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="shadow-sm border-slate-200">
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-sm font-medium">Timeline des questions</div>
+            <Button type="button" variant="outline" size="sm" onClick={() => setSaveMessage("Mode impression rapport : bientôt") }>
+              Générer rapport audit
             </Button>
           </div>
 
-          {/* Optionnel : Preuves attendues / Risques / Fonctions (tu peux les masquer si tu veux ultra minimal) */}
-          {(currentQuestion?.expectedEvidence || currentQuestion?.risks || (currentQuestion?.interviewFunctions && currentQuestion.interviewFunctions.length > 0)) ? (
-            <>
-              <Separator />
+          <div className="mt-3 flex flex-wrap gap-2">
+            {questions.map((q, idx) => {
+              const rv = responsesMap.get(q.questionKey)?.responseValue || "in_progress";
+              const cls =
+                rv === "compliant"
+                  ? "bg-emerald-600"
+                  : rv === "partial"
+                    ? "bg-amber-500"
+                    : rv === "non_compliant"
+                      ? "bg-red-600"
+                      : rv === "not_applicable"
+                        ? "bg-slate-400"
+                        : "bg-slate-300";
 
-              {currentQuestion?.expectedEvidence ? (
-                <div className="space-y-2">
-                  <div className="text-sm font-medium flex items-center gap-2">
-                    <ClipboardList className="h-4 w-4" />
-                    Éléments de preuve attendus
-                  </div>
-                  <div className="text-sm whitespace-pre-wrap text-muted-foreground">
-                    {currentQuestion.expectedEvidence}
-                  </div>
-                </div>
-              ) : null}
-
-              {currentQuestion?.risks ? (
-                <div className="space-y-2">
-                  <div className="text-sm font-medium flex items-center gap-2">
-                    <AlertCircle className="h-4 w-4" />
-                    Risques
-                  </div>
-                  <div className="text-sm whitespace-pre-wrap text-muted-foreground">
-                    {typeof currentQuestion.risks === "string"
-                      ? currentQuestion.risks
-                      : JSON.stringify(currentQuestion.risks, null, 2)}
-                  </div>
-                </div>
-              ) : null}
-
-              {currentQuestion?.interviewFunctions && currentQuestion.interviewFunctions.length > 0 ? (
-                <div className="space-y-2">
-                  <div className="text-sm font-medium">Fonctions à interviewer</div>
-                  <div className="flex flex-wrap gap-2">
-                    {safeArray<any>(currentQuestion.interviewFunctions).map((f, idx) => (
-                      <Badge key={idx} variant="outline">
-                        {String(f)}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-            </>
-          ) : null}
-
-          {/* Petit bouton retour wizard (discret) */}
-          <div className="pt-2">
-            <Button variant="secondary" onClick={() => setLocation("/mdr")} className="w-full md:w-auto">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Retour Wizard
-            </Button>
+              return (
+                <button
+                  key={q.questionKey}
+                  type="button"
+                  onClick={() => setCurrentIndex(idx)}
+                  className={cn(
+                    "h-8 w-8 rounded-full text-white text-xs font-semibold",
+                    cls,
+                    idx === currentIndex && "ring-2 ring-offset-2 ring-slate-700",
+                  )}
+                  title={`Q${idx + 1} - ${rv}`}
+                >
+                  {idx + 1}
+                </button>
+              );
+            })}
           </div>
         </CardContent>
       </Card>
