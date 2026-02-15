@@ -219,6 +219,7 @@ export default function MDRAuditDrilldown() {
   }, [responsesData]);
 
   const saveResponseMutation = trpc.mdr.saveResponse.useMutation();
+  const completeAuditMutation = trpc.mdr.completeAudit.useMutation();
 
   const responsesMap = useMemo(() => {
     const localList = Object.values(localDrafts);
@@ -405,6 +406,22 @@ export default function MDRAuditDrilldown() {
   const handleSaveAndContinue = async () => {
     const ok = await handleSaveCurrent();
     if (!ok) return;
+
+    const isLastQuestion = currentIndex >= totalQuestions - 1;
+
+    if (isLastQuestion) {
+      if (enabled && auditId) {
+        try {
+          await completeAuditMutation.mutateAsync({ auditId } as any);
+        } catch (e) {
+          // safe fallback: keep review navigation even if completion status update fails
+          console.warn("[MDR] completeAudit failed, fallback to review navigation", e);
+        }
+      }
+      setLocation(`/mdr/audit/${auditId}/review`);
+      return;
+    }
+
     goNext();
   };
 
@@ -443,7 +460,7 @@ export default function MDRAuditDrilldown() {
         <Card>
           <CardContent className="p-10 flex items-center justify-center gap-3">
             <Loader2 className="h-5 w-5 animate-spin" />
-            <div>Chargement du questionnaire</div>
+            <div>Chargement du questionnaire…</div>
           </CardContent>
         </Card>
       </div>
