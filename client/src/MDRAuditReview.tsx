@@ -30,10 +30,7 @@ export default function MDRAuditReview() {
 
   const [, setLocation] = useLocation();
 
-  const dashboardQuery = trpc.mdr.getAuditDashboard.useQuery(
-    { auditId: (auditId ?? 0) as number },
-    { enabled }
-  );
+  const dashboardQuery = trpc.mdr.getAuditDashboard.useQuery({ auditId: (auditId ?? 0) as number }, { enabled });
 
   const listAuditsQuery = trpc.mdr.listAudits.useQuery(undefined, { enabled: true });
 
@@ -69,7 +66,7 @@ export default function MDRAuditReview() {
     return (
       <div className="p-6">
         <Card>
-          <CardContent className="p-6 space-y-3">
+          <CardContent className="space-y-3 p-6">
             <div className="font-semibold">Audit invalide</div>
             <div className="text-sm text-muted-foreground">ID audit manquant.</div>
             <Button variant="secondary" onClick={() => setLocation("/mdr")}>Retour</Button>
@@ -87,7 +84,7 @@ export default function MDRAuditReview() {
     return (
       <div className="p-6">
         <Card>
-          <CardContent className="p-6 space-y-2">
+          <CardContent className="space-y-2 p-6">
             <div className="flex items-center gap-2 text-rose-700"><AlertCircle className="h-4 w-4" /> Erreur</div>
             <div className="text-sm text-muted-foreground">{(dashboardQuery.error as any)?.message || "Impossible de charger la review"}</div>
             <Button variant="secondary" onClick={() => setLocation(`/mdr/audit/${auditId}`)}>Reprendre audit</Button>
@@ -98,13 +95,13 @@ export default function MDRAuditReview() {
   }
 
   return (
-    <div className="p-4 md:p-6 bg-slate-50 min-h-screen print:bg-white" id="print-area">
+    <div className="min-h-screen bg-slate-50 p-4 print:bg-white md:p-6" id="print-area">
       <style>{`@media print {.no-print{display:none!important;} .print-grid{grid-template-columns:1fr!important;} }`}</style>
 
-      <div className="sticky top-0 z-20 bg-slate-50/95 backdrop-blur border-b border-slate-200 pb-3 mb-4 no-print">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+      <div className="no-print sticky top-0 z-20 mb-4 border-b border-slate-200 bg-slate-50/95 pb-3 backdrop-blur">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h1 className="text-xl md:text-2xl font-semibold text-slate-900">Audit Review & Dashboard</h1>
+            <h1 className="text-xl font-semibold text-slate-900 md:text-2xl">Audit Review & Dashboard</h1>
             <div className="text-sm text-slate-600">
               {(data?.audit?.name || `Audit #${auditId}`)} • {data?.audit?.siteName || "Site non renseigné"}
             </div>
@@ -113,14 +110,14 @@ export default function MDRAuditReview() {
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="outline">Statut: {data?.audit?.status || "draft"}</Badge>
             <Badge variant="outline">Progression: {percent(stats.answered, stats.totalQuestions)}%</Badge>
-            <Button variant="outline" onClick={() => setLocation("/mdr")}><ArrowLeft className="h-4 w-4 mr-2" />Liste audits</Button>
-            <Button variant="outline" onClick={printReport}><Printer className="h-4 w-4 mr-2" />Imprimer rapport</Button>
-            <Button variant="outline" onClick={() => setLocation(`/mdr/audit/${auditId}`)}><RefreshCw className="h-4 w-4 mr-2" />Reprendre audit</Button>
+            <Button variant="outline" onClick={() => setLocation("/mdr")}><ArrowLeft className="mr-2 h-4 w-4" />Liste audits</Button>
+            <Button variant="outline" onClick={printReport}><Printer className="mr-2 h-4 w-4" />Imprimer rapport</Button>
+            <Button variant="outline" onClick={() => setLocation(`/mdr/audit/${auditId}`)}><RefreshCw className="mr-2 h-4 w-4" />Reprendre audit</Button>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-7 gap-3 print-grid">
+      <div className="print-grid grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-7">
         <Card className="xl:col-span-1"><CardContent className="p-4"><div className="text-xs text-slate-500">Total questions</div><div className="text-2xl font-semibold">{stats.totalQuestions}</div></CardContent></Card>
         <Card className="xl:col-span-1"><CardContent className="p-4"><div className="text-xs text-slate-500">Répondu</div><div className="text-2xl font-semibold">{stats.answered}</div></CardContent></Card>
         <Card className="xl:col-span-1"><CardContent className="p-4"><div className="text-xs text-slate-500">Conformes</div><div className="text-2xl font-semibold text-emerald-700">{stats.compliant}</div></CardContent></Card>
@@ -130,9 +127,9 @@ export default function MDRAuditReview() {
         <Card className="xl:col-span-1"><CardContent className="p-4"><div className="text-xs text-slate-500">Score conformité</div><div className="text-2xl font-semibold">{stats.score}%</div></CardContent></Card>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 mt-4 print-grid">
+      <div className="print-grid mt-4 grid grid-cols-1 gap-4 xl:grid-cols-12">
         <Card className="xl:col-span-5">
-          <CardContent className="p-4 space-y-3">
+          <CardContent className="space-y-3 p-4">
             <div className="font-medium">Répartition statuts</div>
             {statusList.map((row) => (
               <div key={row.key} className="space-y-1">
@@ -144,17 +141,17 @@ export default function MDRAuditReview() {
         </Card>
 
         <Card className="xl:col-span-7">
-          <CardContent className="p-4 space-y-3">
+          <CardContent className="space-y-3 p-4">
             <div className="font-medium">Heatmap Processus × Statut (fallback table)</div>
-            <div className="overflow-x-auto border rounded-lg">
+            <div className="overflow-x-auto rounded-lg border">
               <table className="w-full text-sm">
                 <thead className="bg-slate-50">
                   <tr>
-                    <th className="text-left px-3 py-2">Process</th>
-                    <th className="text-left px-3 py-2">Conforme</th>
-                    <th className="text-left px-3 py-2">Partiel</th>
-                    <th className="text-left px-3 py-2">NOK</th>
-                    <th className="text-left px-3 py-2">N/A</th>
+                    <th className="px-3 py-2 text-left">Process</th>
+                    <th className="px-3 py-2 text-left">Conforme</th>
+                    <th className="px-3 py-2 text-left">Partiel</th>
+                    <th className="px-3 py-2 text-left">NOK</th>
+                    <th className="px-3 py-2 text-left">N/A</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -174,32 +171,32 @@ export default function MDRAuditReview() {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 mt-4 print-grid">
+      <div className="print-grid mt-4 grid grid-cols-1 gap-4 xl:grid-cols-12">
         <Card className="xl:col-span-7">
-          <CardContent className="p-4 space-y-3">
+          <CardContent className="space-y-3 p-4">
             <div className="font-medium">Top risques / NC majeures</div>
-            <div className="overflow-x-auto border rounded-lg">
+            <div className="overflow-x-auto rounded-lg border">
               <table className="w-full text-sm">
                 <thead className="bg-slate-50">
                   <tr>
-                    <th className="text-left px-3 py-2">Article</th>
-                    <th className="text-left px-3 py-2">Question</th>
-                    <th className="text-left px-3 py-2">Criticité</th>
-                    <th className="text-left px-3 py-2">Statut</th>
-                    <th className="text-left px-3 py-2 no-print">Action</th>
+                    <th className="px-3 py-2 text-left">Article</th>
+                    <th className="px-3 py-2 text-left">Question</th>
+                    <th className="px-3 py-2 text-left">Criticité</th>
+                    <th className="px-3 py-2 text-left">Statut</th>
+                    <th className="no-print px-3 py-2 text-left">Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {topRisks.map((risk: any) => (
                     <tr key={risk.questionKey} className="border-t align-top">
-                      <td className="px-3 py-2 whitespace-nowrap">{risk.article || "n/a"}</td>
+                      <td className="whitespace-nowrap px-3 py-2">{risk.article || "n/a"}</td>
                       <td className="px-3 py-2">{risk.questionText}</td>
                       <td className="px-3 py-2">{risk.criticality || "n/a"}</td>
                       <td className="px-3 py-2">
-                        <span className={`inline-block h-2.5 w-2.5 rounded-full mr-2 ${statusTone[risk.responseValue as StatusKey] || "bg-slate-300"}`} />
+                        <span className={`mr-2 inline-block h-2.5 w-2.5 rounded-full ${statusTone[risk.responseValue as StatusKey] || "bg-slate-300"}`} />
                         {risk.responseValue}
                       </td>
-                      <td className="px-3 py-2 no-print">
+                      <td className="no-print px-3 py-2">
                         <Button size="sm" variant="outline" onClick={() => setLocation(`/mdr/audit/${auditId}`)}>Ouvrir question</Button>
                       </td>
                     </tr>
@@ -211,23 +208,23 @@ export default function MDRAuditReview() {
         </Card>
 
         <Card className="xl:col-span-5">
-          <CardContent className="p-4 space-y-3">
+          <CardContent className="space-y-3 p-4">
             <div className="font-medium">Mes audits</div>
             <Separator />
-            <div className="space-y-2 max-h-[420px] overflow-auto pr-1">
+            <div className="max-h-[420px] space-y-2 overflow-auto pr-1">
               {auditsHistory.map((audit: any) => (
-                <div key={audit.id} className="rounded-lg border p-3 bg-white">
+                <div key={audit.id} className="rounded-lg border bg-white p-3">
                   <div className="flex items-center justify-between gap-2">
-                    <div className="font-medium text-sm">{audit.name}</div>
+                    <div className="text-sm font-medium">{audit.name}</div>
                     <Badge variant="outline">{audit.status || "draft"}</Badge>
                   </div>
-                  <div className="text-xs text-slate-500 mt-1">
+                  <div className="mt-1 text-xs text-slate-500">
                     rôle: {audit.economicRole || "n/a"} • MAJ: {audit.updatedAt ? new Date(audit.updatedAt).toLocaleDateString() : "n/a"}
                   </div>
-                  <div className="flex flex-wrap gap-2 mt-2 no-print">
+                  <div className="no-print mt-2 flex flex-wrap gap-2">
                     <Button size="sm" variant="outline" onClick={() => setLocation(`/mdr/audit/${audit.id}`)}>Reprendre</Button>
                     <Button size="sm" variant="outline" onClick={() => setLocation(`/mdr/audit/${audit.id}/review`)}>Review</Button>
-                    <Button size="sm" variant="outline" onClick={printReport}><Download className="h-3.5 w-3.5 mr-1" />Imprimer</Button>
+                    <Button size="sm" variant="outline" onClick={printReport}><Download className="mr-1 h-3.5 w-3.5" />Imprimer</Button>
                   </div>
                 </div>
               ))}
