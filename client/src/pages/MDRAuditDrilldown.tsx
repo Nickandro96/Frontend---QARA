@@ -532,12 +532,20 @@ export default function MDRAuditDrilldown() {
 
   const showCoherenceAlert = weakSignals >= 2 || valueNow === "non_compliant";
 
-  const statusRows: Array<{ label: string; key: ResponseValue; dot: string; tone: string }> = [
-    { label: "Conforme", key: "compliant", dot: "bg-emerald-500", tone: "text-emerald-700" },
-    { label: "Partiel", key: "partial", dot: "bg-amber-500", tone: "text-amber-700" },
-    { label: "Non conforme", key: "non_compliant", dot: "bg-rose-600", tone: "text-rose-700" },
-    { label: "N/A", key: "not_applicable", dot: "bg-slate-400", tone: "text-slate-700" },
-    { label: "En cours", key: "in_progress", dot: "bg-slate-300", tone: "text-slate-600" },
+  const statusColorMap: Record<ResponseValue, { dot: string; tone: string }> = {
+    compliant: { dot: "bg-emerald-600", tone: "text-emerald-700" },
+    partial: { dot: "bg-amber-500", tone: "text-amber-700" },
+    non_compliant: { dot: "bg-rose-600", tone: "text-rose-700" },
+    not_applicable: { dot: "bg-slate-400", tone: "text-slate-700" },
+    in_progress: { dot: "bg-slate-300", tone: "text-slate-600" },
+  };
+
+  const statusRows: Array<{ label: string; key: ResponseValue }> = [
+    { label: "Conforme", key: "compliant" },
+    { label: "Partiel", key: "partial" },
+    { label: "Non conforme", key: "non_compliant" },
+    { label: "N/A", key: "not_applicable" },
+    { label: "En cours", key: "in_progress" },
   ];
 
   return (
@@ -899,8 +907,8 @@ export default function MDRAuditDrilldown() {
                   return (
                     <tr key={row.key} className="border-t border-slate-100">
                       <td className="px-3 py-2">
-                        <span className={cn("inline-block h-2.5 w-2.5 rounded-full mr-2 align-middle", row.dot)} />
-                        <span className={cn("align-middle", row.tone)}>{row.label}</span>
+                        <span className={cn("inline-block h-2.5 w-2.5 rounded-full mr-2 align-middle", statusColorMap[row.key].dot)} />
+                        <span className={cn("align-middle", statusColorMap[row.key].tone)}>{row.label}</span>
                       </td>
                       <td className="px-3 py-2">{count}</td>
                       <td className="px-3 py-2">{pct}%</td>
@@ -915,16 +923,7 @@ export default function MDRAuditDrilldown() {
           <div className="mt-3 flex flex-wrap gap-2">
             {questions.map((q, idx) => {
               const rv = responsesMap.get(q.questionKey)?.responseValue || "in_progress";
-              const cls =
-                rv === "compliant"
-                  ? "bg-emerald-600"
-                  : rv === "partial"
-                    ? "bg-amber-500"
-                    : rv === "non_compliant"
-                      ? "bg-rose-600"
-                      : rv === "not_applicable"
-                        ? "bg-slate-400"
-                        : "bg-slate-300";
+              const cls = statusColorMap[rv as ResponseValue]?.dot || "bg-slate-300";
 
               return (
                 <button
