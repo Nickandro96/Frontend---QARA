@@ -34,6 +34,7 @@ type Question = {
   title?: string | null;
   expectedEvidence?: string | null;
   criticality?: string | null;
+  risk?: any;
   risks?: any;
   interviewFunctions?: any[];
   economicRole?: string | null;
@@ -153,6 +154,20 @@ function aiInsightsForQuestion(
   return base;
 }
 
+function formatRiskText(risk: any): string {
+  if (!risk) {
+    return "Si non conforme, justifier l'impact certification, patient et inspection, puis documenter le plan d'action correctif.";
+  }
+
+  if (typeof risk === "string") return risk;
+
+  try {
+    return JSON.stringify(risk, null, 2);
+  } catch {
+    return String(risk);
+  }
+}
+
 export default function MDRAuditDrilldown() {
   const [, params] = useRoute("/mdr/audit/:auditId");
   const auditId = params?.auditId ? Number(params.auditId) : null;
@@ -170,7 +185,6 @@ export default function MDRAuditDrilldown() {
   const [inspectorMode, setInspectorMode] = useState(false);
   const [activeTab, setActiveTab] = useState<"context" | "copilot" | "evidence">("context");
 
-  const lastSaveRef = useRef<number>(0);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const {
@@ -239,6 +253,23 @@ export default function MDRAuditDrilldown() {
       if (r) rows.push(r);
     }
     return complianceScoreFromResponses(rows);
+  }, [questions, responsesMap]);
+
+  const statusStats = useMemo(() => {
+    const stats = {
+      compliant: 0,
+      partial: 0,
+      non_compliant: 0,
+      not_applicable: 0,
+      in_progress: 0,
+    } as Record<ResponseValue, number>;
+
+    for (const q of questions) {
+      const rv = responsesMap.get(q.questionKey)?.responseValue || "in_progress";
+      stats[rv] += 1;
+    }
+
+    return stats;
   }, [questions, responsesMap]);
 
   useEffect(() => {
@@ -314,7 +345,7 @@ export default function MDRAuditDrilldown() {
   };
 
   const handleSaveCurrent = async () => {
-    if (!currentQuestion?.questionKey) return;
+    if (!currentQuestion?.questionKey) return false;
 
     const mergedRow: ResponseRow = {
       questionKey: currentQuestion.questionKey,
@@ -328,32 +359,33 @@ export default function MDRAuditDrilldown() {
       processId: localDrafts[currentQuestion.questionKey]?.processId ?? currentResponse?.processId ?? ((auditContext as any)?.processIds?.[0] ?? null),
     };
 
-    const hasLocal = !!localDrafts[currentQuestion.questionKey];
     const hasAnyValue =
       !!mergedRow.responseComment ||
       !!mergedRow.note ||
       (mergedRow.evidenceFiles && mergedRow.evidenceFiles.length > 0) ||
       (mergedRow.responseValue && mergedRow.responseValue !== "in_progress");
 
-    if (!hasLocal && !hasAnyValue) {
+    if (!hasAnyValue) {
       setSaveMessage("Rien à enregistrer");
-      return;
+      return true;
     }
 
     try {
       setSaving(true);
       await persistOne(mergedRow);
-      lastSaveRef.current = Date.now();
       setSaveMessage("Enregistré ✅");
 
-      setLocalDrafts((prev) => {
-        const next = { ...prev };
-        delete next[currentQuestion.questionKey];
-        return next;
-      });
+      // garde la ligne localement pour que progression et score restent cohérents immédiatement
+      setLocalDrafts((prev) => ({
+        ...prev,
+        [currentQuestion.questionKey]: mergedRow,
+      }));
+
+      return true;
     } catch (e) {
       console.error(e);
       setSaveMessage("Erreur d’enregistrement");
+      return false;
     } finally {
       setSaving(false);
     }
@@ -363,8 +395,8 @@ export default function MDRAuditDrilldown() {
   const goNext = () => setCurrentIndex((i) => Math.min(totalQuestions - 1, i + 1));
 
   const handleSaveAndContinue = async () => {
-    await handleSaveCurrent();
-    if (saveResponseMutation.isError) return;
+    const ok = await handleSaveCurrent();
+    if (!ok) return;
     goNext();
   };
 
@@ -469,6 +501,7 @@ export default function MDRAuditDrilldown() {
 
   const articleBadge = extractArticleBadge(currentQuestion?.article ?? null);
   const crit = formatCriticality(currentQuestion?.criticality ?? null);
+  const riskText = formatRiskText(currentQuestion?.risks ?? currentQuestion?.risk ?? null);
 
   const valueNow: ResponseValue =
     localDrafts[currentQuestion!.questionKey]?.responseValue ??
@@ -499,13 +532,21 @@ export default function MDRAuditDrilldown() {
 
   const showCoherenceAlert = weakSignals >= 2 || valueNow === "non_compliant";
 
+  const statusRows: Array<{ label: string; key: ResponseValue; dot: string; tone: string }> = [
+    { label: "Conforme", key: "compliant", dot: "bg-emerald-500", tone: "text-emerald-700" },
+    { label: "Partiel", key: "partial", dot: "bg-amber-500", tone: "text-amber-700" },
+    { label: "Non conforme", key: "non_compliant", dot: "bg-rose-600", tone: "text-rose-700" },
+    { label: "N/A", key: "not_applicable", dot: "bg-slate-400", tone: "text-slate-700" },
+    { label: "En cours", key: "in_progress", dot: "bg-slate-300", tone: "text-slate-600" },
+  ];
+
   return (
-    <div className="p-6 space-y-4">
-      <Card className="shadow-sm border-slate-200">
+    <div className="p-4 md:p-6 space-y-4 bg-slate-50/60">
+      <Card className="shadow-sm border-slate-200 bg-white/95 backdrop-blur">
         <CardContent className="p-4 md:p-5 flex flex-col gap-4">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-3">
             <div>
-              <div className="text-base font-semibold text-slate-900">
+              <div className="text-base md:text-lg font-semibold text-slate-900">
                 {(auditContext as any)?.auditName || `Audit MDR #${auditId}`}
               </div>
               <div className="text-sm text-muted-foreground">
@@ -537,23 +578,38 @@ export default function MDRAuditDrilldown() {
 
           <div className="flex items-center gap-3">
             <Progress value={progressPct} className="h-2" />
-            <Badge variant="outline">{answeredCount}/{totalQuestions}</Badge>
+            <Badge variant="outline" className="whitespace-nowrap">{answeredCount}/{totalQuestions}</Badge>
           </div>
         </CardContent>
       </Card>
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
-        <Card className="xl:col-span-8 shadow-sm border-slate-200">
-          <CardContent className="p-6 space-y-6">
+        <Card className="xl:col-span-8 shadow-sm border-slate-200 bg-white">
+          <CardContent className="p-5 md:p-6 space-y-6">
             <div className="space-y-3">
               <div className="flex flex-wrap items-center gap-2">
                 {articleBadge ? <Badge variant="outline">{articleBadge}</Badge> : null}
                 <Badge variant="secondary">Question {currentIndex + 1} / {totalQuestions}</Badge>
+                {currentQuestion?.questionType ? <Badge variant="outline">{currentQuestion.questionType}</Badge> : null}
               </div>
 
-              <h2 className="text-2xl leading-snug font-semibold text-slate-900">
+              <h2 className="text-xl md:text-[30px] leading-tight font-semibold text-slate-900 tracking-tight">
                 {currentQuestion?.questionText || currentQuestion?.title || "Question"}
               </h2>
+
+              <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-[11px] uppercase tracking-[0.08em] font-semibold text-rose-700">
+                      Risque à justifier en cas de non-conformité
+                    </div>
+                    <div className="mt-1 text-sm text-rose-900 whitespace-pre-wrap">{riskText}</div>
+                  </div>
+                  <Badge className="bg-rose-100 text-rose-700 border border-rose-200 hover:bg-rose-100">
+                    Gravité: {crit.label.replace("Criticité ", "")}
+                  </Badge>
+                </div>
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -561,8 +617,8 @@ export default function MDRAuditDrilldown() {
               <Textarea
                 value={mainAnswerValue}
                 onChange={(e) => handleSetMainAnswer(e.target.value)}
-                placeholder="Décrivez les constats terrain, la cohérence documentaire, les preuves vérifiées et les écarts observés."
-                className="min-h-[150px]"
+                placeholder="Décrivez les constats terrain, la cohérence documentaire, les preuves vérifiées, les écarts observés et le lien direct avec le risque réglementaire/patient."
+                className="min-h-[140px]"
               />
             </div>
 
@@ -610,7 +666,7 @@ export default function MDRAuditDrilldown() {
               <Input
                 value={optionalCommentValue}
                 onChange={(e) => handleSetOptionalComment(e.target.value)}
-                placeholder="Ex: périmètre limité, justification d'applicabilité, point à revalider..."
+                placeholder="Ex: périmètre limité, justification d'applicabilité, décision de traitement du risque..."
                 className="h-11"
               />
             </div>
@@ -644,7 +700,7 @@ export default function MDRAuditDrilldown() {
               )}
             </div>
 
-            <div className="flex flex-col md:flex-row gap-2 md:justify-between">
+            <div className="flex flex-col lg:flex-row gap-2 lg:justify-between">
               <div className="flex gap-2">
                 <Button variant="secondary" onClick={goPrev} disabled={currentIndex === 0}>
                   <ArrowLeft className="mr-2 h-4 w-4" />
@@ -675,7 +731,7 @@ export default function MDRAuditDrilldown() {
           </CardContent>
         </Card>
 
-        <Card className="xl:col-span-4 shadow-sm border-slate-200">
+        <Card className="xl:col-span-4 shadow-sm border-slate-200 bg-white">
           <CardContent className="p-4 space-y-4">
             <div className="grid grid-cols-3 gap-2">
               <Button
@@ -802,33 +858,58 @@ export default function MDRAuditDrilldown() {
                     </div>
                   </>
                 ) : null}
-
-                {currentQuestion?.risks ? (
-                  <>
-                    <Separator />
-                    <div className="space-y-2">
-                      <div className="font-medium">Risques associés</div>
-                      <div className="whitespace-pre-wrap text-muted-foreground">
-                        {typeof currentQuestion.risks === "string"
-                          ? currentQuestion.risks
-                          : JSON.stringify(currentQuestion.risks, null, 2)}
-                      </div>
-                    </div>
-                  </>
-                ) : null}
               </div>
             )}
           </CardContent>
         </Card>
       </div>
 
-      <Card className="shadow-sm border-slate-200">
+      <Card className="shadow-sm border-slate-200 bg-white">
         <CardContent className="p-4">
           <div className="flex items-center justify-between gap-2">
-            <div className="text-sm font-medium">Timeline des questions</div>
+            <div className="text-sm font-medium">Table de progression audit</div>
             <Button type="button" variant="outline" size="sm" onClick={() => setSaveMessage("Mode impression rapport : bientôt") }>
               Générer rapport audit
             </Button>
+          </div>
+
+          <div className="mt-3 overflow-x-auto rounded-lg border border-slate-200">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 text-slate-600">
+                <tr>
+                  <th className="text-left px-3 py-2 font-medium">Statut</th>
+                  <th className="text-left px-3 py-2 font-medium">Volume</th>
+                  <th className="text-left px-3 py-2 font-medium">%</th>
+                  <th className="text-left px-3 py-2 font-medium">Tendance</th>
+                </tr>
+              </thead>
+              <tbody>
+                {statusRows.map((row) => {
+                  const count = statusStats[row.key] || 0;
+                  const pct = totalQuestions > 0 ? Math.round((count / totalQuestions) * 100) : 0;
+                  const trend =
+                    row.key === "non_compliant"
+                      ? "⚠ prioritaire"
+                      : row.key === "partial"
+                        ? "à réduire"
+                        : row.key === "compliant"
+                          ? "stable"
+                          : "en cours";
+
+                  return (
+                    <tr key={row.key} className="border-t border-slate-100">
+                      <td className="px-3 py-2">
+                        <span className={cn("inline-block h-2.5 w-2.5 rounded-full mr-2 align-middle", row.dot)} />
+                        <span className={cn("align-middle", row.tone)}>{row.label}</span>
+                      </td>
+                      <td className="px-3 py-2">{count}</td>
+                      <td className="px-3 py-2">{pct}%</td>
+                      <td className="px-3 py-2 text-slate-500">{trend}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
 
           <div className="mt-3 flex flex-wrap gap-2">
@@ -840,7 +921,7 @@ export default function MDRAuditDrilldown() {
                   : rv === "partial"
                     ? "bg-amber-500"
                     : rv === "non_compliant"
-                      ? "bg-red-600"
+                      ? "bg-rose-600"
                       : rv === "not_applicable"
                         ? "bg-slate-400"
                         : "bg-slate-300";
