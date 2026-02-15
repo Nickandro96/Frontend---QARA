@@ -52,6 +52,8 @@ type ResponseRow = {
   evidenceFiles?: string[];
   role?: string | null;
   processId?: string | null;
+  answeredBy?: number | string | null;
+  answeredAt?: string | null;
   updatedAt?: any;
 };
 
@@ -314,6 +316,8 @@ export default function MDRAuditDrilldown() {
       responseValue: value,
       role: (auditContext as any)?.economicRole ?? null,
       processId: (auditContext as any)?.processIds?.[0] ?? null,
+      answeredBy: (auditContext as any)?.userId ?? (auditContext as any)?.createdBy ?? 1,
+      answeredAt: new Date().toISOString(),
     });
   };
 
@@ -341,7 +345,9 @@ export default function MDRAuditDrilldown() {
       evidenceFiles: row.evidenceFiles ?? [],
       role: row.role ?? null,
       processId: row.processId ?? null,
-    });
+      answeredBy: row.answeredBy ?? (auditContext as any)?.userId ?? (auditContext as any)?.createdBy ?? 1,
+      answeredAt: row.answeredAt ?? new Date().toISOString(),
+    } as any);
   };
 
   const handleSaveCurrent = async () => {
@@ -357,6 +363,8 @@ export default function MDRAuditDrilldown() {
         safeArray<string>(currentResponse?.evidenceFiles),
       role: localDrafts[currentQuestion.questionKey]?.role ?? currentResponse?.role ?? ((auditContext as any)?.economicRole ?? null),
       processId: localDrafts[currentQuestion.questionKey]?.processId ?? currentResponse?.processId ?? ((auditContext as any)?.processIds?.[0] ?? null),
+      answeredBy: localDrafts[currentQuestion.questionKey]?.answeredBy ?? currentResponse?.answeredBy ?? ((auditContext as any)?.userId ?? (auditContext as any)?.createdBy ?? 1),
+      answeredAt: localDrafts[currentQuestion.questionKey]?.answeredAt ?? currentResponse?.answeredAt ?? new Date().toISOString(),
     };
 
     const hasAnyValue =
@@ -435,7 +443,7 @@ export default function MDRAuditDrilldown() {
         <Card>
           <CardContent className="p-10 flex items-center justify-center gap-3">
             <Loader2 className="h-5 w-5 animate-spin" />
-            <div>Chargement du questionnaire…</div>
+            <div>Chargement du questionnaire</div>
           </CardContent>
         </Card>
       </div>
@@ -532,12 +540,20 @@ export default function MDRAuditDrilldown() {
 
   const showCoherenceAlert = weakSignals >= 2 || valueNow === "non_compliant";
 
-  const statusRows: Array<{ label: string; key: ResponseValue; dot: string; tone: string }> = [
-    { label: "Conforme", key: "compliant", dot: "bg-emerald-500", tone: "text-emerald-700" },
-    { label: "Partiel", key: "partial", dot: "bg-amber-500", tone: "text-amber-700" },
-    { label: "Non conforme", key: "non_compliant", dot: "bg-rose-600", tone: "text-rose-700" },
-    { label: "N/A", key: "not_applicable", dot: "bg-slate-400", tone: "text-slate-700" },
-    { label: "En cours", key: "in_progress", dot: "bg-slate-300", tone: "text-slate-600" },
+  const statusColorMap: Record<ResponseValue, { dot: string; tone: string }> = {
+    compliant: { dot: "bg-emerald-600", tone: "text-emerald-700" },
+    partial: { dot: "bg-amber-500", tone: "text-amber-700" },
+    non_compliant: { dot: "bg-rose-600", tone: "text-rose-700" },
+    not_applicable: { dot: "bg-slate-400", tone: "text-slate-700" },
+    in_progress: { dot: "bg-slate-300", tone: "text-slate-600" },
+  };
+
+  const statusRows: Array<{ label: string; key: ResponseValue }> = [
+    { label: "Conforme", key: "compliant" },
+    { label: "Partiel", key: "partial" },
+    { label: "Non conforme", key: "non_compliant" },
+    { label: "N/A", key: "not_applicable" },
+    { label: "En cours", key: "in_progress" },
   ];
 
   return (
@@ -626,8 +642,13 @@ export default function MDRAuditDrilldown() {
               <div className="text-sm font-medium">Statut de conformité</div>
               <div className="grid grid-cols-1 gap-2 md:grid-cols-4">
                 <Button
-                  variant={valueNow === "compliant" ? "default" : "outline"}
-                  className={cn("h-11 justify-center", valueNow === "compliant" && "shadow-sm")}
+                  variant="outline"
+                  className={cn(
+                    "h-11 justify-center",
+                    valueNow === "compliant"
+                      ? "!border-emerald-600 !bg-emerald-600 !text-white hover:!bg-emerald-600 hover:!text-white"
+                      : "border-slate-200 text-slate-700",
+                  )}
                   onClick={() => handleSetCompliance("compliant")}
                 >
                   <CheckCircle2 className="mr-2 h-4 w-4" />
@@ -635,16 +656,26 @@ export default function MDRAuditDrilldown() {
                 </Button>
 
                 <Button
-                  variant={valueNow === "partial" ? "default" : "outline"}
-                  className={cn("h-11 justify-center", valueNow === "partial" && "shadow-sm")}
+                  variant="outline"
+                  className={cn(
+                    "h-11 justify-center",
+                    valueNow === "partial"
+                      ? "!border-amber-500 !bg-amber-500 !text-white hover:!bg-amber-500 hover:!text-white"
+                      : "border-slate-200 text-slate-700",
+                  )}
                   onClick={() => handleSetCompliance("partial")}
                 >
                   Partiel
                 </Button>
 
                 <Button
-                  variant={valueNow === "non_compliant" ? "destructive" : "outline"}
-                  className={cn("h-11 justify-center", valueNow === "non_compliant" && "shadow-sm")}
+                  variant="outline"
+                  className={cn(
+                    "h-11 justify-center",
+                    valueNow === "non_compliant"
+                      ? "!border-rose-600 !bg-rose-600 !text-white hover:!bg-rose-600 hover:!text-white"
+                      : "border-slate-200 text-slate-700",
+                  )}
                   onClick={() => handleSetCompliance("non_compliant")}
                 >
                   <AlertCircle className="mr-2 h-4 w-4" />
@@ -652,8 +683,13 @@ export default function MDRAuditDrilldown() {
                 </Button>
 
                 <Button
-                  variant={valueNow === "not_applicable" ? "default" : "outline"}
-                  className={cn("h-11 justify-center", valueNow === "not_applicable" && "shadow-sm")}
+                  variant="outline"
+                  className={cn(
+                    "h-11 justify-center",
+                    valueNow === "not_applicable"
+                      ? "!border-slate-500 !bg-slate-500 !text-white hover:!bg-slate-500 hover:!text-white"
+                      : "border-slate-200 text-slate-700",
+                  )}
                   onClick={() => handleSetCompliance("not_applicable")}
                 >
                   N/A
@@ -899,8 +935,8 @@ export default function MDRAuditDrilldown() {
                   return (
                     <tr key={row.key} className="border-t border-slate-100">
                       <td className="px-3 py-2">
-                        <span className={cn("inline-block h-2.5 w-2.5 rounded-full mr-2 align-middle", row.dot)} />
-                        <span className={cn("align-middle", row.tone)}>{row.label}</span>
+                        <span className={cn("inline-block h-2.5 w-2.5 rounded-full mr-2 align-middle", statusColorMap[row.key].dot)} />
+                        <span className={cn("align-middle", statusColorMap[row.key].tone)}>{row.label}</span>
                       </td>
                       <td className="px-3 py-2">{count}</td>
                       <td className="px-3 py-2">{pct}%</td>
@@ -915,16 +951,7 @@ export default function MDRAuditDrilldown() {
           <div className="mt-3 flex flex-wrap gap-2">
             {questions.map((q, idx) => {
               const rv = responsesMap.get(q.questionKey)?.responseValue || "in_progress";
-              const cls =
-                rv === "compliant"
-                  ? "bg-emerald-600"
-                  : rv === "partial"
-                    ? "bg-amber-500"
-                    : rv === "non_compliant"
-                      ? "bg-rose-600"
-                      : rv === "not_applicable"
-                        ? "bg-slate-400"
-                        : "bg-slate-300";
+              const cls = statusColorMap[rv as ResponseValue]?.dot || "bg-slate-300";
 
               return (
                 <button
