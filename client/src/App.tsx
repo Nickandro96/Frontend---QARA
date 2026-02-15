@@ -49,10 +49,9 @@ import AuditComparison from "./pages/AuditComparison";
 import SiteManagement from "./pages/SiteManagement";
 import MDRAuditWizard from "./pages/MDRAudit";
 
-// ✅ Ajout routes directes drilldown/review
-// Si tes fichiers sont dans ./pages/, remplace par "./pages/MDRAuditDrilldown" / "./pages/MDRAuditReview"
-import MDRAuditDrilldown from "./MDRAuditDrilldown";
-import MDRAuditReview from "./MDRAuditReview";
+// ✅ FIX: chemins corrects dans ./pages
+import MDRAuditDrilldown from "./pages/MDRAuditDrilldown";
+import MDRAuditReview from "./pages/MDRAuditReview";
 
 function Router() {
   return (
