@@ -11,8 +11,8 @@ import MDRAuditReview from "./MDRAuditReview";
 export default function MDRRoutes() {
   return (
     <Switch>
-      <Route path="/mdr/audit/:auditId" component={MDRAuditDrilldown} />
       <Route path="/mdr/audit/:auditId/review" component={MDRAuditReview} />
+      <Route path="/mdr/audit/:auditId" component={MDRAuditDrilldown} />
     </Switch>
   );
 }
