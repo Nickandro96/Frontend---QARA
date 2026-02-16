@@ -12,11 +12,12 @@ import { ProcessDetailModal } from "@/components/dashboard-main/ProcessDetailMod
 import { ScoreTrendChart } from "@/components/dashboard-main/ScoreTrendChart";
 import { RecentFindingsTable } from "@/components/dashboard-main/RecentFindingsTable";
 import { RecentAuditsTable } from "@/components/dashboard-main/RecentAuditsTable";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 export default function Dashboard() {
   const { user, isAuthenticated, loading } = useAuth();
   const { data: profile } = trpc.profile.get.useQuery(undefined, { enabled: isAuthenticated });
+
   const [modalOpen, setModalOpen] = useState(false);
   const [modalType, setModalType] = useState<"score" | "progress" | "nonconformities">("score");
   const [processModalOpen, setProcessModalOpen] = useState(false);
@@ -24,17 +25,21 @@ export default function Dashboard() {
   const [selectedProcessScore, setSelectedProcessScore] = useState<any>(null);
 
   // Block FREE users
-  if (isAuthenticated && profile && profile.subscriptionTier === 'free' && user?.role !== 'admin') {
+  if (isAuthenticated && profile && profile.subscriptionTier === "free" && user?.role !== "admin") {
     return <UpgradeRequired feature="Dashboard" />;
   }
-  const { data: processes } = trpc.processes.list.useQuery();
+
+  // Keep badges if you use them (server must provide trpc.badges.list)
   const { data: badges } = trpc.badges.list.useQuery(undefined, { enabled: isAuthenticated });
-  
-  // Dashboard data from tRPC
+
+  // Dashboard data from tRPC (legacy dashboard page uses these calls)
   const { data: kpiData } = trpc.dashboard.getKPIs.useQuery(undefined, { enabled: isAuthenticated });
   const { data: processProgress } = trpc.dashboard.getProcessProgress.useQuery(undefined, { enabled: isAuthenticated });
   const { data: scoreTrend } = trpc.dashboard.getScoreTrend.useQuery(undefined, { enabled: isAuthenticated });
-  const { data: recentFindings } = trpc.dashboard.getRecentFindings.useQuery({ limit: 4 }, { enabled: isAuthenticated });
+  const { data: recentFindings } = trpc.dashboard.getRecentFindings.useQuery(
+    { limit: 4 },
+    { enabled: isAuthenticated }
+  );
   const { data: recentAudits } = trpc.audit.getRecentAudits.useQuery({ limit: 5 }, { enabled: isAuthenticated });
 
   if (loading) {
@@ -57,7 +62,7 @@ export default function Dashboard() {
     gspr_completes: "🏆",
     conformity_champion: "👑",
     evidence_master: "📁",
-    sprint_achiever: "⚡"
+    sprint_achiever: "⚡",
   };
 
   const badgeNames: Record<string, string> = {
@@ -67,8 +72,50 @@ export default function Dashboard() {
     gspr_completes: "GSPR Complètes",
     conformity_champion: "Champion de Conformité",
     evidence_master: "Maître des Preuves",
-    sprint_achiever: "Sprint Achiever"
+    sprint_achiever: "Sprint Achiever",
   };
+
+  // ✅ Make all KPI numbers safe (avoid .toFixed crashes when undefined)
+  const safeKPIs = useMemo(() => {
+    const scoreGlobal = Number((kpiData as any)?.scoreGlobal ?? 0);
+    const progression = Number((kpiData as any)?.progression ?? 0);
+    const conforme = Number((kpiData as any)?.conforme ?? 0);
+    const nonConforme = Number((kpiData as any)?.nonConforme ?? 0);
+    const nonConformitiesCount = Number((kpiData as any)?.nonConformitiesCount ?? 0);
+
+    // Some backends may not provide these fields; keep as 0 to avoid UI breaking
+    const answeredQuestions = Number((kpiData as any)?.answeredQuestions ?? 0);
+    const totalQuestions = Number((kpiData as any)?.totalQuestions ?? 0);
+
+    return {
+      scoreGlobal,
+      progression,
+      conforme,
+      nonConforme,
+      nonConformitiesCount,
+      answeredQuestions,
+      totalQuestions,
+    };
+  }, [kpiData]);
+
+  // ✅ Normalize process progress list to be resilient to backend shape
+  const normalizedProcessProgress = useMemo(() => {
+    const list = Array.isArray(processProgress) ? processProgress : [];
+    return list.map((p: any) => {
+      const id = p?.id ?? p?.processId ?? p?.process_id ?? p?.key ?? `${p?.name ?? "process"}`;
+      const name = p?.name ?? p?.processName ?? p?.label ?? `Process ${id}`;
+      const score = Number(p?.score ?? p?.scoreGlobal ?? p?.conformity ?? 0);
+      const progress = Number(p?.progression ?? p?.progress ?? p?.completion ?? 0);
+
+      return {
+        id,
+        name,
+        score,
+        progression: progress,
+        raw: p,
+      };
+    });
+  }, [processProgress]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -84,7 +131,9 @@ export default function Dashboard() {
             </Link>
             <nav className="flex items-center gap-4">
               <Link href="/dashboard">
-                <Button variant="ghost" className="font-medium">Dashboard</Button>
+                <Button variant="ghost" className="font-medium">
+                  Dashboard
+                </Button>
               </Link>
               <Link href="/audit">
                 <Button variant="ghost">Audit</Button>
@@ -111,11 +160,9 @@ export default function Dashboard() {
       <main className="container py-8">
         {/* Welcome Section */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2">
-            Bienvenue, {user?.name || "Utilisateur"}
-          </h1>
+          <h1 className="text-3xl font-bold mb-2">Bienvenue, {user?.name || "Utilisateur"}</h1>
           <p className="text-muted-foreground">
-            {profile?.economicRole 
+            {profile?.economicRole
               ? `Rôle économique : ${profile.economicRole.charAt(0).toUpperCase() + profile.economicRole.slice(1)}`
               : "Configurez votre profil pour commencer"}
           </p>
@@ -140,7 +187,7 @@ export default function Dashboard() {
 
         {/* Score Overview */}
         <div className="grid md:grid-cols-3 gap-6 mb-8">
-          <Card 
+          <Card
             className="cursor-pointer hover:shadow-lg transition-shadow"
             onClick={() => {
               setModalType("score");
@@ -148,25 +195,19 @@ export default function Dashboard() {
             }}
           >
             <CardHeader>
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Score de Conformité Global
-              </CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">Score de Conformité Global</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-4xl font-bold text-primary mb-2">
-                {kpiData?.scoreGlobal.toFixed(1) || "0"}%
-              </div>
-              <Progress value={kpiData?.scoreGlobal || 0} className="h-2" />
+              <div className="text-4xl font-bold text-primary mb-2">{safeKPIs.scoreGlobal.toFixed(1)}%</div>
+              <Progress value={safeKPIs.scoreGlobal} className="h-2" />
               <p className="text-sm text-muted-foreground mt-2">
-                {kpiData?.conforme || 0} conforme sur {(kpiData?.conforme || 0) + (kpiData?.nonConforme || 0)} questions
+                {safeKPIs.conforme} conforme sur {safeKPIs.conforme + safeKPIs.nonConforme} questions
               </p>
-              <p className="text-xs text-primary mt-2 font-medium">
-                → Cliquez pour voir les détails
-              </p>
+              <p className="text-xs text-primary mt-2 font-medium">→ Cliquez pour voir les détails</p>
             </CardContent>
           </Card>
 
-          <Card 
+          <Card
             className="cursor-pointer hover:shadow-lg transition-shadow"
             onClick={() => {
               setModalType("progress");
@@ -174,25 +215,19 @@ export default function Dashboard() {
             }}
           >
             <CardHeader>
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Progression de l'Audit
-              </CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">Progression de l'Audit</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-4xl font-bold mb-2">
-                {kpiData?.progression.toFixed(0) || "0"}%
-              </div>
-              <Progress value={kpiData?.progression || 0} className="h-2" />
+              <div className="text-4xl font-bold mb-2">{safeKPIs.progression.toFixed(0)}%</div>
+              <Progress value={safeKPIs.progression} className="h-2" />
               <p className="text-sm text-muted-foreground mt-2">
-                {kpiData?.answeredQuestions || 0} / {kpiData?.totalQuestions || 0} questions répondues
+                {safeKPIs.answeredQuestions} / {safeKPIs.totalQuestions} questions répondues
               </p>
-              <p className="text-xs text-primary mt-2 font-medium">
-                → Cliquez pour voir les détails
-              </p>
+              <p className="text-xs text-primary mt-2 font-medium">→ Cliquez pour voir les détails</p>
             </CardContent>
           </Card>
 
-          <Card 
+          <Card
             className="cursor-pointer hover:shadow-lg transition-shadow"
             onClick={() => {
               setModalType("nonconformities");
@@ -200,20 +235,12 @@ export default function Dashboard() {
             }}
           >
             <CardHeader>
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Non-conformités
-              </CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">Non-conformités</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-4xl font-bold text-red-600 mb-2">
-                {kpiData?.nonConformitiesCount || 0}
-              </div>
-              <p className="text-sm text-muted-foreground mt-2">
-                Actions correctives requises
-              </p>
-              <p className="text-xs text-primary mt-2 font-medium">
-                → Cliquez pour voir les détails
-              </p>
+              <div className="text-4xl font-bold text-red-600 mb-2">{safeKPIs.nonConformitiesCount}</div>
+              <p className="text-sm text-muted-foreground mt-2">Actions correctives requises</p>
+              <p className="text-xs text-primary mt-2 font-medium">→ Cliquez pour voir les détails</p>
             </CardContent>
           </Card>
         </div>
@@ -223,9 +250,7 @@ export default function Dashboard() {
           <Card className="mb-8">
             <CardHeader>
               <CardTitle>Comparaison par Rôle Économique</CardTitle>
-              <CardDescription>
-                Progression de conformité selon les différents rôles MDR
-              </CardDescription>
+              <CardDescription>Progression de conformité selon les différents rôles MDR</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-6">
@@ -237,11 +262,9 @@ export default function Dashboard() {
                     </span>
                   </div>
                   <Progress value={75} className="h-3" />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    1188 questions applicables • 75% de conformité
-                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">1188 questions applicables • 75% de conformité</p>
                 </div>
-                
+
                 <div>
                   <div className="flex justify-between mb-2">
                     <span className="text-sm font-medium">Importateur</span>
@@ -250,11 +273,9 @@ export default function Dashboard() {
                     </span>
                   </div>
                   <Progress value={82} className="h-3" />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    606 questions applicables • 82% de conformité
-                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">606 questions applicables • 82% de conformité</p>
                 </div>
-                
+
                 <div>
                   <div className="flex justify-between mb-2">
                     <span className="text-sm font-medium">Distributeur</span>
@@ -263,22 +284,20 @@ export default function Dashboard() {
                     </span>
                   </div>
                   <Progress value={88} className="h-3" />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    607 questions applicables • 88% de conformité
-                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">607 questions applicables • 88% de conformité</p>
                 </div>
               </div>
-              
+
               <div className="mt-6 p-4 bg-blue-50 rounded-lg">
                 <p className="text-sm text-blue-900">
-                  <strong>💡 Conseil :</strong> Les distributeurs ont généralement moins d'exigences
-                  que les fabricants, mais doivent s'assurer que les fabricants respectent leurs obligations.
+                  <strong>💡 Conseil :</strong> Les distributeurs ont généralement moins d'exigences que les fabricants,
+                  mais doivent s'assurer que les fabricants respectent leurs obligations.
                 </p>
               </div>
             </CardContent>
           </Card>
         )}
-        
+
         {/* Badges Section */}
         {badges && badges.length > 0 && (
           <Card className="mb-8">
@@ -288,7 +307,7 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent>
               <div className="flex flex-wrap gap-4">
-                {badges.map((badge) => (
+                {badges.map((badge: any) => (
                   <div key={badge.id} className="flex flex-col items-center gap-2">
                     <div className="w-16 h-16 rounded-full badge-earned flex items-center justify-center text-3xl">
                       {badgeIcons[badge.badgeType] || "🏅"}
@@ -304,13 +323,13 @@ export default function Dashboard() {
         )}
 
         {/* Score Trend Chart */}
-        {scoreTrend && scoreTrend.length > 0 && <ScoreTrendChart data={scoreTrend} />}
+        {Array.isArray(scoreTrend) && scoreTrend.length > 0 && <ScoreTrendChart data={scoreTrend as any} />}
 
         {/* Recent Audits Table */}
-        {recentAudits && recentAudits.length > 0 && <RecentAuditsTable data={recentAudits} />}
+        {Array.isArray(recentAudits) && recentAudits.length > 0 && <RecentAuditsTable data={recentAudits as any} />}
 
         {/* Recent Findings Table */}
-        {recentFindings && recentFindings.length > 0 && <RecentFindingsTable data={recentFindings} />}
+        {Array.isArray(recentFindings) && recentFindings.length > 0 && <RecentFindingsTable data={recentFindings as any} />}
 
         {/* Processes Overview */}
         <Card>
@@ -320,26 +339,22 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {processProgress?.slice(0, 6).map((proc) => (
-                <div 
+              {normalizedProcessProgress.slice(0, 6).map((proc) => (
+                <div
                   key={proc.id}
                   className="space-y-2 cursor-pointer hover:bg-gray-50 p-3 rounded-lg transition-colors"
                   onClick={() => {
-                    setSelectedProcess(proc);
+                    setSelectedProcess(proc.raw);
                     setSelectedProcessScore({ score: proc.score, progress: proc.progression });
                     setProcessModalOpen(true);
                   }}
                 >
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium">{proc.name}</span>
-                    <span className="text-sm text-muted-foreground">
-                      {proc.score.toFixed(0)}%
-                    </span>
+                    <span className="text-sm text-muted-foreground">{proc.score.toFixed(0)}%</span>
                   </div>
                   <Progress value={proc.score} className="h-2" />
-                  <p className="text-xs text-primary font-medium">
-                    → Cliquez pour voir les détails
-                  </p>
+                  <p className="text-xs text-primary font-medium">→ Cliquez pour voir les détails</p>
                 </div>
               ))}
             </div>
@@ -358,9 +373,7 @@ export default function Dashboard() {
             <CardHeader>
               <FileText className="h-8 w-8 text-primary mb-2" />
               <CardTitle>Continuer l'Audit</CardTitle>
-              <CardDescription>
-                Reprenez là où vous vous êtes arrêté
-              </CardDescription>
+              <CardDescription>Reprenez là où vous vous êtes arrêté</CardDescription>
             </CardHeader>
             <CardContent>
               <Link href="/audit">
@@ -373,13 +386,13 @@ export default function Dashboard() {
             <CardHeader>
               <TrendingUp className="h-8 w-8 text-primary mb-2" />
               <CardTitle>Rapports & Exports</CardTitle>
-              <CardDescription>
-                Générez vos rapports de conformité
-              </CardDescription>
+              <CardDescription>Générez vos rapports de conformité</CardDescription>
             </CardHeader>
             <CardContent>
               <Link href="/reports">
-                <Button variant="outline" className="w-full">Voir les rapports</Button>
+                <Button variant="outline" className="w-full">
+                  Voir les rapports
+                </Button>
               </Link>
             </CardContent>
           </Card>
@@ -387,12 +400,7 @@ export default function Dashboard() {
       </main>
 
       {/* KPI Detail Modal */}
-      <KPIDetailModal
-        open={modalOpen}
-        onOpenChange={setModalOpen}
-        type={modalType}
-        data={kpiData || {}}
-      />
+      <KPIDetailModal open={modalOpen} onOpenChange={setModalOpen} type={modalType} data={kpiData || {}} />
 
       {/* Process Detail Modal */}
       <ProcessDetailModal
