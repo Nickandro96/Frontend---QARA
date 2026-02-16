@@ -12,6 +12,7 @@ import ActionDashboard from "./pages/ActionDashboard";
 import ModernHome from "./pages/ModernHome";
 import Classification from "./pages/Classification";
 import Dashboard from "./pages/Dashboard";
+import DashboardExecutive from "./pages/DashboardExecutive"; // ✅ AJOUT
 import Profile from "./pages/Profile";
 import Reports from "./pages/Reports";
 import RegulatoryWatch from "./pages/RegulatoryWatch";
@@ -64,6 +65,7 @@ function Router() {
       <Route path="/classification" component={Classification} />
       <Route path={"/dashboard"} component={Dashboard} />
       <Route path={"/dashboard-v2"} component={DashboardV2} />
+      <Route path={"/dashboard-executive"} component={DashboardExecutive} /> {/* ✅ AJOUT */}
 
       <Route path={"/fda/qualification"} component={FDAQualification} />
       <Route path={"/fda/audit"} component={FDAAuditNew} />
