@@ -2,7 +2,6 @@ import { UpgradeRequired } from "@/components/UpgradeRequired";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { Separator } from "@/components/ui/separator";
 import { trpc } from "@/lib/trpc";
 import { getLoginUrl } from "@/const";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -31,6 +30,18 @@ import { RecentAuditsTable } from "@/components/dashboard-main/RecentAuditsTable
 
 type ModalType = "score" | "progress" | "nonconformities";
 
+function num(v: unknown, fallback = 0) {
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function safePercent(v: unknown) {
+  const n = num(v, 0);
+  if (n < 0) return 0;
+  if (n > 100) return 100;
+  return n;
+}
+
 export default function DashboardExecutive() {
   const { user, isAuthenticated, loading } = useAuth();
   const { data: profile } = trpc.profile.get.useQuery(undefined, { enabled: isAuthenticated });
@@ -42,12 +53,12 @@ export default function DashboardExecutive() {
   const [selectedProcess, setSelectedProcess] = useState<any>(null);
   const [selectedProcessScore, setSelectedProcessScore] = useState<any>(null);
 
-  // Block FREE users
+  // ✅ FREE block (after hooks)
   if (isAuthenticated && profile && profile.subscriptionTier === "free" && user?.role !== "admin") {
     return <UpgradeRequired feature="Dashboard Executive" />;
   }
 
-  // tRPC data (compat endpoints you added)
+  // ✅ Queries (always declared, just disabled if not authed)
   const { data: kpiData } = trpc.dashboard.getKPIs.useQuery(undefined, { enabled: isAuthenticated });
   const { data: scoreTrend } = trpc.dashboard.getScoreTrend.useQuery(undefined, { enabled: isAuthenticated });
   const { data: recentFindings } = trpc.dashboard.getRecentFindings.useQuery(
@@ -73,14 +84,18 @@ export default function DashboardExecutive() {
     return null;
   }
 
+  // ✅ Safe KPI model
   const safeKPIs = useMemo(() => {
-    const scoreGlobal = Number((kpiData as any)?.scoreGlobal ?? 0);
-    const progression = Number((kpiData as any)?.progression ?? 0);
-    const conforme = Number((kpiData as any)?.conforme ?? 0);
-    const nonConforme = Number((kpiData as any)?.nonConforme ?? 0);
-    const nonConformitiesCount = Number((kpiData as any)?.nonConformitiesCount ?? 0);
-    const answeredQuestions = Number((kpiData as any)?.answeredQuestions ?? 0);
-    const totalQuestions = Number((kpiData as any)?.totalQuestions ?? 0);
+    const scoreGlobal = safePercent((kpiData as any)?.scoreGlobal);
+    const progression = safePercent((kpiData as any)?.progression);
+
+    const conforme = num((kpiData as any)?.conforme, 0);
+    const nonConforme = num((kpiData as any)?.nonConforme, 0);
+
+    const nonConformitiesCount = num((kpiData as any)?.nonConformitiesCount, nonConforme);
+
+    const answeredQuestions = num((kpiData as any)?.answeredQuestions, 0);
+    const totalQuestions = num((kpiData as any)?.totalQuestions, 0);
 
     const totalAnswered = conforme + nonConforme;
     const okRate = totalAnswered > 0 ? (conforme / totalAnswered) * 100 : 0;
@@ -94,29 +109,34 @@ export default function DashboardExecutive() {
       answeredQuestions,
       totalQuestions,
       totalAnswered,
-      okRate,
+      okRate: safePercent(okRate),
     };
   }, [kpiData]);
 
+  // ✅ Normalize processProgress regardless backend shape
   const normalizedProcessProgress = useMemo(() => {
     const list = Array.isArray(processProgress) ? processProgress : [];
-    return list
-      .map((p: any) => {
-        const id = p?.id ?? p?.processId ?? p?.process_id ?? p?.key ?? `${p?.name ?? "process"}`;
-        const name = p?.name ?? p?.processName ?? p?.label ?? `Process ${id}`;
-        const score = Number(p?.score ?? p?.scoreGlobal ?? p?.conformity ?? 0);
-        const progress = Number(p?.progression ?? p?.progress ?? p?.completion ?? 0);
 
-        return { id, name, score, progress, raw: p };
-      })
-      .sort((a, b) => a.score - b.score);
+    const normalized = list.map((p: any, idx: number) => {
+      const id = p?.id ?? p?.processId ?? p?.process_id ?? idx;
+      const name = p?.name ?? p?.processName ?? p?.process_name ?? p?.label ?? `Process ${id}`;
+      const score = safePercent(p?.score ?? p?.scoreGlobal ?? p?.conformity ?? 0);
+      const progress = safePercent(p?.progression ?? p?.progress ?? p?.completion ?? 0);
+
+      return { id, name, score, progress, raw: p };
+    });
+
+    // sort weak to strong
+    normalized.sort((a, b) => a.score - b.score);
+
+    return normalized;
   }, [processProgress]);
 
   const topWeakProcesses = normalizedProcessProgress.slice(0, 5);
   const topStrongProcesses = normalizedProcessProgress.slice(-5).reverse();
 
+  // ✅ Executive status
   const executiveStatus = useMemo(() => {
-    // simple, conservative executive labeling
     if (safeKPIs.scoreGlobal >= 85 && safeKPIs.nonConformitiesCount <= 5) return "Conformité maîtrisée";
     if (safeKPIs.scoreGlobal >= 70) return "Conformité sous contrôle";
     return "Risque de non-conformité";
@@ -153,6 +173,9 @@ export default function DashboardExecutive() {
     );
   }, [executiveStatus, executiveStatusTone]);
 
+  const trendArray = useMemo(() => (Array.isArray(scoreTrend) ? scoreTrend : []), [scoreTrend]);
+
+  // ✅ UI
   return (
     <div className="min-h-screen bg-[#F6F8FB]">
       {/* Premium top gradient */}
@@ -221,7 +244,7 @@ export default function DashboardExecutive() {
               <h1 className="text-2xl md:text-3xl font-bold text-white">Vue exécutive — Conformité & Risques</h1>
               <p className="text-white/75 mt-1">
                 {profile?.economicRole
-                  ? `Rôle : ${profile.economicRole.charAt(0).toUpperCase() + profile.economicRole.slice(1)}`
+                  ? `Rôle : ${String(profile.economicRole).charAt(0).toUpperCase() + String(profile.economicRole).slice(1)}`
                   : "Configurez votre profil pour des analyses contextualisées"}
               </p>
             </div>
@@ -238,7 +261,7 @@ export default function DashboardExecutive() {
           </div>
         </div>
 
-        {/* Premium KPI Strip */}
+        {/* KPI Strip */}
         <div className="grid gap-4 md:grid-cols-4 mb-6">
           <Card
             className="border-white/10 bg-white/95 shadow-lg shadow-black/5 rounded-2xl cursor-pointer hover:shadow-xl transition-shadow"
@@ -359,7 +382,7 @@ export default function DashboardExecutive() {
           </Card>
         </div>
 
-        {/* Main grid (PowerBI / Veeva vibe) */}
+        {/* Main grid */}
         <div className="grid gap-4 lg:grid-cols-12">
           {/* Trend */}
           <Card className="lg:col-span-8 border-white/10 bg-white/95 shadow-lg shadow-black/5 rounded-2xl overflow-hidden">
@@ -388,8 +411,8 @@ export default function DashboardExecutive() {
               </div>
             </CardHeader>
             <CardContent className="pt-2">
-              {Array.isArray(scoreTrend) && scoreTrend.length > 0 ? (
-                <ScoreTrendChart data={scoreTrend as any} />
+              {trendArray.length > 0 ? (
+                <ScoreTrendChart data={trendArray as any} />
               ) : (
                 <div className="h-56 flex items-center justify-center text-sm text-muted-foreground">
                   Pas assez de données pour afficher une tendance.
@@ -416,7 +439,7 @@ export default function DashboardExecutive() {
                   ) : (
                     topWeakProcesses.map((p) => (
                       <button
-                        key={p.id}
+                        key={String(p.id)}
                         className="w-full text-left rounded-lg p-2 hover:bg-[#F6F8FB] transition-colors"
                         onClick={() => {
                           setSelectedProcess(p.raw);
@@ -443,7 +466,7 @@ export default function DashboardExecutive() {
                   ) : (
                     topStrongProcesses.map((p) => (
                       <button
-                        key={p.id}
+                        key={String(p.id)}
                         className="w-full text-left rounded-lg p-2 hover:bg-[#F6F8FB] transition-colors"
                         onClick={() => {
                           setSelectedProcess(p.raw);
@@ -461,8 +484,6 @@ export default function DashboardExecutive() {
                   )}
                 </div>
               </div>
-
-              <Separator />
 
               <div className="grid grid-cols-2 gap-2">
                 <Link href="/audits">
@@ -515,75 +536,15 @@ export default function DashboardExecutive() {
             </CardContent>
           </Card>
         </div>
-
-        {/* Bottom CTA */}
-        <div className="mt-6 grid gap-4 md:grid-cols-2">
-          <Card className="border-white/10 bg-white/95 shadow-lg shadow-black/5 rounded-2xl">
-            <CardHeader>
-              <CardTitle className="text-sm font-semibold text-[#0B2A55]">Mode direction</CardTitle>
-              <CardDescription>Vue synthèse — priorités & risques critiques</CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-3">
-              <div className="rounded-xl border bg-gradient-to-r from-[#0B2A55]/5 to-[#0B2A55]/0 p-3">
-                <div className="text-xs font-semibold text-[#0B2A55]">Lecture recommandée</div>
-                <div className="text-xs text-muted-foreground mt-1">
-                  1) Score global • 2) NOK récents • 3) Processus &lt; 70% • 4) Export rapport
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  className="rounded-xl"
-                  onClick={() => {
-                    setKpiModalType("nonconformities");
-                    setKpiModalOpen(true);
-                  }}
-                >
-                  Voir NOK
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-                <Link href="/reports">
-                  <Button variant="outline" className="rounded-xl">
-                    Générer rapport
-                    <FileText className="ml-2 h-4 w-4" />
-                  </Button>
-                </Link>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-white/10 bg-white/95 shadow-lg shadow-black/5 rounded-2xl">
-            <CardHeader>
-              <CardTitle className="text-sm font-semibold text-[#0B2A55]">Mode audit</CardTitle>
-              <CardDescription>Aller vite vers les zones à risque</CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-3">
-              <div className="rounded-xl border bg-gradient-to-r from-orange-500/8 to-red-500/5 p-3">
-                <div className="text-xs font-semibold text-[#0B2A55]">Suggestion</div>
-                <div className="text-xs text-muted-foreground mt-1">
-                  Ouvrir les processus faibles puis vérifier cohérence preuves / réponses.
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <Link href="/mdr/audit">
-                  <Button className="rounded-xl">
-                    Continuer audit
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </Button>
-                </Link>
-                <Link href="/audits">
-                  <Button variant="outline" className="rounded-xl">
-                    Liste audits
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </Button>
-                </Link>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
       </main>
 
       {/* KPI Detail Modal */}
-      <KPIDetailModal open={kpiModalOpen} onOpenChange={setKpiModalOpen} type={kpiModalType} data={kpiData || {}} />
+      <KPIDetailModal
+        open={kpiModalOpen}
+        onOpenChange={setKpiModalOpen}
+        type={kpiModalType}
+        data={kpiData || {}}
+      />
 
       {/* Process Detail Modal */}
       <ProcessDetailModal
