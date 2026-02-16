@@ -43,7 +43,9 @@ function safePercent(v: unknown) {
 }
 
 export default function DashboardExecutive() {
+  // ✅ All hooks first — NO early returns before these
   const { user, isAuthenticated, loading } = useAuth();
+
   const { data: profile } = trpc.profile.get.useQuery(undefined, { enabled: isAuthenticated });
 
   const [kpiModalOpen, setKpiModalOpen] = useState(false);
@@ -53,12 +55,7 @@ export default function DashboardExecutive() {
   const [selectedProcess, setSelectedProcess] = useState<any>(null);
   const [selectedProcessScore, setSelectedProcessScore] = useState<any>(null);
 
-  // ✅ FREE block (after hooks)
-  if (isAuthenticated && profile && profile.subscriptionTier === "free" && user?.role !== "admin") {
-    return <UpgradeRequired feature="Dashboard Executive" />;
-  }
-
-  // ✅ Queries (always declared, just disabled if not authed)
+  // ✅ Queries must ALWAYS be declared (hooks), even if later we render UpgradeRequired
   const { data: kpiData } = trpc.dashboard.getKPIs.useQuery(undefined, { enabled: isAuthenticated });
   const { data: scoreTrend } = trpc.dashboard.getScoreTrend.useQuery(undefined, { enabled: isAuthenticated });
   const { data: recentFindings } = trpc.dashboard.getRecentFindings.useQuery(
@@ -68,6 +65,7 @@ export default function DashboardExecutive() {
   const { data: recentAudits } = trpc.audit.getRecentAudits.useQuery({ limit: 6 }, { enabled: isAuthenticated });
   const { data: processProgress } = trpc.dashboard.getProcessProgress.useQuery(undefined, { enabled: isAuthenticated });
 
+  // ✅ Then render logic
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#F6F8FB]">
@@ -84,7 +82,11 @@ export default function DashboardExecutive() {
     return null;
   }
 
-  // ✅ Safe KPI model
+  // ✅ FREE block AFTER all hooks
+  if (profile && profile.subscriptionTier === "free" && user?.role !== "admin") {
+    return <UpgradeRequired feature="Dashboard Executive" />;
+  }
+
   const safeKPIs = useMemo(() => {
     const scoreGlobal = safePercent((kpiData as any)?.scoreGlobal);
     const progression = safePercent((kpiData as any)?.progression);
@@ -113,7 +115,6 @@ export default function DashboardExecutive() {
     };
   }, [kpiData]);
 
-  // ✅ Normalize processProgress regardless backend shape
   const normalizedProcessProgress = useMemo(() => {
     const list = Array.isArray(processProgress) ? processProgress : [];
 
@@ -122,20 +123,16 @@ export default function DashboardExecutive() {
       const name = p?.name ?? p?.processName ?? p?.process_name ?? p?.label ?? `Process ${id}`;
       const score = safePercent(p?.score ?? p?.scoreGlobal ?? p?.conformity ?? 0);
       const progress = safePercent(p?.progression ?? p?.progress ?? p?.completion ?? 0);
-
       return { id, name, score, progress, raw: p };
     });
 
-    // sort weak to strong
     normalized.sort((a, b) => a.score - b.score);
-
     return normalized;
   }, [processProgress]);
 
   const topWeakProcesses = normalizedProcessProgress.slice(0, 5);
   const topStrongProcesses = normalizedProcessProgress.slice(-5).reverse();
 
-  // ✅ Executive status
   const executiveStatus = useMemo(() => {
     if (safeKPIs.scoreGlobal >= 85 && safeKPIs.nonConformitiesCount <= 5) return "Conformité maîtrisée";
     if (safeKPIs.scoreGlobal >= 70) return "Conformité sous contrôle";
@@ -175,13 +172,10 @@ export default function DashboardExecutive() {
 
   const trendArray = useMemo(() => (Array.isArray(scoreTrend) ? scoreTrend : []), [scoreTrend]);
 
-  // ✅ UI
   return (
     <div className="min-h-screen bg-[#F6F8FB]">
-      {/* Premium top gradient */}
       <div className="absolute inset-x-0 top-0 h-72 bg-gradient-to-b from-[#0B2A55] via-[#0B2A55] to-transparent pointer-events-none" />
 
-      {/* Header */}
       <header className="relative border-b border-white/10 bg-transparent sticky top-0 z-50 backdrop-blur-md">
         <div className="container flex h-16 items-center justify-between">
           <div className="flex items-center gap-6">
@@ -237,7 +231,6 @@ export default function DashboardExecutive() {
       </header>
 
       <main className="relative container py-8">
-        {/* Executive Top */}
         <div className="mb-7">
           <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
             <div>
@@ -261,7 +254,6 @@ export default function DashboardExecutive() {
           </div>
         </div>
 
-        {/* KPI Strip */}
         <div className="grid gap-4 md:grid-cols-4 mb-6">
           <Card
             className="border-white/10 bg-white/95 shadow-lg shadow-black/5 rounded-2xl cursor-pointer hover:shadow-xl transition-shadow"
@@ -382,9 +374,7 @@ export default function DashboardExecutive() {
           </Card>
         </div>
 
-        {/* Main grid */}
         <div className="grid gap-4 lg:grid-cols-12">
-          {/* Trend */}
           <Card className="lg:col-span-8 border-white/10 bg-white/95 shadow-lg shadow-black/5 rounded-2xl overflow-hidden">
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between gap-3">
@@ -421,7 +411,6 @@ export default function DashboardExecutive() {
             </CardContent>
           </Card>
 
-          {/* Process Focus */}
           <Card className="lg:col-span-4 border-white/10 bg-white/95 shadow-lg shadow-black/5 rounded-2xl">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold text-[#0B2A55] flex items-center gap-2">
@@ -502,7 +491,6 @@ export default function DashboardExecutive() {
             </CardContent>
           </Card>
 
-          {/* Recent Audits */}
           <Card className="lg:col-span-6 border-white/10 bg-white/95 shadow-lg shadow-black/5 rounded-2xl overflow-hidden">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold text-[#0B2A55]">Audits récents</CardTitle>
@@ -519,7 +507,6 @@ export default function DashboardExecutive() {
             </CardContent>
           </Card>
 
-          {/* Recent Findings */}
           <Card className="lg:col-span-6 border-white/10 bg-white/95 shadow-lg shadow-black/5 rounded-2xl overflow-hidden">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold text-[#0B2A55]">Dernières non-conformités (NOK)</CardTitle>
@@ -538,15 +525,8 @@ export default function DashboardExecutive() {
         </div>
       </main>
 
-      {/* KPI Detail Modal */}
-      <KPIDetailModal
-        open={kpiModalOpen}
-        onOpenChange={setKpiModalOpen}
-        type={kpiModalType}
-        data={kpiData || {}}
-      />
+      <KPIDetailModal open={kpiModalOpen} onOpenChange={setKpiModalOpen} type={kpiModalType} data={kpiData || {}} />
 
-      {/* Process Detail Modal */}
       <ProcessDetailModal
         open={processModalOpen}
         onOpenChange={setProcessModalOpen}
