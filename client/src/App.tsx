@@ -67,6 +67,11 @@ function Router() {
       <Route path={"/dashboard-v2"} component={DashboardV2} />
       <Route path={"/dashboard-executive"} component={DashboardExecutive} />
 
+      {/* ✅ Optional trailing slash safety */}
+      <Route path="/dashboard-executive/">
+        <Redirect to="/dashboard-executive" />
+      </Route>
+
       <Route path={"/fda/qualification"} component={FDAQualification} />
       <Route path={"/fda/audit"} component={FDAAuditNew} />
 
