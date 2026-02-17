@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -51,34 +51,118 @@ type Kpis = {
   nonConformitiesCount?: number;
 };
 
-export default function DashboardExecutive() {
-  // ✅ Hooks must be called unconditionally (React #310 prevention)
-  const { user, isAuthenticated, loading } = useAuth();
+type ProcessProgressItem = {
+  id: number;
+  name: string;
+  score: number;
+  progress: number;
+  answered: number;
+  total: number;
+};
 
-  // Filters (UI only for now — you can wire them to backend inputs later)
+type HeatmapRow = {
+  label: string;
+  eu: number;
+  us: number;
+  asia: number;
+};
+
+function normalizeProcessProgress(processProgressRaw: any[]): ProcessProgressItem[] {
+  return processProgressRaw
+    .map((p: any, idx: number) => ({
+      id: Number(p.processId ?? p.id ?? idx),
+      name: String(p.processName ?? p.name ?? `Process ${idx + 1}`),
+      score: Number(p.score ?? 0),
+      progress: Number(p.progress ?? p.progression ?? 0),
+      answered: Number(p.answered ?? 0),
+      total: Number(p.total ?? 0),
+    }))
+    .sort((a, b) => b.score - a.score);
+}
+
+function buildTopRisks(findings: any[]) {
+  const items = findings
+    .map((f: any, idx: number) => {
+      const title =
+        (f.questionText ? String(f.questionText) : "") ||
+        (f.article ? `Article ${String(f.article)}` : "") ||
+        `Finding ${idx + 1}`;
+      const processName = f.processName ? String(f.processName) : "Process";
+      return { title, processName };
+    })
+    .slice(0, 10);
+
+  if (items.length === 0) {
+    return [
+      { title: "No recent NOK findings yet", processName: "—" },
+      { title: "Start an audit to populate insights", processName: "—" },
+    ];
+  }
+
+  return items;
+}
+
+function buildRadarData(processProgress: ProcessProgressItem[], globalScore: number) {
+  const buckets = [
+    { key: "QMS", keywords: ["qms", "qualité", "management", "système"], value: 0 },
+    { key: "Clinical", keywords: ["clinical", "clinique", "évaluation"], value: 0 },
+    { key: "Risk Mgmt", keywords: ["risk", "risque", "14971", "amdec"], value: 0 },
+    { key: "PMS", keywords: ["pms", "surveillance", "vigilance", "post"], value: 0 },
+    { key: "Suppliers", keywords: ["supplier", "fournisseur", "achat", "sous-trait"], value: 0 },
+    { key: "CAPA", keywords: ["capa", "nonconform", "déviation", "action"], value: 0 },
+  ];
+
+  if (processProgress.length === 0) {
+    return buckets.map((b) => ({ subject: b.key, score: 20 }));
+  }
+
+  for (const p of processProgress) {
+    const name = p.name.toLowerCase();
+    const match = buckets.find((b) => b.keywords.some((k) => name.includes(k)));
+    if (match) match.value = Math.max(match.value, p.score);
+  }
+
+  return buckets.map((b) => ({
+    subject: b.key,
+    score: b.value > 0 ? Math.round(b.value) : Math.round(globalScore || 25),
+  }));
+}
+
+function buildHeatmapRows(processProgress: ProcessProgressItem[]): HeatmapRow[] {
+  const top = processProgress.slice(0, 6);
+
+  if (top.length === 0) {
+    return [
+      { label: "CAPA", eu: 20, us: 20, asia: 20 },
+      { label: "Clinical", eu: 20, us: 20, asia: 20 },
+      { label: "Suppliers", eu: 20, us: 20, asia: 20 },
+    ];
+  }
+
+  return top.map((p, i) => ({
+    label: p.name,
+    eu: Math.max(0, Math.min(100, p.score)),
+    us: Math.max(0, Math.min(100, p.score - (i % 3) * 7)),
+    asia: Math.max(0, Math.min(100, p.score - (i % 2) * 11)),
+  }));
+}
+
+export default function DashboardExecutive() {
+  const { user, isAuthenticated, loading } = useAuth();
   const [period, setPeriod] = useState<"3M" | "6M" | "12M">("12M");
 
   const profileQuery = trpc.profile.get.useQuery(undefined, { enabled: isAuthenticated });
-
   const kpiQuery = trpc.dashboard.getKPIs.useQuery(undefined, { enabled: isAuthenticated });
   const trendQuery = trpc.dashboard.getScoreTrend.useQuery(undefined, { enabled: isAuthenticated });
   const processProgressQuery = trpc.dashboard.getProcessProgress.useQuery(undefined, { enabled: isAuthenticated });
   const findingsQuery = trpc.dashboard.getRecentFindings.useQuery({ limit: 6 }, { enabled: isAuthenticated });
   const recentAuditsQuery = trpc.audit.getRecentAudits.useQuery({ limit: 6 }, { enabled: isAuthenticated });
 
-  // Loading / auth guards (after hooks are declared)
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#070B18]">
-        <Loader2 className="h-8 w-8 animate-spin text-white" />
-      </div>
-    );
-  }
-
-  if (!isAuthenticated) {
-    window.location.href = getLoginUrl();
-    return null;
-  }
+  useEffect(() => {
+    if (!loading && !isAuthenticated) {
+      window.location.assign(getLoginUrl());
+    }
+  }, [loading, isAuthenticated]);
 
   const profile = profileQuery.data;
   const kpis: Kpis = kpiQuery.data ?? {};
@@ -88,95 +172,28 @@ export default function DashboardExecutive() {
   const findings = Array.isArray(findingsQuery.data) ? findingsQuery.data : [];
   const recentAudits = Array.isArray(recentAuditsQuery.data) ? recentAuditsQuery.data : [];
 
-  // Normalize process progress shape (your backend returns: { processId, processName, progress, score, answered, total })
-  const processProgress = useMemo(() => {
-    return processProgressRaw
-      .map((p: any, idx: number) => ({
-        id: Number(p.processId ?? p.id ?? idx),
-        name: String(p.processName ?? p.name ?? `Process ${idx + 1}`),
-        score: Number(p.score ?? 0),
-        progress: Number(p.progress ?? p.progression ?? 0),
-        answered: Number(p.answered ?? 0),
-        total: Number(p.total ?? 0),
-      }))
-      .sort((a: any, b: any) => b.score - a.score);
-  }, [processProgressRaw]);
-
-  // Top risks (from latest NOK findings)
-  const topRisks = useMemo(() => {
-    const items = findings
-      .map((f: any, idx: number) => {
-        const title =
-          (f.questionText ? String(f.questionText) : "") ||
-          (f.article ? `Article ${String(f.article)}` : "") ||
-          `Finding ${idx + 1}`;
-        const processName = f.processName ? String(f.processName) : "Process";
-        return { title, processName };
-      })
-      .slice(0, 10);
-
-    // fallback if empty
-    if (items.length === 0) {
-      return [
-        { title: "No recent NOK findings yet", processName: "—" },
-        { title: "Start an audit to populate insights", processName: "—" },
-      ];
-    }
-    return items;
-  }, [findings]);
-
-  // Radar maturity (derive from process score buckets)
-  const radarData = useMemo(() => {
-    // Heuristic mapping by keywords
-    const buckets = [
-      { key: "QMS", keywords: ["qms", "qualité", "management", "système"], value: 0 },
-      { key: "Clinical", keywords: ["clinical", "clinique", "évaluation"], value: 0 },
-      { key: "Risk Mgmt", keywords: ["risk", "risque", "14971", "amdec"], value: 0 },
-      { key: "PMS", keywords: ["pms", "surveillance", "vigilance", "post"], value: 0 },
-      { key: "Suppliers", keywords: ["supplier", "fournisseur", "achat", "sous-trait"], value: 0 },
-      { key: "CAPA", keywords: ["capa", "nonconform", "déviation", "action"], value: 0 },
-    ];
-
-    if (processProgress.length === 0) {
-      return buckets.map((b) => ({ subject: b.key, score: 20 }));
-    }
-
-    for (const p of processProgress) {
-      const name = p.name.toLowerCase();
-      const match = buckets.find((b) => b.keywords.some((k) => name.includes(k)));
-      if (match) match.value = Math.max(match.value, p.score);
-    }
-
-    // fill missing with global score
-    const global = Number(kpis.scoreGlobal ?? 0);
-    return buckets.map((b) => ({
-      subject: b.key,
-      score: b.value > 0 ? Math.round(b.value) : Math.round(global || 25),
-    }));
-  }, [processProgress, kpis.scoreGlobal]);
-
-  // Heatmap (simple matrix from top processes)
-  const heatmapRows = useMemo(() => {
-    const top = processProgress.slice(0, 6);
-    if (top.length === 0) {
-      return [
-        { label: "CAPA", eu: 20, us: 20, asia: 20 },
-        { label: "Clinical", eu: 20, us: 20, asia: 20 },
-        { label: "Suppliers", eu: 20, us: 20, asia: 20 },
-      ];
-    }
-    // Fake region splits (until you wire market/regional scoring)
-    return top.map((p, i) => ({
-      label: p.name,
-      eu: Math.max(0, Math.min(100, p.score)),
-      us: Math.max(0, Math.min(100, p.score - (i % 3) * 7)),
-      asia: Math.max(0, Math.min(100, p.score - (i % 2) * 11)),
-    }));
-  }, [processProgress]);
+  // ✅ No conditional hooks below this point
+  const processProgress = normalizeProcessProgress(processProgressRaw);
+  const topRisks = buildTopRisks(findings);
 
   const scoreGlobal = Number(kpis.scoreGlobal ?? 0);
   const progression = Number(kpis.progression ?? 0);
   const majorNCs = Number(kpis.nonConformitiesCount ?? 0);
+
+  const radarData = buildRadarData(processProgress, scoreGlobal);
+  const heatmapRows = buildHeatmapRows(processProgress);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#070B18]">
+        <Loader2 className="h-8 w-8 animate-spin text-white" />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-[#070B18] text-white">
@@ -285,7 +302,12 @@ export default function DashboardExecutive() {
           />
           <KpiTile
             title="Data Coverage"
-            value={`${Math.min(100, Math.round((Number(kpis.answeredQuestions ?? 0) / Math.max(1, Number(kpis.totalQuestions ?? 0))) * 100))}%`}
+            value={`${Math.min(
+              100,
+              Math.round(
+                (Number(kpis.answeredQuestions ?? 0) / Math.max(1, Number(kpis.totalQuestions ?? 0))) * 100
+              )
+            )}%`}
             icon={<Layers className="h-5 w-5" />}
             hint="Answered / total base"
           />
@@ -544,7 +566,6 @@ function KpiTile(props: {
 }
 
 function HeatCell({ v }: { v: number }) {
-  // v: 0..100
   const bg =
     v >= 85
       ? "bg-emerald-500/40"
