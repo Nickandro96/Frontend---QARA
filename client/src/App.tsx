@@ -43,7 +43,9 @@ import ReportComparative from "./pages/ReportComparative";
 import AuditsList from "./pages/AuditsList";
 import MdrRoutesErrorBoundary from "./components/MdrRoutesErrorBoundary";
 import ISOQualification from "./pages/ISOQualification";
-import ISOAudit from "./pages/ISOAudit";
+import ISOAuditWizard from "./pages/ISOAuditWizard";
+import ISOAuditDrilldown from "./pages/ISOAuditDrilldown";
+import ISOAuditReview from "./pages/ISOAuditReview";
 import AuditHistory from "./pages/AuditHistory";
 import AuditResults from "./pages/AuditResults";
 import AuditComparison from "./pages/AuditComparison";
@@ -82,7 +84,9 @@ function Router() {
       <Route path={"/mdr/*"} component={MdrRoutesErrorBoundary} />
 
       <Route path={"/iso/qualification"} component={ISOQualification} />
-      <Route path="/iso/audit" component={ISOAudit} />
+      <Route path="/iso/audit/:auditId/review" component={ISOAuditReview} />
+      <Route path="/iso/audit/:auditId" component={ISOAuditDrilldown} />
+      <Route path="/iso/audit" component={ISOAuditWizard} />
 
       <Route path="/audit-history" component={AuditHistory} />
       <Route path="/audit/compare" component={AuditComparison} />
