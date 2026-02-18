@@ -170,7 +170,7 @@ function formatRiskText(risk: any): string {
   }
 }
 
-export default function MDRAuditDrilldown() {
+export default function ISOAuditDrilldown() {
   const [, params] = useRoute("/iso/audit/:auditId");
   const auditId = params?.auditId ? Number(params.auditId) : null;
 
@@ -418,14 +418,14 @@ export default function MDRAuditDrilldown() {
           console.warn("[MDR] completeAudit failed, fallback to review navigation", e);
         }
       }
-      setLocation(`/iso/audit/${auditId}/review`);
+      setLocation(`/mdr/audit/${auditId}/review`);
       return;
     }
 
     goNext();
   };
 
-  const goBackToWizard = () => setLocation("/iso/audit");
+  const goBackToWizard = () => setLocation("/mdr");
 
   const loading = loadingContext || loadingQuestions || loadingResponses;
 
