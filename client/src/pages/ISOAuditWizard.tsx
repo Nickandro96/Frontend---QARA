@@ -193,9 +193,10 @@ export default function ISOAuditWizard() {
       startDate: plannedStartDate || null,
       endDate: plannedEndDate || null,
 
-      auditorName: auditLeader || null,
-      auditeeName: auditeeMainContact || null,
-      auditeeEmail: auditeeContactEmail || null,
+      // Backend validation expects strings (not null). Send empty strings when not provided.
+      auditorName: (auditLeader ?? "").trim(),
+      auditeeName: (auditeeMainContact ?? "").trim(),
+      auditeeEmail: (auditeeContactEmail ?? "").trim(),
 
       processIds: selectedProcessMode === "all" ? [] : selectedProcessIdsNumber,
 
