@@ -33,6 +33,16 @@ const AUDIT_METHODS = [
 
 type IsoStandardCode = "ISO9001" | "ISO13485";
 
+function toIsoStandardCode(value: unknown): IsoStandardCode {
+  const raw = String(value ?? "").trim();
+  const v = raw.replace(/\s+/g, "").toUpperCase();
+  // accept many shapes coming from DB / UI
+  if (v === "ISO9001" || v === "9001" || v.endsWith("9001")) return "ISO9001";
+  if (v === "ISO13485" || v === "13485" || v.endsWith("13485")) return "ISO13485";
+  // default safe
+  return "ISO9001";
+}
+
 function normalizeStandardFromQuery(): IsoStandardCode | null {
   const raw = new URLSearchParams(window.location.search).get("standard");
   if (!raw) return null;
@@ -65,7 +75,8 @@ export default function ISOAuditWizard() {
   const [auditeeMainContact, setAuditeeMainContact] = useState<string>("");
   const [auditeeContactEmail, setAuditeeContactEmail] = useState<string>("");
   const [selectedProcessMode, setSelectedProcessMode] = useState<string>("all"); // all | select
-  const [selectedProcessIds, setSelectedProcessIds] = useState<number[]>([]);
+  // ⚠️ Keep as string to avoid NaN issues if API returns ids as strings
+  const [selectedProcessIds, setSelectedProcessIds] = useState<string[]>([]);
 
   // Step 2 - context fields
   const [auditedEntityName, setAuditedEntityName] = useState<string>("");
@@ -103,13 +114,20 @@ export default function ISOAuditWizard() {
   }, [sitesData]);
 
   const selectedStandard = useMemo(() => {
-    return (standards ?? []).find((s: any) => s.code === standardCode) ?? null;
+    return (standards ?? []).find((s: any) => toIsoStandardCode(s.code) === standardCode) ?? null;
   }, [standards, standardCode]);
 
   const referentialIds = useMemo(() => {
     // Mapping DB: 2=ISO9001, 3=ISO13485
     return standardCode === "ISO9001" ? [2] : [3];
   }, [standardCode]);
+
+  const selectedProcessIdsNumber = useMemo(() => {
+    // Backend expects number[]; filter any non-numeric values defensively
+    return selectedProcessIds
+      .map((x) => Number(x))
+      .filter((n) => Number.isFinite(n) && n > 0);
+  }, [selectedProcessIds]);
 
   // Mutations
   const createOrUpdateAuditDraft = trpc.iso.createOrUpdateAuditDraft.useMutation({
@@ -179,7 +197,7 @@ export default function ISOAuditWizard() {
       auditeeName: auditeeMainContact || null,
       auditeeEmail: auditeeContactEmail || null,
 
-      processIds: selectedProcessMode === "all" ? [] : selectedProcessIds,
+      processIds: selectedProcessMode === "all" ? [] : selectedProcessIdsNumber,
 
       entityName: auditedEntityName || null,
       address: auditedEntityAddress || null,
@@ -275,10 +293,10 @@ export default function ISOAuditWizard() {
                 <button
                   key={s.code}
                   type="button"
-                  onClick={() => setStandardCode(s.code as IsoStandardCode)}
+                  onClick={() => setStandardCode(toIsoStandardCode(s.code))}
                   className={
                     "text-left rounded-xl border p-4 transition hover:bg-muted/30 " +
-                    (standardCode === s.code ? "border-primary ring-2 ring-primary/20" : "")
+                    (standardCode === toIsoStandardCode(s.code) ? "border-primary ring-2 ring-primary/20" : "")
                   }
                 >
                   <div className="font-semibold">{s.label ?? s.name ?? s.code}</div>
@@ -407,7 +425,7 @@ export default function ISOAuditWizard() {
               {selectedProcessMode === "select" && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                   {processes.map((p: any) => {
-                    const id = Number(p.id);
+                    const id = String(p.id);
                     const checked = selectedProcessIds.includes(id);
                     return (
                       <button
