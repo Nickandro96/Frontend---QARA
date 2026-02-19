@@ -179,11 +179,8 @@ export default function ISOAuditWizard() {
   };
 
   const upsertDraft = async (status: "draft" | "in_progress" = "draft") => {
-    const effectiveProcessMode =
-      selectedProcessIdsNumber.length > 0 ? "select" : selectedProcessMode;
-
+    const effectiveProcessMode = selectedProcessIdsNumber.length > 0 ? \"select\" : selectedProcessMode;
     const payload: any = {
-
       auditId: auditId ?? undefined,
       standardCode,
       referentialIds,
@@ -202,10 +199,10 @@ export default function ISOAuditWizard() {
       auditeeName: (auditeeMainContact ?? "").trim(),
       auditeeEmail: (auditeeContactEmail ?? "").trim(),
 
+      // ✅ FIX: always persist selected processIds; force mode=select when at least one is selected
       processMode: effectiveProcessMode as any,
       processIds: selectedProcessIdsNumber,
-
-      entityName: auditedEntityName || null,
+entityName: auditedEntityName || null,
       address: auditedEntityAddress || null,
       exclusions: exclusions || null,
       productFamilies: productFamilies || null,
