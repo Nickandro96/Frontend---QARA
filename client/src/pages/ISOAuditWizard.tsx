@@ -179,7 +179,6 @@ export default function ISOAuditWizard() {
   };
 
   const upsertDraft = async (status: "draft" | "in_progress" = "draft") => {
-    const effectiveProcessMode = selectedProcessIdsNumber.length > 0 ? "select" : selectedProcessMode;
     const payload: any = {
       auditId: auditId ?? undefined,
       standardCode,
@@ -199,10 +198,16 @@ export default function ISOAuditWizard() {
       auditeeName: (auditeeMainContact ?? "").trim(),
       auditeeEmail: (auditeeContactEmail ?? "").trim(),
 
-      // ✅ FIX: always persist selected processIds; force mode=select when at least one is selected
-      processMode: effectiveProcessMode as any,
-      processIds: selectedProcessIdsNumber,
-entityName: auditedEntityName || null,
+      // ✅ FIX: always persist processIds (never [])
+      // If user chooses "Tous", we store all process ids so backend can compute per-process stats.
+      // If user chooses manual selection, we store only selected ids.
+      processMode: selectedProcessMode as any,
+      processIds:
+        selectedProcessMode === "all"
+          ? processes.map((p: any) => Number(p.id)).filter((n: number) => Number.isFinite(n) && n > 0)
+          : selectedProcessIdsNumber,
+
+      entityName: auditedEntityName || null,
       address: auditedEntityAddress || null,
       exclusions: exclusions || null,
       productFamilies: productFamilies || null,
@@ -435,6 +440,7 @@ entityName: auditedEntityName || null,
                         key={p.id}
                         type="button"
                         onClick={() => {
+                          if (selectedProcessMode !== "select") setSelectedProcessMode("select");
                           setSelectedProcessIds((prev) => (checked ? prev.filter((x) => x !== id) : [...prev, id]));
                         }}
                         className={
