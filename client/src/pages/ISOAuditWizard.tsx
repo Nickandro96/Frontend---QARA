@@ -179,7 +179,7 @@ export default function ISOAuditWizard() {
   };
 
   const upsertDraft = async (status: "draft" | "in_progress" = "draft") => {
-    const effectiveProcessMode = selectedProcessIdsNumber.length > 0 ? \"select\" : selectedProcessMode;
+    const effectiveProcessMode = selectedProcessIdsNumber.length > 0 ? "select" : selectedProcessMode;
     const payload: any = {
       auditId: auditId ?? undefined,
       standardCode,
