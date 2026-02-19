@@ -92,7 +92,8 @@ function extractArticleBadge(article?: string | null) {
 function formatCriticality(level?: string | null) {
   const v = (level || "").toLowerCase().trim();
   if (!v) return { label: "Criticité n/a", variant: "outline" as const };
-  if (v === "critical" || v === "very_high" || v === "high") return { label: "Criticité élevée", variant: "destructive" as const };
+  if (v === "critical" || v === "very_high" || v === "high")
+    return { label: "Criticité élevée", variant: "destructive" as const };
   if (v === "medium") return { label: "Criticité moyenne", variant: "secondary" as const };
   if (v === "low") return { label: "Criticité faible", variant: "outline" as const };
   return { label: `Criticité ${level}`, variant: "outline" as const };
@@ -161,10 +162,14 @@ function formatRiskText(risk: any): string {
     return "Si non conforme, justifier l'impact certification, patient et inspection, puis documenter le plan d'action correctif.";
   }
 
-  // ✅ support JSON string (ex: '["..."]')
+  // ✅ FIX: if risk is JSON string like '["..."]', extract first string for display
   if (typeof risk === "string") {
     const s = risk.trim();
-    if ((s.startsWith("[") && s.endsWith("]")) || (s.startsWith("{") && s.endsWith("}"))) {
+    if (
+      (s.startsWith("[") && s.endsWith("]")) ||
+      (s.startsWith("{") && s.endsWith("}")) ||
+      (s.startsWith('"') && s.endsWith('"'))
+    ) {
       try {
         const parsed: any = JSON.parse(s);
         if (Array.isArray(parsed)) {
@@ -183,7 +188,7 @@ function formatRiskText(risk: any): string {
 
   if (Array.isArray(risk)) {
     const first = risk.find((x) => typeof x === "string" && x.trim().length > 0);
-    return first ? first : JSON.stringify(risk, null, 2);
+    if (first) return first;
   }
 
   try {
@@ -337,14 +342,16 @@ export default function ISOAuditDrilldown() {
   const handleSetCompliance = (value: ResponseValue) => {
     if (!currentQuestion?.questionKey) return;
 
-    // ✅ CRITICAL: lier la réponse AU process de la question (sinon "décalage" / null)
+    // ✅ FIX: link response to the question's processId first
     const qProcessId =
-      (currentQuestion as any)?.processId != null ? String((currentQuestion as any).processId) : null;
+      (currentQuestion as any)?.processId ??
+      (auditContext as any)?.processIds?.[0] ??
+      null;
 
     setDraft(currentQuestion.questionKey, {
       responseValue: value,
       role: (auditContext as any)?.economicRole ?? null,
-      processId: qProcessId ?? ((auditContext as any)?.processIds?.[0] ?? null),
+      processId: qProcessId,
       answeredBy: (auditContext as any)?.userId ?? (auditContext as any)?.createdBy ?? 1,
       answeredAt: new Date().toISOString(),
     });
@@ -392,12 +399,11 @@ export default function ISOAuditDrilldown() {
         safeArray<string>(currentResponse?.evidenceFiles),
       role: localDrafts[currentQuestion.questionKey]?.role ?? currentResponse?.role ?? ((auditContext as any)?.economicRole ?? null),
 
-      // ✅ CRITICAL: conserver processId de la question si dispo
+      // ✅ FIX: preserve per-question processId
       processId:
         localDrafts[currentQuestion.questionKey]?.processId ??
         currentResponse?.processId ??
-        ((currentQuestion as any)?.processId != null ? String((currentQuestion as any).processId) : null) ??
-        ((auditContext as any)?.processIds?.[0] ?? null),
+        ((currentQuestion as any)?.processId ?? (auditContext as any)?.processIds?.[0] ?? null),
 
       answeredBy: localDrafts[currentQuestion.questionKey]?.answeredBy ?? currentResponse?.answeredBy ?? ((auditContext as any)?.userId ?? (auditContext as any)?.createdBy ?? 1),
       answeredAt: localDrafts[currentQuestion.questionKey]?.answeredAt ?? currentResponse?.answeredAt ?? new Date().toISOString(),
@@ -452,7 +458,8 @@ export default function ISOAuditDrilldown() {
           console.warn("[ISO] completeAudit failed, fallback to review navigation", e);
         }
       }
-      // ✅ ISO route (pas MDR)
+
+      // ✅ FIX: ISO route (was MDR)
       setLocation(`/iso/audit/${auditId}/review`);
       return;
     }
@@ -460,7 +467,7 @@ export default function ISOAuditDrilldown() {
     goNext();
   };
 
-  // ✅ ISO route (pas MDR)
+  // ✅ FIX: ISO wizard back route (was /mdr)
   const goBackToWizard = () => setLocation("/iso/audit");
 
   const loading = loadingContext || loadingQuestions || loadingResponses;
@@ -776,4 +783,255 @@ export default function ISOAuditDrilldown() {
               </Button>
 
               {evidenceNames.length > 0 ? (
-                <div className="flex flex
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {evidenceNames.slice(0, 8).map((name, idx) => (
+                    <Badge key={`${name}-${idx}`} variant="secondary" className="max-w-full truncate">
+                      {name}
+                    </Badge>
+                  ))}
+                  {evidenceNames.length > 8 ? <Badge variant="outline">+{evidenceNames.length - 8}</Badge> : null}
+                </div>
+              ) : (
+                <div className="text-xs text-muted-foreground">Aucun document sélectionné.</div>
+              )}
+            </div>
+
+            <div className="flex flex-col lg:flex-row gap-2 lg:justify-between">
+              <div className="flex gap-2">
+                <Button variant="secondary" onClick={goPrev} disabled={currentIndex === 0}>
+                  <ArrowLeft className="mr-2 h-4 w-4" />
+                  Précédent
+                </Button>
+                <Button variant="secondary" onClick={goNext} disabled={currentIndex >= totalQuestions - 1}>
+                  Suivant
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </div>
+
+              <Button onClick={handleSaveAndContinue} disabled={saving} className="h-11 px-5">
+                {saving ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Save className="mr-2 h-5 w-5" />}
+                Enregistrer et continuer
+              </Button>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <Info className="h-4 w-4" />
+                {saveMessage ? <span className="font-medium">{saveMessage}</span> : <span>Brouillon local actif jusqu’à enregistrement.</span>}
+              </div>
+              <Button variant="ghost" size="sm" onClick={goBackToWizard}>
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Retour wizard
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="xl:col-span-4 shadow-sm border-slate-200 bg-white">
+          <CardContent className="p-4 space-y-4">
+            <div className="grid grid-cols-3 gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant={activeTab === "context" ? "default" : "outline"}
+                onClick={() => setActiveTab("context")}
+              >
+                Contexte
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={activeTab === "copilot" ? "default" : "outline"}
+                onClick={() => setActiveTab("copilot")}
+              >
+                IA Copilot
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={activeTab === "evidence" ? "default" : "outline"}
+                onClick={() => setActiveTab("evidence")}
+              >
+                Preuves
+              </Button>
+            </div>
+
+            {activeTab === "context" && (
+              <div className="space-y-3 text-sm">
+                <div>
+                  <div className="text-muted-foreground">Article MDR</div>
+                  <div className="font-medium">{currentQuestion?.article || "n/a"}</div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground">Rôle économique</div>
+                  <div className="font-medium">{currentQuestion?.economicRole || (auditContext as any)?.economicRole || "n/a"}</div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground">Processus</div>
+                  <div className="font-medium">
+                    {safeArray<any>(currentQuestion?.applicableProcesses).length > 0
+                      ? safeArray<any>(currentQuestion?.applicableProcesses).join(", ")
+                      : "n/a"}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground">Annexe</div>
+                  <div className="font-medium">{currentQuestion?.annexe || "n/a"}</div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === "copilot" && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-medium">Audit Copilot</div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={inspectorMode ? "destructive" : "outline"}
+                    onClick={() => setInspectorMode((v) => !v)}
+                  >
+                    Mode Inspecteur ON
+                  </Button>
+                </div>
+
+                <ul className="space-y-2 text-sm text-slate-700">
+                  {aiInsights.map((insight, idx) => (
+                    <li key={`${idx}-${insight}`} className="rounded-md border border-slate-200 p-2 bg-slate-50">
+                      {insight}
+                    </li>
+                  ))}
+                </ul>
+
+                {inspectorMode ? (
+                  <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm">
+                    <div className="font-medium mb-1">Simulation audit ON</div>
+                    <div>"Montrez la preuve terrain la plus récente qui contredit le moins votre procédure."</div>
+                  </div>
+                ) : null}
+
+                {showCoherenceAlert ? (
+                  <div className="rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-800">
+                    Attention : signaux faibles détectés. Vérifier cohérence PMS / CER / CAPA avant clôture.
+                  </div>
+                ) : null}
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => setSaveMessage("IA : recommandations générées localement (mode soft)")}
+                >
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  Rafraîchir suggestions
+                </Button>
+              </div>
+            )}
+
+            {activeTab === "evidence" && (
+              <div className="space-y-3 text-sm">
+                <div className="font-medium flex items-center gap-2">
+                  <FileText className="h-4 w-4" />
+                  Documents attendus
+                </div>
+
+                <div className="whitespace-pre-wrap text-muted-foreground">
+                  {currentQuestion?.expectedEvidence || "Aucune preuve attendue spécifiée pour cette question."}
+                </div>
+
+                {currentQuestion?.interviewFunctions && currentQuestion.interviewFunctions.length > 0 ? (
+                  <>
+                    <Separator />
+                    <div className="space-y-2">
+                      <div className="font-medium">Fonctions à interviewer</div>
+                      <div className="flex flex-wrap gap-2">
+                        {safeArray<any>(currentQuestion.interviewFunctions).map((f, idx) => (
+                          <Badge key={idx} variant="outline">
+                            {String(f)}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                ) : null}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="shadow-sm border-slate-200 bg-white">
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-sm font-medium">Table de progression audit</div>
+            <Button type="button" variant="outline" size="sm" onClick={() => setSaveMessage("Mode impression rapport : bientôt") }>
+              Générer rapport audit
+            </Button>
+          </div>
+
+          <div className="mt-3 overflow-x-auto rounded-lg border border-slate-200">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 text-slate-600">
+                <tr>
+                  <th className="text-left px-3 py-2 font-medium">Statut</th>
+                  <th className="text-left px-3 py-2 font-medium">Volume</th>
+                  <th className="text-left px-3 py-2 font-medium">%</th>
+                  <th className="text-left px-3 py-2 font-medium">Tendance</th>
+                </tr>
+              </thead>
+              <tbody>
+                {statusRows.map((row) => {
+                  const count = statusStats[row.key] || 0;
+                  const pct = totalQuestions > 0 ? Math.round((count / totalQuestions) * 100) : 0;
+                  const trend =
+                    row.key === "non_compliant"
+                      ? "⚠ prioritaire"
+                      : row.key === "partial"
+                        ? "à réduire"
+                        : row.key === "compliant"
+                          ? "stable"
+                          : "en cours";
+
+                  return (
+                    <tr key={row.key} className="border-t border-slate-100">
+                      <td className="px-3 py-2">
+                        <span className={cn("inline-block h-2.5 w-2.5 rounded-full mr-2 align-middle", statusColorMap[row.key].dot)} />
+                        <span className={cn("align-middle", statusColorMap[row.key].tone)}>{row.label}</span>
+                      </td>
+                      <td className="px-3 py-2">{count}</td>
+                      <td className="px-3 py-2">{pct}%</td>
+                      <td className="px-3 py-2 text-slate-500">{trend}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            {questions.map((q, idx) => {
+              const rv = responsesMap.get(q.questionKey)?.responseValue || "in_progress";
+              const cls = statusColorMap[rv as ResponseValue]?.dot || "bg-slate-300";
+
+              return (
+                <button
+                  key={q.questionKey}
+                  type="button"
+                  onClick={() => setCurrentIndex(idx)}
+                  className={cn(
+                    "h-8 w-8 rounded-full text-white text-xs font-semibold",
+                    cls,
+                    idx === currentIndex && "ring-2 ring-offset-2 ring-slate-700",
+                  )}
+                  title={`Q${idx + 1} - ${rv}`}
+                >
+                  {idx + 1}
+                </button>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
