@@ -140,6 +140,7 @@ export default function ISOAuditWizard() {
     },
   });
 
+  // (kept for compatibility; not strictly needed because we use upsertDraft("in_progress"))
   const setAuditInProgress = trpc.iso.createOrUpdateAuditDraft.useMutation({
     onError: (err) => {
       toast.error("❌ Erreur", { description: err.message });
@@ -178,53 +179,53 @@ export default function ISOAuditWizard() {
     return true;
   };
 
- const upsertDraft = async (status: "draft" | "in_progress" = "draft") => {
-  // ⚠️ IMPORTANT:
-  // Backend filters ISO questions based on the processes stored on the audit (audits.processIds).
-  // If we send processIds=[] while the user selected processes, the backend will (correctly)
-  // return the full referential set (e.g., 228 questions).
-  // So we ALWAYS send processIds when any are selected, regardless of the UI mode.
-  const effectiveProcessIds = selectedProcessIdsNumber;
-  const effectiveProcessMode: "all" | "select" =
-    effectiveProcessIds.length > 0 ? "select" : (selectedProcessMode as any);
+  const upsertDraft = async (status: "draft" | "in_progress" = "draft") => {
+    // ⚠️ IMPORTANT:
+    // Backend filters ISO questions based on the processes stored on the audit (audits.processIds).
+    // If we send processIds=[] while the user selected processes, the backend will (correctly)
+    // return the full referential set (e.g., 228 questions).
+    // So we ALWAYS send processIds when any are selected, regardless of the UI mode.
+    const effectiveProcessIds = selectedProcessIdsNumber;
+    const effectiveProcessMode: "all" | "select" =
+      effectiveProcessIds.length > 0 ? "select" : (selectedProcessMode as any);
 
-  const payload: any = {
-    auditId: auditId ?? undefined,
-    standardCode,
-    referentialIds,
-    status,
+    const payload: any = {
+      auditId: auditId ?? undefined,
+      standardCode,
+      referentialIds,
+      status,
 
-    siteId: Number(selectedSiteId),
-    name: auditName.trim(),
+      siteId: Number(selectedSiteId),
+      name: auditName.trim(),
 
-    scope: auditScope || null,
-    method: auditMethod || null,
-    startDate: plannedStartDate || null,
-    endDate: plannedEndDate || null,
+      scope: auditScope || null,
+      method: auditMethod || null,
+      startDate: plannedStartDate || null,
+      endDate: plannedEndDate || null,
 
-    auditorName: (auditLeader ?? "").trim(),
-    auditeeName: (auditeeMainContact ?? "").trim(),
-    auditeeEmail: (auditeeContactEmail ?? "").trim(),
+      auditorName: (auditLeader ?? "").trim(),
+      auditeeName: (auditeeMainContact ?? "").trim(),
+      auditeeEmail: (auditeeContactEmail ?? "").trim(),
 
-    // ✅ Critical: persist selected processes on the audit so backend can filter questions.
-    processMode: effectiveProcessMode,
-    processIds: effectiveProcessIds,
+      // ✅ Critical: persist selected processes on the audit so backend can filter questions.
+      processMode: effectiveProcessMode,
+      processIds: effectiveProcessIds,
 
-    entityName: auditedEntityName || null,
-    address: auditedEntityAddress || null,
-    exclusions: exclusions || null,
-    productFamilies: productFamilies || null,
-    markets: markets || null,
-    auditTeam: auditTeamMembers || null,
-    standardsVersion: versionReferentials || null,
+      entityName: auditedEntityName || null,
+      address: auditedEntityAddress || null,
+      exclusions: exclusions || null,
+      productFamilies: productFamilies || null,
+      markets: markets || null,
+      auditTeam: auditTeamMembers || null,
+      standardsVersion: versionReferentials || null,
+    };
+
+    const res: any = await createOrUpdateAuditDraft.mutateAsync(payload);
+    const id = Number(res?.auditId);
+    if (!Number.isFinite(id) || id <= 0) throw new Error("AuditId invalide");
+    setAuditId(id);
+    return id;
   };
-
-  const res: any = await createOrUpdateAuditDraft.mutateAsync(payload);
-  const id = Number(res?.auditId);
-  if (!Number.isFinite(id) || id <= 0) throw new Error("AuditId invalide");
-  setAuditId(id);
-  return id;
-};
 
   // Auth gate
   if (!isAuthenticated) {
@@ -260,9 +261,8 @@ export default function ISOAuditWizard() {
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
-            Veuillez d'abord compléter votre qualification ISO.
-            <Button variant="link" className="ml-2" onClick={() => setLocation("/iso/qualification")}
-            >
+            Veuillez d&apos;abord compléter votre qualification ISO.
+            <Button variant="link" className="ml-2" onClick={() => setLocation("/iso/qualification")}>
               Compléter la qualification
             </Button>
           </AlertDescription>
@@ -277,7 +277,7 @@ export default function ISOAuditWizard() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Audit ISO</h1>
           <p className="text-muted-foreground mt-1">
-            Wizard de création d'audit (métadonnées + sélection processus) — sans rôle économique.
+            Wizard de création d&apos;audit (métadonnées + sélection processus) — sans rôle économique.
           </p>
         </div>
         {wizardStep > 0 && (
@@ -330,7 +330,7 @@ export default function ISOAuditWizard() {
         <Card className="border shadow-sm">
           <CardHeader>
             <CardTitle>Étape 1 — Informations critiques</CardTitle>
-            <CardDescription>Ces informations sont nécessaires pour démarrer l'audit.</CardDescription>
+            <CardDescription>Ces informations sont nécessaires pour démarrer l&apos;audit.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -363,13 +363,21 @@ export default function ISOAuditWizard() {
               </div>
 
               <div className="space-y-2 md:col-span-2">
-                <Label>Nom de l'audit *</Label>
-                <Input value={auditName} onChange={(e) => setAuditName(e.target.value)} placeholder="Ex: Audit ISO 9001 - Site Paris" />
+                <Label>Nom de l&apos;audit *</Label>
+                <Input
+                  value={auditName}
+                  onChange={(e) => setAuditName(e.target.value)}
+                  placeholder="Ex: Audit ISO 9001 - Site Paris"
+                />
               </div>
 
               <div className="space-y-2 md:col-span-2">
                 <Label>Périmètre / Scope</Label>
-                <Textarea value={auditScope} onChange={(e) => setAuditScope(e.target.value)} placeholder="Décrivez le périmètre de l'audit (processus, sites, exclusions…)" />
+                <Textarea
+                  value={auditScope}
+                  onChange={(e) => setAuditScope(e.target.value)}
+                  placeholder="Décrivez le périmètre de l'audit (processus, sites, exclusions…)"
+                />
               </div>
 
               <div className="space-y-2">
@@ -403,11 +411,19 @@ export default function ISOAuditWizard() {
               </div>
               <div className="space-y-2">
                 <Label>Contact principal audité</Label>
-                <Input value={auditeeMainContact} onChange={(e) => setAuditeeMainContact(e.target.value)} placeholder="Nom du contact" />
+                <Input
+                  value={auditeeMainContact}
+                  onChange={(e) => setAuditeeMainContact(e.target.value)}
+                  placeholder="Nom du contact"
+                />
               </div>
               <div className="space-y-2">
                 <Label>Email contact audité</Label>
-                <Input value={auditeeContactEmail} onChange={(e) => setAuditeeContactEmail(e.target.value)} placeholder="email@exemple.com" />
+                <Input
+                  value={auditeeContactEmail}
+                  onChange={(e) => setAuditeeContactEmail(e.target.value)}
+                  placeholder="email@exemple.com"
+                />
               </div>
             </div>
 
@@ -513,14 +529,18 @@ export default function ISOAuditWizard() {
               </div>
               <div className="space-y-2 md:col-span-2">
                 <Label>Familles produits / services</Label>
-                <Textarea value={productFamilies} onChange={(e) => setProductFamilies(e.target.value)} placeholder="Ex: Lits médicalisés, matelas, accessoires…" />
+                <Textarea
+                  value={productFamilies}
+                  onChange={(e) => setProductFamilies(e.target.value)}
+                  placeholder="Ex: Lits médicalisés, matelas, accessoires…"
+                />
               </div>
               <div className="space-y-2 md:col-span-2">
                 <Label>Marchés</Label>
                 <Textarea value={markets} onChange={(e) => setMarkets(e.target.value)} placeholder="Ex: France, UE, Export…" />
               </div>
               <div className="space-y-2 md:col-span-2">
-                <Label>Membres de l'équipe d'audit</Label>
+                <Label>Membres de l&apos;équipe d&apos;audit</Label>
                 <Textarea value={auditTeamMembers} onChange={(e) => setAuditTeamMembers(e.target.value)} placeholder="Noms / fonctions" />
               </div>
               <div className="space-y-2 md:col-span-2">
@@ -564,7 +584,7 @@ export default function ISOAuditWizard() {
         <Card className="border shadow-sm">
           <CardHeader>
             <CardTitle>Étape 3 — Résumé</CardTitle>
-            <CardDescription>Vérifiez les paramètres et lancez l'audit.</CardDescription>
+            <CardDescription>Vérifiez les paramètres et lancez l&apos;audit.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -572,7 +592,9 @@ export default function ISOAuditWizard() {
                 <div className="text-sm text-muted-foreground">Audit</div>
                 <div className="font-semibold mt-1">{auditName}</div>
                 <div className="text-sm text-muted-foreground mt-2">Norme</div>
-                <div className="font-medium">{selectedStandard?.label ?? (standardCode === "ISO9001" ? "ISO 9001" : "ISO 13485")}</div>
+                <div className="font-medium">
+                  {selectedStandard?.label ?? (standardCode === "ISO9001" ? "ISO 9001" : "ISO 13485")}
+                </div>
                 <div className="text-sm text-muted-foreground mt-2">Site</div>
                 <div className="font-medium">{sites.find((s: any) => String(s.id) === String(selectedSiteId))?.name ?? "—"}</div>
               </div>
@@ -625,8 +647,8 @@ export default function ISOAuditWizard() {
                     try {
                       const id = auditId ?? (await upsertDraft("draft"));
 
-                      // ✅ FIX 2: do NOT overwrite process selection with a minimal payload.
-                      // We just upsert as in_progress with the full payload (incl. processMode/processIds).
+                      // ✅ IMPORTANT: do NOT overwrite process selection with a minimal payload.
+                      // Upsert as in_progress with the FULL payload (incl. processMode/processIds).
                       await upsertDraft("in_progress");
 
                       toast.success("Audit lancé", { description: "Redirection vers le questionnaire…" });
@@ -643,7 +665,7 @@ export default function ISOAuditWizard() {
                     </>
                   ) : (
                     <>
-                      <CheckCircle2 className="h-4 w-4 mr-2" /> Démarrer l'audit
+                      <CheckCircle2 className="h-4 w-4 mr-2" /> Démarrer l&apos;audit
                     </>
                   )}
                 </Button>
