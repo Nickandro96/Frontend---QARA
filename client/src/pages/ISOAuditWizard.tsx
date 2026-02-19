@@ -140,7 +140,6 @@ export default function ISOAuditWizard() {
     },
   });
 
-  // (On conserve pour compat, mais on ne l'utilise plus pour éviter d'écraser processIds)
   const setAuditInProgress = trpc.iso.createOrUpdateAuditDraft.useMutation({
     onError: (err) => {
       toast.error("❌ Erreur", { description: err.message });
@@ -199,8 +198,8 @@ export default function ISOAuditWizard() {
       auditeeName: (auditeeMainContact ?? "").trim(),
       auditeeEmail: (auditeeContactEmail ?? "").trim(),
 
-      // ✅ CRITICAL: envoyer processMode pour que le backend conserve processIds quand "select"
-      processMode: selectedProcessMode === "select" ? "select" : "all",
+      // ✅ FIX 1: send processMode so backend keeps processIds
+      processMode: selectedProcessMode as any,
       processIds: selectedProcessMode === "all" ? [] : selectedProcessIdsNumber,
 
       entityName: auditedEntityName || null,
@@ -616,8 +615,10 @@ export default function ISOAuditWizard() {
                 <Button
                   onClick={async () => {
                     try {
-                      // ✅ CRITICAL: démarrer via upsertDraft("in_progress") pour ne pas écraser processIds/processMode
                       const id = auditId ?? (await upsertDraft("draft"));
+
+                      // ✅ FIX 2: do NOT overwrite process selection with a minimal payload.
+                      // We just upsert as in_progress with the full payload (incl. processMode/processIds).
                       await upsertDraft("in_progress");
 
                       toast.success("Audit lancé", { description: "Redirection vers le questionnaire…" });
@@ -626,9 +627,9 @@ export default function ISOAuditWizard() {
                       toast.error("❌ Erreur", { description: e?.message ?? "Impossible de démarrer" });
                     }
                   }}
-                  disabled={createOrUpdateAuditDraft.isPending}
+                  disabled={setAuditInProgress.isPending}
                 >
-                  {createOrUpdateAuditDraft.isPending ? (
+                  {setAuditInProgress.isPending ? (
                     <>
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Démarrage…
                     </>
