@@ -178,45 +178,53 @@ export default function ISOAuditWizard() {
     return true;
   };
 
-  const upsertDraft = async (status: "draft" | "in_progress" = "draft") => {
-    const payload: any = {
-      auditId: auditId ?? undefined,
-      standardCode,
-      referentialIds,
-      status,
+ const upsertDraft = async (status: "draft" | "in_progress" = "draft") => {
+  // ⚠️ IMPORTANT:
+  // Backend filters ISO questions based on the processes stored on the audit (audits.processIds).
+  // If we send processIds=[] while the user selected processes, the backend will (correctly)
+  // return the full referential set (e.g., 228 questions).
+  // So we ALWAYS send processIds when any are selected, regardless of the UI mode.
+  const effectiveProcessIds = selectedProcessIdsNumber;
+  const effectiveProcessMode: "all" | "select" =
+    effectiveProcessIds.length > 0 ? "select" : (selectedProcessMode as any);
 
-      siteId: Number(selectedSiteId),
-      name: auditName.trim(),
+  const payload: any = {
+    auditId: auditId ?? undefined,
+    standardCode,
+    referentialIds,
+    status,
 
-      scope: auditScope || null,
-      method: auditMethod || null,
-      startDate: plannedStartDate || null,
-      endDate: plannedEndDate || null,
+    siteId: Number(selectedSiteId),
+    name: auditName.trim(),
 
-      // Backend validation expects strings (not null). Send empty strings when not provided.
-      auditorName: (auditLeader ?? "").trim(),
-      auditeeName: (auditeeMainContact ?? "").trim(),
-      auditeeEmail: (auditeeContactEmail ?? "").trim(),
+    scope: auditScope || null,
+    method: auditMethod || null,
+    startDate: plannedStartDate || null,
+    endDate: plannedEndDate || null,
 
-      // ✅ FIX 1: send processMode so backend keeps processIds
-      processMode: selectedProcessMode as any,
-      processIds: selectedProcessMode === "all" ? [] : selectedProcessIdsNumber,
+    auditorName: (auditLeader ?? "").trim(),
+    auditeeName: (auditeeMainContact ?? "").trim(),
+    auditeeEmail: (auditeeContactEmail ?? "").trim(),
 
-      entityName: auditedEntityName || null,
-      address: auditedEntityAddress || null,
-      exclusions: exclusions || null,
-      productFamilies: productFamilies || null,
-      markets: markets || null,
-      auditTeam: auditTeamMembers || null,
-      standardsVersion: versionReferentials || null,
-    };
+    // ✅ Critical: persist selected processes on the audit so backend can filter questions.
+    processMode: effectiveProcessMode,
+    processIds: effectiveProcessIds,
 
-    const res: any = await createOrUpdateAuditDraft.mutateAsync(payload);
-    const id = Number(res?.auditId);
-    if (!Number.isFinite(id) || id <= 0) throw new Error("AuditId invalide");
-    setAuditId(id);
-    return id;
+    entityName: auditedEntityName || null,
+    address: auditedEntityAddress || null,
+    exclusions: exclusions || null,
+    productFamilies: productFamilies || null,
+    markets: markets || null,
+    auditTeam: auditTeamMembers || null,
+    standardsVersion: versionReferentials || null,
   };
+
+  const res: any = await createOrUpdateAuditDraft.mutateAsync(payload);
+  const id = Number(res?.auditId);
+  if (!Number.isFinite(id) || id <= 0) throw new Error("AuditId invalide");
+  setAuditId(id);
+  return id;
+};
 
   // Auth gate
   if (!isAuthenticated) {
