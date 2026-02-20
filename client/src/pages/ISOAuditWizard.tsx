@@ -75,7 +75,8 @@ export default function ISOAuditWizard() {
   const [auditeeMainContact, setAuditeeMainContact] = useState<string>("");
   const [auditeeContactEmail, setAuditeeContactEmail] = useState<string>("");
   const [selectedProcessMode, setSelectedProcessMode] = useState<string>("all"); // all | select
-  // ⚠️ Keep as string to avoid NaN issues if API returns ids as strings
+  // ✅ Keep as string ids (MDR canonical process ids are slugs)
+  // ISO backend can handle both numeric ids and slugs thanks to buildProcessCandidates()
   const [selectedProcessIds, setSelectedProcessIds] = useState<string[]>([]);
 
   // Step 2 - context fields
@@ -91,7 +92,9 @@ export default function ISOAuditWizard() {
   const { data: isoQualification, isLoading: loadingIsoQualification } = trpc.iso.getQualification.useQuery({});
   const { data: standards, isLoading: loadingStandards } = trpc.iso.getStandards.useQuery();
 
-  // ✅ MUST be identical to MDR
+  // ✅ MUST be identical to MDR (canonical list of process slugs)
+  // IMPORTANT: MDR processes are { id: string(slug), name: string }
+  // Do NOT coerce ids to numbers (would become NaN and break filtering)
   const { data: processesData, isLoading: loadingProcesses } = trpc.mdr.getProcesses.useQuery();
   const {
     data: sitesData,
@@ -122,11 +125,9 @@ export default function ISOAuditWizard() {
     return standardCode === "ISO9001" ? [2] : [3];
   }, [standardCode]);
 
-  const selectedProcessIdsNumber = useMemo(() => {
-    // Backend expects number[]; filter any non-numeric values defensively
-    return selectedProcessIds
-      .map((x) => Number(x))
-      .filter((n) => Number.isFinite(n) && n > 0);
+  const selectedProcessIdsSafe = useMemo(() => {
+    // Keep only non-empty strings
+    return (selectedProcessIds ?? []).map((x) => String(x ?? "").trim()).filter(Boolean);
   }, [selectedProcessIds]);
 
   // Mutations
@@ -204,8 +205,8 @@ export default function ISOAuditWizard() {
       processMode: selectedProcessMode as any,
       processIds:
         selectedProcessMode === "all"
-          ? processes.map((p: any) => Number(p.id)).filter((n: number) => Number.isFinite(n) && n > 0)
-          : selectedProcessIdsNumber,
+          ? processes.map((p: any) => String(p.id ?? "").trim()).filter(Boolean)
+          : selectedProcessIdsSafe,
 
       entityName: auditedEntityName || null,
       address: auditedEntityAddress || null,
