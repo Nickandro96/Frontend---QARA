@@ -57,39 +57,6 @@ type ResponseRow = {
   updatedAt?: any;
 };
 
-function normalizeToStrings(v: any): string[] {
-  if (Array.isArray(v)) return v.map((x) => String(x).trim()).filter(Boolean);
-  if (v == null) return [];
-  const s = String(v).trim();
-  return s ? [s] : [];
-}
-
-function questionMatchesSelectedProcesses(q: any, selectedProcessIds: Array<string | number>, processIdToName: Record<string, string>) {
-  if (!q || !selectedProcessIds?.length) return true;
-
-  const selectedIds = selectedProcessIds
-    .map((x) => (typeof x === "number" ? x : Number(String(x))))
-    .filter((n) => Number.isFinite(n) && n > 0);
-
-  // 1) Direct match on processId
-  const qPid = typeof q.processId === "number" ? q.processId : Number(String(q.processId ?? ""));
-  if (Number.isFinite(qPid) && selectedIds.includes(qPid)) return true;
-
-  // 2) Match on applicableProcesses (JSON array) by id or name
-  const ap = safeArray<any>(q.applicableProcesses);
-  const apStrings = ap.flatMap((x) => normalizeToStrings(x).map((s) => s.toLowerCase()));
-  if (!apStrings.length) return false;
-
-  for (const pid of selectedIds) {
-    const idStr = String(pid).toLowerCase();
-    const name = (processIdToName[String(pid)] || "").toLowerCase();
-    if (apStrings.includes(idStr)) return true;
-    if (name && apStrings.includes(name)) return true;
-  }
-
-  return false;
-}
-
 function safeArray<T>(v: any): T[] {
   return Array.isArray(v) ? v : [];
 }
@@ -256,19 +223,6 @@ export default function ISOAuditDrilldown() {
     error: contextError,
   } = trpc.iso.getAuditContext.useQuery({ auditId: (auditId ?? 0) as number }, { enabled });
 
-  // ✅ We reuse the same processes source as MDR (single truth)
-  const { data: processesData } = trpc.mdr.getProcesses.useQuery(undefined as any, { enabled } as any);
-
-  const processIdToName = useMemo(() => {
-    const arr = (processesData as any)?.processes;
-    const list = Array.isArray(arr) ? arr : Array.isArray(processesData) ? (processesData as any[]) : [];
-    const map: Record<string, string> = {};
-    for (const p of list) {
-      if (p?.id != null && p?.name) map[String(p.id)] = String(p.name);
-    }
-    return map;
-  }, [processesData]);
-
   const {
     data: questionsPayload,
     isLoading: loadingQuestions,
@@ -277,20 +231,8 @@ export default function ISOAuditDrilldown() {
 
   const questions: Question[] = useMemo(() => {
     const q = (questionsPayload as any)?.questions;
-    const all = Array.isArray(q) ? (q as Question[]) : [];
-
-    // ✅ Safety-net: if backend returns unfiltered questions (processIds empty or mismatch),
-    // we re-apply process filtering client-side using the auditContext.processIds.
-    const selected = safeArray<any>((auditContext as any)?.processIds).map((x) => (typeof x === "object" && x ? ((x as any).id ?? (x as any).value ?? (x as any).processId) : x));
-    const selectedClean = selected
-      .map((x) => (typeof x === "number" ? x : String(x ?? "").trim()))
-      .filter((x) => String(x).length > 0);
-
-    if (!selectedClean.length) return all;
-
-    const filtered = all.filter((row: any) => questionMatchesSelectedProcesses(row, selectedClean, processIdToName));
-    return filtered.length > 0 ? filtered : all;
-  }, [questionsPayload, auditContext, processIdToName]);
+    return Array.isArray(q) ? q : [];
+  }, [questionsPayload]);
 
   const {
     data: responsesData,
@@ -400,11 +342,11 @@ export default function ISOAuditDrilldown() {
   const handleSetCompliance = (value: ResponseValue) => {
     if (!currentQuestion?.questionKey) return;
 
-    // ✅ FIX: link response to the question's processId first
-    const qProcessId =
-      (currentQuestion as any)?.processId ??
-      (auditContext as any)?.processIds?.[0] ??
-      null;
+    // ✅ Link response to the question's processId first.
+    // auditContext.processIds can be MDR slugs (string) -> never store that into int processId.
+    const ctxPidRaw = (auditContext as any)?.processIds?.[0];
+    const ctxPidNum = Number.isFinite(Number(ctxPidRaw)) ? Number(ctxPidRaw) : null;
+    const qProcessId = (currentQuestion as any)?.processId ?? ctxPidNum ?? null;
 
     setDraft(currentQuestion.questionKey, {
       responseValue: value,
@@ -461,7 +403,11 @@ export default function ISOAuditDrilldown() {
       processId:
         localDrafts[currentQuestion.questionKey]?.processId ??
         currentResponse?.processId ??
-        ((currentQuestion as any)?.processId ?? (auditContext as any)?.processIds?.[0] ?? null),
+        (() => {
+          const ctxPidRaw = (auditContext as any)?.processIds?.[0];
+          const ctxPidNum = Number.isFinite(Number(ctxPidRaw)) ? Number(ctxPidRaw) : null;
+          return (currentQuestion as any)?.processId ?? ctxPidNum ?? null;
+        })(),
 
       answeredBy: localDrafts[currentQuestion.questionKey]?.answeredBy ?? currentResponse?.answeredBy ?? ((auditContext as any)?.userId ?? (auditContext as any)?.createdBy ?? 1),
       answeredAt: localDrafts[currentQuestion.questionKey]?.answeredAt ?? currentResponse?.answeredAt ?? new Date().toISOString(),
