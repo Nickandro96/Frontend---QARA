@@ -629,21 +629,9 @@ export default function ISOAuditDrilldown() {
   const crit = formatCriticality(currentQuestion?.criticality ?? null);
   // Prefer `risks` ONLY if non-empty; otherwise fallback to singular `risk`
   const riskText = useMemo(() => {
-    // Prefer `risk` (single) when `risks` is empty / "[]" (text column often used inconsistently)
     const rAny: any = (currentQuestion as any) || {};
-    const risks = rAny.risks;
-
-    // If risks is an array and non-empty -> use it
-    if (Array.isArray(risks) && risks.length > 0) return formatRiskText(risks);
-
-    // If risks is a non-empty string and not a JSON empty array -> use it
-    if (typeof risks === "string") {
-      const trimmed = risks.trim();
-      if (trimmed && trimmed !== "[]" && trimmed !== "{}") return formatRiskText(trimmed);
-    }
-
-    // Fallback to risk (single)
-    return formatRiskText(rAny.risk ?? null);
+    // Standard: prefer the single source column `risk`. Legacy support: fallback to `risks`.
+    return formatRiskText(rAny.risk ?? rAny.risks ?? null);
   }, [currentQuestion?.questionKey, (currentQuestion as any)?.risk, (currentQuestion as any)?.risks]);
 
   const valueNow: ResponseValue =
