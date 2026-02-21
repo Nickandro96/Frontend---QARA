@@ -314,6 +314,9 @@ export default function ISOAuditDrilldown() {
 
   const totalQuestions = questions.length;
 
+  // ✅ Non-blocking warning: responses load may fail, but we can still run the audit
+  const responsesWarning = (responsesError as any)?.message ? String((responsesError as any).message) : null;
+
   const currentQuestion = useMemo(() => {
     if (!questions || questions.length === 0) return null;
     return questions[Math.min(Math.max(currentIndex, 0), questions.length - 1)];
@@ -568,7 +571,7 @@ export default function ISOAuditDrilldown() {
     );
   }
 
-  if (contextError || questionsError || responsesError) {
+  if (contextError || questionsError) {
     return (
       <div className="p-6">
         <Card>
@@ -704,6 +707,13 @@ export default function ISOAuditDrilldown() {
                 Progression {progressPct}% • Score conformité live {complianceScore}%
               </div>
             </div>
+
+            {responsesWarning && (
+              <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                ⚠️ Certaines réponses existantes n’ont pas pu être chargées (vous pouvez quand même continuer l’audit).
+                <div className="mt-1 opacity-80">{responsesWarning}</div>
+              </div>
+            )}
 
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant={crit.variant as any}>{crit.label}</Badge>
