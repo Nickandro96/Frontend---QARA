@@ -628,23 +628,23 @@ export default function ISOAuditDrilldown() {
   const articleBadge = extractArticleBadge(currentQuestion?.article ?? null);
   const crit = formatCriticality(currentQuestion?.criticality ?? null);
   // Prefer `risks` ONLY if non-empty; otherwise fallback to singular `risk`
-    const isMeaningful = (v: any) => {
-    if (v == null) return false;
-    if (Array.isArray(v)) return v.length > 0;
-    if (typeof v === "string") {
-      const s = v.trim();
-      if (!s) return false;
-      if (s === "[]" || s === "{}" || s === '""') return false;
-      return true;
+  const riskText = useMemo(() => {
+    // Prefer `risk` (single) when `risks` is empty / "[]" (text column often used inconsistently)
+    const rAny: any = (currentQuestion as any) || {};
+    const risks = rAny.risks;
+
+    // If risks is an array and non-empty -> use it
+    if (Array.isArray(risks) && risks.length > 0) return formatRiskText(risks);
+
+    // If risks is a non-empty string and not a JSON empty array -> use it
+    if (typeof risks === "string") {
+      const trimmed = risks.trim();
+      if (trimmed && trimmed !== "[]" && trimmed !== "{}") return formatRiskText(trimmed);
     }
-    return true;
-  };
 
-  // Prefer `risks` ONLY if meaningful; otherwise fallback to singular `risk`
-  const riskValue = isMeaningful(currentQuestion?.risks) ? currentQuestion!.risks : currentQuestion?.risk ?? null;
-
-  const riskText = formatRiskText(riskValue);
-
+    // Fallback to risk (single)
+    return formatRiskText(rAny.risk ?? null);
+  }, [currentQuestion?.questionKey, (currentQuestion as any)?.risk, (currentQuestion as any)?.risks]);
 
   const valueNow: ResponseValue =
     localDrafts[currentQuestion!.questionKey]?.responseValue ??
