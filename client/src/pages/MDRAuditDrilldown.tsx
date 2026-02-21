@@ -526,7 +526,7 @@ export default function MDRAuditDrilldown() {
 
   const articleBadge = extractArticleBadge(currentQuestion?.article ?? null);
   const crit = formatCriticality(currentQuestion?.criticality ?? null);
-  const riskText = formatRiskText(currentQuestion?.risk ?? (currentQuestion as any)?.risks ?? null);
+  const riskText = formatRiskText(currentQuestion?.risks ?? currentQuestion?.risk ?? null);
 
   const valueNow: ResponseValue =
     localDrafts[currentQuestion!.questionKey]?.responseValue ??
