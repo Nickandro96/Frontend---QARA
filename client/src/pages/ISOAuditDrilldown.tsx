@@ -628,14 +628,23 @@ export default function ISOAuditDrilldown() {
   const articleBadge = extractArticleBadge(currentQuestion?.article ?? null);
   const crit = formatCriticality(currentQuestion?.criticality ?? null);
   // Prefer `risks` ONLY if non-empty; otherwise fallback to singular `risk`
-  const riskValue =
-    Array.isArray(currentQuestion?.risks) && currentQuestion!.risks.length > 0
-      ? currentQuestion!.risks
-      : currentQuestion?.risks
-        ? currentQuestion.risks
-        : currentQuestion?.risk ?? null;
+    const isMeaningful = (v: any) => {
+    if (v == null) return false;
+    if (Array.isArray(v)) return v.length > 0;
+    if (typeof v === "string") {
+      const s = v.trim();
+      if (!s) return false;
+      if (s === "[]" || s === "{}" || s === '""') return false;
+      return true;
+    }
+    return true;
+  };
+
+  // Prefer `risks` ONLY if meaningful; otherwise fallback to singular `risk`
+  const riskValue = isMeaningful(currentQuestion?.risks) ? currentQuestion!.risks : currentQuestion?.risk ?? null;
 
   const riskText = formatRiskText(riskValue);
+
 
   const valueNow: ResponseValue =
     localDrafts[currentQuestion!.questionKey]?.responseValue ??
