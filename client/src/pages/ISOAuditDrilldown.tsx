@@ -346,6 +346,18 @@ export default function ISOAuditDrilldown() {
     return responsesMap.get(currentQuestion.questionKey) || null;
   }, [responsesMap, currentQuestion]);
 
+  // ✅ Ensure the risk banner ALWAYS follows the current question.
+  // We compute it in an effect bound to questionKey + risk payload to avoid any stale render/memo edge-cases.
+  const [riskText, setRiskText] = useState<string>(computeRiskTextForQuestion(currentQuestion));
+
+  useEffect(() => {
+    setRiskText(computeRiskTextForQuestion(currentQuestion));
+  }, [
+    currentQuestion?.questionKey,
+    (currentQuestion as any)?.risk,
+    (currentQuestion as any)?.risks,
+  ]);
+
   const answeredCount = useMemo(() => {
     let c = 0;
     for (const q of questions) {
@@ -649,9 +661,6 @@ export default function ISOAuditDrilldown() {
 
   const articleBadge = extractArticleBadge(currentQuestion?.article ?? null);
   const crit = formatCriticality(currentQuestion?.criticality ?? null);
-  // Prefer `risks` ONLY if non-empty; otherwise fallback to singular `risk`
-  // NOTE: no hooks here (avoid React hook order issues due to early returns)
-  const riskText = computeRiskTextForQuestion(currentQuestion);
 
   const valueNow: ResponseValue =
     localDrafts[currentQuestion!.questionKey]?.responseValue ??
