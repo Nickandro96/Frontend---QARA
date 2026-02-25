@@ -265,6 +265,20 @@ export default function MDRAuditDrilldown() {
     return responsesMap.get(currentQuestion.questionKey) || null;
   }, [responsesMap, currentQuestion]);
 
+  // ✅ Ensure the risk banner ALWAYS follows the current question.
+  // We compute it in an effect bound to questionKey + risk payload to avoid any stale render/memo edge-cases.
+  const [riskText, setRiskText] = useState<string>(
+    formatRiskText(currentQuestion?.risks ?? currentQuestion?.risk ?? null),
+  );
+
+  useEffect(() => {
+    setRiskText(formatRiskText(currentQuestion?.risks ?? currentQuestion?.risk ?? null));
+  }, [
+    currentQuestion?.questionKey,
+    (currentQuestion as any)?.risk,
+    (currentQuestion as any)?.risks,
+  ]);
+
   const answeredCount = useMemo(() => {
     let c = 0;
     for (const q of questions) {
@@ -553,7 +567,6 @@ export default function MDRAuditDrilldown() {
 
   const articleBadge = extractArticleBadge(currentQuestion?.article ?? null);
   const crit = formatCriticality(currentQuestion?.criticality ?? null);
-  const riskText = formatRiskText(currentQuestion?.risks ?? currentQuestion?.risk ?? null);
 
   const valueNow: ResponseValue =
     localDrafts[currentQuestion!.questionKey]?.responseValue ??
