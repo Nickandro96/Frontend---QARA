@@ -161,7 +161,34 @@ function formatRiskText(risk: any): string {
     return "Si non conforme, justifier l'impact certification, patient et inspection, puis documenter le plan d'action correctif.";
   }
 
-  if (typeof risk === "string") return risk;
+  // If risk is a JSON string like '["..."]', extract the first meaningful string for display
+  if (typeof risk === "string") {
+    const s = risk.trim();
+    if (
+      (s.startsWith("[") && s.endsWith("]")) ||
+      (s.startsWith("{") && s.endsWith("}")) ||
+      (s.startsWith('"') && s.endsWith('"'))
+    ) {
+      try {
+        const parsed: any = JSON.parse(s);
+        if (Array.isArray(parsed)) {
+          const first = parsed.find((x) => typeof x === "string" && x.trim().length > 0);
+          return first ? first : s;
+        }
+        if (typeof parsed === "string") return parsed;
+        if (parsed && typeof parsed === "object" && typeof parsed.text === "string") return parsed.text;
+        return s;
+      } catch {
+        return s;
+      }
+    }
+    return s;
+  }
+
+  if (Array.isArray(risk)) {
+    const first = risk.find((x) => typeof x === "string" && x.trim().length > 0);
+    if (first) return first;
+  }
 
   try {
     return JSON.stringify(risk, null, 2);
