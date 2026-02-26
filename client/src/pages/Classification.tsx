@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -82,6 +82,25 @@ export default function Classification() {
   const [exportingExcel, setExportingExcel] = useState(false);
   const [exportingPDF, setExportingPDF] = useState(false);
 
+  // ✅ Hooks must be called unconditionally. Keep mutations above any early returns.
+  const classifyMutation = trpc.classification.classify.useMutation({
+    onSuccess: (result) => {
+      setClassificationResult(result);
+      setCurrentStep("result");
+      toast.success(t("classification.successMessage", "Classification effectuée avec succès !"));
+    },
+    onError: (error) => {
+      toast.error(t("classification.errorMessage", "Erreur : {{message}}", { message: error.message }));
+    },
+  });
+
+  // ✅ Avoid side-effects inside render
+  useEffect(() => {
+    if (!loading && !isAuthenticated) {
+      window.location.href = getLoginUrl();
+    }
+  }, [loading, isAuthenticated]);
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -91,7 +110,6 @@ export default function Classification() {
   }
 
   if (!isAuthenticated) {
-    window.location.href = getLoginUrl();
     return null;
   }
 
@@ -100,17 +118,6 @@ export default function Classification() {
   if (tier === "FREE") {
     return <UpgradeRequired feature="la classification MDR" />;
   }
-
-  const classifyMutation = trpc.classification.classify.useMutation({
-    onSuccess: (result) => {
-      setClassificationResult(result);
-      setCurrentStep("result");
-      toast.success(t('classification.successMessage', 'Classification effectuée avec succès !'));
-    },
-    onError: (error) => {
-      toast.error(t('classification.errorMessage', 'Erreur : {{message}}', { message: error.message }));
-    }
-  });
 
   const steps: { id: WizardStep; title: string; description: string }[] = [
     { id: "general", title: t('classification.steps.general', 'Informations générales'), description: t('classification.steps.generalDesc', 'Type de dispositif') },
