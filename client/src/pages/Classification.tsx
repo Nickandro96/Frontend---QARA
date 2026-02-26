@@ -71,6 +71,8 @@ interface ClassificationAnswers {
   software_purpose?: string[];
 }
 
+function uniq<T>(arr: T[]): T[] { return Array.from(new Set(arr)); }
+
 function normalizeClassificationResult(raw: any) {
   // tRPC client usually unwraps to the procedure output.
   // However, network previews often show { result: { data: ... } }.
@@ -166,12 +168,120 @@ export default function Classification() {
     });
   };
 
+  // ✅ Validation "Annexe VIII-ready" (bloquant)
+  const getStepErrors = (step: WizardStep, a: ClassificationAnswers): string[] => {
+    const errs: string[] = [];
+
+    const requireBool = (label: string, v: boolean | undefined) => {
+      if (v === undefined) errs.push(label);
+    };
+
+    const requireNonEmptyArray = (label: string, v: string[] | undefined) => {
+      if (!v || v.length === 0) errs.push(label);
+    };
+
+    switch (step) {
+      case "general":
+        if (!a.device_type) errs.push("Type de dispositif (DM / accessoire)");
+        requireBool("Dispositif actif (Oui/Non)", a.is_active);
+        requireBool("Logiciel (Oui/Non)", a.is_software);
+        break;
+
+      case "invasiveness":
+        if (!a.invasiveness) errs.push("Niveau d’invasivité");
+        if (a.invasiveness && a.invasiveness !== "non-invasif") {
+          requireBool("Implantable (Oui/Non)", a.implantable);
+          requireBool("Contact système nerveux central (Oui/Non)", a.contact_nervous_system);
+          requireBool("Contact système circulatoire central (Oui/Non)", a.contact_circulatory_system);
+        }
+        break;
+
+      case "duration":
+        if (!a.duration) errs.push("Durée de contact (transitoire / court terme / long terme)");
+        break;
+
+      case "anatomical_site":
+        requireNonEmptyArray("Site(s) anatomique(s) de contact", a.contact_site);
+        if (a.contact_site?.includes("peau_lesee") && !a.wound_depth) {
+          errs.push("Profondeur de la plaie (superficielle / profonde)");
+        }
+        break;
+
+      case "function_energy":
+        requireNonEmptyArray("Fonction(s) du dispositif (au moins 1)", a.function);
+        // Si énergie ou administration substance → danger level nécessaire pour appliquer règles 9/12 correctement
+        if (a.function?.includes("administrer_energie") || a.function?.includes("administrer_medicament")) {
+          if (!a.danger_level) errs.push("Niveau de danger (normal / potentiellement dangereux)");
+        }
+        break;
+
+      case "sterility":
+        requireBool("Fourni stérile (Oui/Non)", a.provided_sterile);
+        requireBool("Fonction de mesure (Oui/Non)", a.has_measuring_function);
+        requireBool("Instrument chirurgical réutilisable (Oui/Non)", a.reusable_surgical);
+        break;
+
+      case "special_cases":
+        // Si nanomatériaux → exposition interne doit être renseignée
+        if (a.contains_nanomaterials) requireBool("Exposition interne élevée (Oui/Non)", a.high_internal_exposure);
+        break;
+
+      case "software":
+        // Ce step n’est obligatoire que si is_software = true
+        if (a.is_software) {
+          requireNonEmptyArray("Finalité du logiciel (au moins 1)", a.software_purpose);
+          if (!a.danger_level) errs.push("Impact clinique du logiciel (normal / potentiellement dangereux)");
+        }
+        break;
+
+      case "result":
+        break;
+    }
+
+    return errs;
+  };
+
+  const showStepErrors = (errs: string[]) => {
+    toast.error("Champs obligatoires manquants", {
+      description: errs.map((e) => `• ${e}`).join("\n"),
+    });
+  };
+
+
   const goToNextStep = () => {
+    const errs = getStepErrors(currentStep, answers);
+    if (errs.length) {
+      showStepErrors(errs);
+      return;
+    }
+
     if (currentStepIndex < steps.length - 2) {
-      setCurrentStep(steps[currentStepIndex + 1].id);
+      // Skip software step if not applicable
+      const next = steps[currentStepIndex + 1].id;
+      if (next === "software" && !answers.is_software) {
+        setCurrentStep("result");
+        // Submit immediately (all previous steps validated)
+        classifyMutation.mutate({
+          ...answers,
+          software_purpose: answers.software_purpose ?? [],
+        });
+        return;
+      }
+      setCurrentStep(next);
     } else {
-      // Soumettre la classification
-      classifyMutation.mutate(answers);
+      // Soumettre la classification (validation globale avant envoi)
+      const globalMissing: string[] = [];
+      for (const s of steps.map((x) => x.id)) {
+        globalMissing.push(...getStepErrors(s, answers));
+      }
+      if (globalMissing.length) {
+        showStepErrors(uniq(globalMissing));
+        return;
+      }
+      classifyMutation.mutate({
+        ...answers,
+        software_purpose: answers.software_purpose ?? [],
+      });
     }
   };
 
