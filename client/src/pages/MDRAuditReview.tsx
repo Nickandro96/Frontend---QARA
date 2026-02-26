@@ -30,6 +30,8 @@ export default function MDRAuditReview() {
 
   const [, setLocation] = useLocation();
 
+  const utils = trpc.useUtils();
+
   const dashboardQuery = trpc.mdr.getAuditDashboard.useQuery({ auditId: (auditId ?? 0) as number }, { enabled });
 
   const listAuditsQuery = trpc.mdr.listAudits.useQuery(undefined, { enabled: true });
@@ -61,6 +63,174 @@ export default function MDRAuditReview() {
   }, [listAuditsQuery.data]);
 
   const printReport = () => window.print();
+
+  function escapeHtml(s: string) {
+    return String(s ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function downloadAsWord(filename: string, htmlBody: string) {
+    const full = `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>${escapeHtml(filename)}</title>
+<style>
+  body{font-family:Calibri,Arial,sans-serif; font-size:11pt; color:#111827;}
+  h1{font-size:18pt;margin:0 0 8px 0;}
+  h2{font-size:14pt;margin:18px 0 8px 0;}
+  h3{font-size:12pt;margin:14px 0 6px 0;}
+  .meta{font-size:10pt;color:#374151;margin-bottom:10px;}
+  .pill{display:inline-block;padding:2px 8px;border-radius:999px;border:1px solid #e5e7eb;font-size:9pt;margin-right:6px;}
+  table{border-collapse:collapse;width:100%; margin-top:8px;}
+  th,td{border:1px solid #e5e7eb;padding:6px;vertical-align:top;}
+  th{background:#f8fafc;text-align:left;}
+  .small{font-size:9pt;color:#4b5563;}
+  .nc{color:#b91c1c;font-weight:600;}
+  .partial{color:#b45309;font-weight:600;}
+  .ok{color:#047857;font-weight:600;}
+</style>
+</head>
+<body>
+${htmlBody}
+</body>
+</html>`;
+    const blob = new Blob([full], { type: "application/msword;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename.endsWith(".doc") ? filename : `${filename}.doc`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  const downloadReport = async () => {
+    if (!auditId) return;
+    const report = await utils.mdr.getAuditReport.fetch({ auditId });
+
+    const a = (report as any)?.audit || {};
+    const questions = Array.isArray((report as any)?.questions) ? (report as any).questions : [];
+
+    const findings = questions.filter((q: any) => q.responseValue === "non_compliant" || q.responseValue === "partial");
+    const answered = questions.filter((q: any) => q.responseValue && q.responseValue !== "in_progress").length;
+    const total = questions.length;
+
+    const now = new Date();
+    const docName = `Rapport_Audit_MDR_${a?.id ?? auditId}_${now.toISOString().slice(0, 10)}`;
+
+    const html = `
+      <h1>Rapport d’audit – MDR 2017/745</h1>
+      <div class="meta">
+        <span class="pill">Audit #${escapeHtml(a?.id)}</span>
+        <span class="pill">Statut: ${escapeHtml(a?.status ?? "n/a")}</span>
+        <span class="pill">Rôle: ${escapeHtml(a?.economicRole ?? "n/a")}</span>
+        <span class="pill">Site: ${escapeHtml(a?.siteName ?? "n/a")}</span>
+      </div>
+
+      <h2>1. Informations générales</h2>
+      <table>
+        <tr><th>Intitulé</th><td>${escapeHtml(a?.name ?? "")}</td></tr>
+        <tr><th>Date de génération</th><td>${escapeHtml(now.toLocaleString())}</td></tr>
+        <tr><th>Périmètre (processus drilldown)</th><td>${escapeHtml((a?.processIds ?? []).join(" • ") || "n/a")}</td></tr>
+        <tr><th>Référentiel(s)</th><td>${escapeHtml((a?.referentialIds ?? []).join(", ") || "MDR")}</td></tr>
+      </table>
+
+      <h2>2. Synthèse</h2>
+      <table>
+        <tr><th>Total questions (scope audit)</th><td>${total}</td></tr>
+        <tr><th>Questions répondues</th><td>${answered}</td></tr>
+        <tr><th>Constats (NC + partiels)</th><td>${findings.length}</td></tr>
+      </table>
+      <p class="small">
+        Note: ce rapport est généré automatiquement à partir des réponses saisies dans l’outil. Il est conçu pour un format « IRCA-like »
+        (constats, preuves attendues, commentaires, actions) et peut être enrichi avec des champs audit (équipe, méthode, durée, etc.).
+      </p>
+
+      <h2>3. Constats et écarts</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Article / Annexe</th>
+            <th>Question</th>
+            <th>Statut</th>
+            <th>Criticité</th>
+            <th>Risque</th>
+            <th>Preuves attendues</th>
+            <th>Commentaire / Note</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${
+            findings.length
+              ? findings
+                  .map((q: any) => {
+                    const status = String(q.responseValue || "");
+                    const cls = status === "non_compliant" ? "nc" : "partial";
+                    return `
+                      <tr>
+                        <td>${escapeHtml(q.article ?? "")}${q.annexe ? " / " + escapeHtml(q.annexe) : ""}</td>
+                        <td>${escapeHtml(q.questionText ?? "")}</td>
+                        <td class="${cls}">${escapeHtml(status)}</td>
+                        <td>${escapeHtml(q.criticality ?? "")}</td>
+                        <td>${escapeHtml(q.risk ?? "")}</td>
+                        <td>${escapeHtml(q.expectedEvidence ?? "")}</td>
+                        <td>${escapeHtml(q.responseComment ?? "")}${q.note ? "<br/><span class='small'>Note: " + escapeHtml(q.note) + "</span>" : ""}</td>
+                      </tr>
+                    `;
+                  })
+                  .join("")
+              : `<tr><td colspan="7" class="small">Aucun écart (NC/partiel) détecté dans les réponses enregistrées.</td></tr>`
+          }
+        </tbody>
+      </table>
+
+      <h2>4. Liste complète (traceability)</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Article</th>
+            <th>Question</th>
+            <th>Statut</th>
+            <th>Commentaire</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${
+            questions
+              .map((q: any, idx: number) => {
+                const s = String(q.responseValue || "in_progress");
+                const cls = s === "non_compliant" ? "nc" : s === "partial" ? "partial" : "ok";
+                return `
+                  <tr>
+                    <td>${idx + 1}</td>
+                    <td>${escapeHtml(q.article ?? "")}</td>
+                    <td>${escapeHtml(q.questionText ?? "")}</td>
+                    <td class="${cls}">${escapeHtml(s)}</td>
+                    <td>${escapeHtml(q.responseComment ?? "")}</td>
+                  </tr>
+                `;
+              })
+              .join("")
+          }
+        </tbody>
+      </table>
+
+      <h2>5. Conclusion</h2>
+      <p>
+        Sur la base du périmètre audité, le niveau de conformité observé doit être confirmé par revue des preuves et validation de la
+        criticité des écarts. Les actions correctives/préventives (CAPA) devront être planifiées, assignées et suivies jusqu’à
+        vérification d’efficacité.
+      </p>
+    `;
+
+    downloadAsWord(docName, html);
+  };
 
   if (!enabled) {
     return (
@@ -111,6 +281,7 @@ export default function MDRAuditReview() {
             <Badge variant="outline">Statut: {data?.audit?.status || "draft"}</Badge>
             <Badge variant="outline">Progression: {percent(stats.answered, stats.totalQuestions)}%</Badge>
             <Button variant="outline" onClick={() => setLocation("/mdr")}><ArrowLeft className="mr-2 h-4 w-4" />Liste audits</Button>
+            <Button variant="outline" onClick={downloadReport}><Download className="mr-2 h-4 w-4" />Télécharger rapport</Button>
             <Button variant="outline" onClick={printReport}><Printer className="mr-2 h-4 w-4" />Imprimer rapport</Button>
             <Button variant="outline" onClick={() => setLocation(`/mdr/audit/${auditId}`)}><RefreshCw className="mr-2 h-4 w-4" />Reprendre audit</Button>
           </div>
