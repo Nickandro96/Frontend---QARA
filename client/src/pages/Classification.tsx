@@ -230,24 +230,46 @@ export default function Classification() {
   const canProceed = () => {
     switch (currentStep) {
       case "general":
-        return answers.device_type && answers.is_active !== undefined;
+        return Boolean(answers.device_type) && answers.is_active !== undefined && answers.is_software !== undefined;
       case "invasiveness":
-        return answers.invasiveness !== undefined;
+        if (answers.invasiveness === undefined) return false;
+        if (answers.invasiveness !== "non-invasif") {
+          return (
+            answers.implantable !== undefined &&
+            answers.contact_nervous_system !== undefined &&
+            answers.contact_circulatory_system !== undefined
+          );
+        }
+        return true;
       case "duration":
-        // Annex VIII classification frequently depends on contact duration.
-        // We require it for all devices to improve reliability.
+        // ✅ Durée = critère clé Annexe VIII. On la rend obligatoire pour une classification fiable.
         return answers.duration !== undefined;
       case "anatomical_site": {
-        const hasSite = Array.isArray(answers.contact_site) && answers.contact_site.length > 0;
-        if (!hasSite) return false;
-        // If injured skin selected, depth is mandatory for Rule 4.
+        const sitesOk = Array.isArray(answers.contact_site) && answers.contact_site.length > 0;
+        if (!sitesOk) return false;
         if (answers.contact_site?.includes("peau_lesee")) {
           return answers.wound_depth !== undefined;
         }
         return true;
       }
+      case "function_energy": {
+        const funcsOk = Array.isArray(answers.function) && answers.function.length > 0;
+        if (!funcsOk) return false;
+        const needsDanger =
+          answers.function?.includes("administrer_energie") ||
+          answers.function?.includes("administrer_medicament") ||
+          answers.is_software === true;
+        if (needsDanger && !answers.danger_level) return false;
+        return true;
+      }
+      case "sterility":
+        return (
+          answers.provided_sterile !== undefined &&
+          answers.has_measuring_function !== undefined &&
+          answers.reusable_surgical !== undefined
+        );
       case "software":
-        return !answers.is_software || (Array.isArray(answers.software_purpose) && answers.software_purpose.length > 0);
+        return !answers.is_software || (Array.isArray(answers.software_purpose) && answers.software_purpose.length > 0 && !!answers.danger_level);
       default:
         return true;
     }
@@ -485,43 +507,47 @@ export default function Classification() {
               </div>
             )}
 
-            {/* Step: Duration (required for reliability) */}
-            {currentStep === "duration" && (
-              <div className="space-y-6">
-                <div>
-                  <Label className="text-base font-semibold mb-3 block">
-                    {t('classification.durationOfUse', 'Durée de contact / d\'utilisation')} *
-                  </Label>
-                  <p className="text-sm text-slate-600 mb-3">
-                    <Info className="inline w-4 h-4 mr-1" />
-                    Cette donnée est utilisée par les règles de l’Annexe VIII (ex. règles 4/5/6/7/8).
-                  </p>
-                  <RadioGroup
-                    value={answers.duration}
-                    onValueChange={(value) => updateAnswer("duration", value)}
-                  >
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="transitoire" id="transitoire" />
-                      <Label htmlFor="transitoire" className="cursor-pointer">
-                        {t('classification.transient', 'Transitoire (≤ 60 minutes)')}
-                      </Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="court_terme" id="court_terme" />
-                      <Label htmlFor="court_terme" className="cursor-pointer">
-                        {t('classification.shortTerm', 'Court terme (> 60 min à ≤ 30 jours)')}
-                      </Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="long_terme" id="long_terme" />
-                      <Label htmlFor="long_terme" className="cursor-pointer">
-                        {t('classification.longTerm', 'Long terme (> 30 jours)')}
-                      </Label>
-                    </div>
-                  </RadioGroup>
-                </div>
-              </div>
-            )}
+            {/* Step: Duration */}
+{currentStep === "duration" && (
+  <div className="space-y-6">
+    <Alert>
+      <Info className="h-4 w-4" />
+      <AlertDescription>
+        La durée d’utilisation est un critère clé de l’Annexe VIII. Même pour les DM non invasifs, elle améliore la précision de la classification.
+      </AlertDescription>
+    </Alert>
+
+    <div>
+      <Label className="text-base font-semibold mb-3 block">
+        {t('classification.durationOfUse', "Durée d'utilisation")} *
+      </Label>
+      <RadioGroup
+        value={answers.duration}
+        onValueChange={(value) => updateAnswer("duration", value)}
+      >
+        <div className="flex items-center space-x-2">
+          <RadioGroupItem value="transitoire" id="transitoire" />
+          <Label htmlFor="transitoire" className="cursor-pointer">
+            {t('classification.transient', 'Transitoire (≤ 60 minutes)')}
+          </Label>
+        </div>
+        <div className="flex items-center space-x-2">
+          <RadioGroupItem value="court_terme" id="court_terme" />
+          <Label htmlFor="court_terme" className="cursor-pointer">
+            {t('classification.shortTerm', 'Court terme (> 60 min à ≤ 30 jours)')}
+          </Label>
+        </div>
+        <div className="flex items-center space-x-2">
+          <RadioGroupItem value="long_terme" id="long_terme" />
+          <Label htmlFor="long_terme" className="cursor-pointer">
+            {t('classification.longTerm', 'Long terme (> 30 jours)')}
+          </Label>
+        </div>
+      </RadioGroup>
+    </div>
+  </div>
+)}
+
 
             {/* Step: Anatomical Site */}
             {currentStep === "anatomical_site" && (
