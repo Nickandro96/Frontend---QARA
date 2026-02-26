@@ -265,16 +265,19 @@ export default function MDRAuditDrilldown() {
     return responsesMap.get(currentQuestion.questionKey) || null;
   }, [responsesMap, currentQuestion]);
 
-  // ✅ Ensure the risk banner ALWAYS follows the current question.
-  // We compute it in an effect bound to questionKey + risk payload to avoid any stale render/memo edge-cases.
-  const [riskText, setRiskText] = useState<string>(
-    formatRiskText(currentQuestion?.risks ?? currentQuestion?.risk ?? null),
-  );
-
-  useEffect(() => {
-    setRiskText(formatRiskText(currentQuestion?.risks ?? currentQuestion?.risk ?? null));
+  /**
+   * ✅ Risk banner (dynamic)
+   *
+   * Si le backend renvoie des questions “dupliquées” (même questionKey/questionText mais lignes différentes),
+   * se baser uniquement sur questionKey peut donner un rendu “figé”.
+   *
+   * En dépendant de currentIndex + id, le bandeau se met à jour à chaque navigation.
+   */
+  const riskText = useMemo(() => {
+    return formatRiskText((currentQuestion as any)?.risks ?? (currentQuestion as any)?.risk ?? null);
   }, [
-    currentQuestion?.questionKey,
+    currentIndex,
+    (currentQuestion as any)?.id,
     (currentQuestion as any)?.risk,
     (currentQuestion as any)?.risks,
   ]);
