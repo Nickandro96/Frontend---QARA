@@ -36,6 +36,8 @@ type Question = {
   criticality?: string | null;
   risk?: any;
   risks?: any;
+  riskLen?: number | null;
+  riskHash?: string | null;
   interviewFunctions?: any[];
   economicRole?: string | null;
   applicableProcesses?: any[];
@@ -680,6 +682,13 @@ export default function MDRAuditDrilldown() {
                       Risque à justifier en cas de non-conformité
                     </div>
                     <div className="mt-1 text-sm text-rose-900 whitespace-pre-wrap">{riskText}</div>
+                    {(expertMode || inspectorMode) && currentQuestion?.questionKey ? (
+                      <div className="mt-2 text-[11px] text-rose-800/80">
+                        Debug: {currentQuestion.questionKey}
+                        {typeof (currentQuestion as any)?.riskLen === "number" ? ` · len=${(currentQuestion as any).riskLen}` : ""}
+                        {(currentQuestion as any)?.riskHash ? ` · md5=${(currentQuestion as any).riskHash}` : ""}
+                      </div>
+                    ) : null}
                   </div>
                   <Badge className="bg-rose-100 text-rose-700 border border-rose-200 hover:bg-rose-100">
                     Gravité: {crit.label.replace("Criticité ", "")}
