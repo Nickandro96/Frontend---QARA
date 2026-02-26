@@ -71,6 +71,24 @@ interface ClassificationAnswers {
   software_purpose?: string[];
 }
 
+function normalizeClassificationResult(raw: any) {
+  // tRPC client usually unwraps to the procedure output.
+  // However, network previews often show { result: { data: ... } }.
+  const unwrapped =
+    raw?.result?.data ??
+    raw?.data ??
+    raw;
+
+  if (!unwrapped || typeof unwrapped !== "object") return unwrapped;
+
+  return {
+    ...unwrapped,
+    appliedRules: Array.isArray((unwrapped as any).appliedRules) ? (unwrapped as any).appliedRules : [],
+    recommendations: Array.isArray((unwrapped as any).recommendations) ? (unwrapped as any).recommendations : [],
+    missingData: Array.isArray((unwrapped as any).missingData) ? (unwrapped as any).missingData : [],
+  };
+}
+
 export default function Classification() {
   const { t } = useTranslation();
   const { user, isAuthenticated, loading } = useAuth();
@@ -85,7 +103,7 @@ export default function Classification() {
   // ✅ Hooks must be called unconditionally. Keep mutations above any early returns.
   const classifyMutation = trpc.classification.classify.useMutation({
     onSuccess: (result) => {
-      setClassificationResult(result);
+      setClassificationResult(normalizeClassificationResult(result));
       setCurrentStep("result");
       toast.success(t("classification.successMessage", "Classification effectuée avec succès !"));
     },
@@ -863,7 +881,7 @@ export default function Classification() {
                 <div>
                   <h3 className="text-lg font-semibold mb-3">{t('classification.appliedRules', 'Règles appliquées')}</h3>
                   <div className="space-y-2">
-                    {classificationResult.appliedRules.map((rule: any) => (
+                    {(classificationResult.appliedRules ?? []).map((rule: any) => (
                       <Card key={rule.id}>
                         <CardContent className="pt-4">
                           <div className="flex items-start gap-3">
@@ -895,7 +913,7 @@ export default function Classification() {
                 <div>
                   <h3 className="text-lg font-semibold mb-3">{t('classification.recommendations', 'Recommandations next-step')}</h3>
                   <div className="space-y-2">
-                    {classificationResult.recommendations.map((rec: string, index: number) => (
+                    {(classificationResult.recommendations ?? []).map((rec: string, index: number) => (
                       <div key={index} className="flex items-start gap-2 p-3 bg-slate-50 rounded-md">
                         <span className="text-sm">{rec}</span>
                       </div>
@@ -904,13 +922,13 @@ export default function Classification() {
                 </div>
 
                 {/* Données manquantes */}
-                {classificationResult.missingData.length > 0 && (
+                {(classificationResult.missingData ?? []).length > 0 && (
                   <Alert>
                     <AlertCircle className="h-4 w-4" />
                     <AlertDescription>
                       <p className="font-semibold mb-2">{t('classification.missingData', 'Données manquantes')} :</p>
                       <ul className="list-disc list-inside space-y-1">
-                        {classificationResult.missingData.map((data: string, index: number) => (
+                        {(classificationResult.missingData ?? []).map((data: string, index: number) => (
                           <li key={index} className="text-sm">{data}</li>
                         ))}
                       </ul>
