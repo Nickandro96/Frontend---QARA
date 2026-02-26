@@ -234,9 +234,20 @@ export default function Classification() {
       case "invasiveness":
         return answers.invasiveness !== undefined;
       case "duration":
-        return answers.invasiveness === "non-invasif" || answers.duration !== undefined;
+        // Annex VIII classification frequently depends on contact duration.
+        // We require it for all devices to improve reliability.
+        return answers.duration !== undefined;
+      case "anatomical_site": {
+        const hasSite = Array.isArray(answers.contact_site) && answers.contact_site.length > 0;
+        if (!hasSite) return false;
+        // If injured skin selected, depth is mandatory for Rule 4.
+        if (answers.contact_site?.includes("peau_lesee")) {
+          return answers.wound_depth !== undefined;
+        }
+        return true;
+      }
       case "software":
-        return !answers.is_software || answers.software_purpose;
+        return !answers.is_software || (Array.isArray(answers.software_purpose) && answers.software_purpose.length > 0);
       default:
         return true;
     }
@@ -474,13 +485,17 @@ export default function Classification() {
               </div>
             )}
 
-            {/* Step: Duration */}
-            {currentStep === "duration" && answers.invasiveness !== "non-invasif" && (
+            {/* Step: Duration (required for reliability) */}
+            {currentStep === "duration" && (
               <div className="space-y-6">
                 <div>
                   <Label className="text-base font-semibold mb-3 block">
-                    {t('classification.durationOfUse', 'Durée d\'utilisation')} *
+                    {t('classification.durationOfUse', 'Durée de contact / d\'utilisation')} *
                   </Label>
+                  <p className="text-sm text-slate-600 mb-3">
+                    <Info className="inline w-4 h-4 mr-1" />
+                    Cette donnée est utilisée par les règles de l’Annexe VIII (ex. règles 4/5/6/7/8).
+                  </p>
                   <RadioGroup
                     value={answers.duration}
                     onValueChange={(value) => updateAnswer("duration", value)}
@@ -506,15 +521,6 @@ export default function Classification() {
                   </RadioGroup>
                 </div>
               </div>
-            )}
-
-            {currentStep === "duration" && answers.invasiveness === "non-invasif" && (
-              <Alert>
-                <Info className="h-4 w-4" />
-                <AlertDescription>
-                  {t('classification.durationNotApplicable', 'La durée d\'utilisation n\'est pas applicable pour les dispositifs non invasifs. Passez à l\'étape suivante.')}
-                </AlertDescription>
-              </Alert>
             )}
 
             {/* Step: Anatomical Site */}
