@@ -225,7 +225,7 @@ export default function Classification() {
               "radiations_ionisantes",
               "administrer_medicament",
             ].includes(f)
-	            )}
+          )
         ) {
           if (!a.danger_level) errs.push("Niveau de danger / impact clinique (normal / potentiellement dangereux)");
         }
