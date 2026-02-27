@@ -994,7 +994,7 @@ export default function Classification() {
                   </div>
                 </div>
               </div>
-            )
+            )}
 
             {/* Step: Sterility */}
             {currentStep === "sterility" && (
