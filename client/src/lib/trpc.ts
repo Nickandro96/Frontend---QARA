@@ -5,7 +5,10 @@ import superjson from "superjson";
 // NOTE: This import must be type-only.
 // If Vercel build fails due to monorepo path resolution,
 // move AppRouter type into a shared package (recommended).
-import type { AppRouter } from "../../../backend-QARA-new/server/routers";
+// NOTE: Frontend and backend are provided as separate projects.
+// In production monorepo you can re-point this import to the backend AppRouter.
+// To keep this frontend buildable in standalone mode, we keep a local type.
+import type { AppRouter } from "@/server-types";
 
 export const trpc = createTRPCReact<AppRouter>();
 
