@@ -240,7 +240,7 @@ export const CLASSIFICATION_RULES: ClassificationRule[] = [
     description: "Dispositifs actifs thérapeutiques destinés à administrer ou échanger de l'énergie",
     resultingClass: "IIa",
     conditions: [
-      { field: "is_active", operator: "equals", value: true },
+      { field: "active", operator: "equals", value: true },
       { field: "function", operator: "includes", value: "administrer_energie" }
     ],
     rationale: "Dispositif actif thérapeutique administrant énergie - Classe IIa"
@@ -253,7 +253,7 @@ export const CLASSIFICATION_RULES: ClassificationRule[] = [
     description: "Dispositifs administrant de l'énergie de manière potentiellement dangereuse",
     resultingClass: "IIb",
     conditions: [
-      { field: "is_active", operator: "equals", value: true },
+      { field: "active", operator: "equals", value: true },
       { field: "function", operator: "includes", value: "energie_dangereuse" }
     ],
     rationale: "Dispositif actif administrant énergie potentiellement dangereuse - Classe IIb"
@@ -267,7 +267,7 @@ export const CLASSIFICATION_RULES: ClassificationRule[] = [
     description: "Dispositifs actifs destinés au diagnostic et au monitoring de fonctions vitales",
     resultingClass: "IIa",
     conditions: [
-      { field: "is_active", operator: "equals", value: true },
+      { field: "active", operator: "equals", value: true },
       { field: "function", operator: "includes", value: "diagnostic_monitoring" }
     ],
     rationale: "Dispositif actif de diagnostic/monitoring - Classe IIa"
@@ -280,7 +280,7 @@ export const CLASSIFICATION_RULES: ClassificationRule[] = [
     description: "Dispositifs destinés au monitoring de paramètres vitaux dont les variations peuvent présenter un danger immédiat",
     resultingClass: "IIb",
     conditions: [
-      { field: "is_active", operator: "equals", value: true },
+      { field: "active", operator: "equals", value: true },
       { field: "function", operator: "includes", value: "monitoring_vital" }
     ],
     rationale: "Dispositif actif monitoring fonctions vitales critiques - Classe IIb"
@@ -452,7 +452,7 @@ export const CLASSIFICATION_RULES: ClassificationRule[] = [
     description: "Dispositifs actifs destinés à avoir un effet biologique ou à être absorbés",
     resultingClass: "III",
     conditions: [
-      { field: "is_active", operator: "equals", value: true },
+      { field: "active", operator: "equals", value: true },
       { field: "biological_effect", operator: "equals", value: true }
     ],
     rationale: "Dispositif actif avec effet biologique/absorbé - Classe III"
