@@ -52,6 +52,10 @@ interface ClassificationAnswers {
   // Fonction/énergie
   function?: string[];
   danger_level?: "potentiellement_dangereux" | "normal";
+  // Compléments nécessaires Annexe VIII
+  modify_composition_simple?: boolean;
+  disinfection_target?: "non_invasif" | "invasif" | "implantable";
+  other_function_text?: string;
   
   // Stérilité/mesure
   provided_sterile?: boolean;
@@ -209,9 +213,32 @@ export default function Classification() {
 
       case "function_energy":
         requireNonEmptyArray("Fonction(s) du dispositif (au moins 1)", a.function);
-        // Si énergie ou administration substance → danger level nécessaire pour appliquer règles 9/12 correctement
-        if (a.function?.includes("administrer_energie") || a.function?.includes("administrer_medicament")) {
-          if (!a.danger_level) errs.push("Niveau de danger (normal / potentiellement dangereux)");
+
+        // Danger level requis pour règles sur dispositifs actifs / énergie / monitoring critique / radiations
+        if (
+          a.function?.includes("administrer_energie") ||
+          a.function?.includes("diagnostic_monitoring") ||
+          a.function?.includes("monitoring_vital") ||
+          a.function?.includes("radiations_ionisantes") ||
+          a.function?.includes("administrer_medicament")
+        ) {
+          if (!a.danger_level) errs.push("Danger potentiel (normal / potentiellement dangereux)");
+        }
+
+        // Exception Annexe VIII : modification par filtration/centrifugation/échanges de gaz/chaleur
+        if (a.function?.includes("modifier_composition") && typeof a.modify_composition_simple !== "boolean") {
+          errs.push("Type de modification (filtration/centrifugation/échanges gaz/chaleur : Oui/Non)");
+        }
+
+        // Désinfection / stérilisation : cible nécessaire (non invasif / invasif / implantable)
+        if (a.function?.includes("sterilisation_dm") && !a.disinfection_target) {
+          errs.push("Type de dispositif ciblé par la désinfection/stérilisation");
+        }
+
+        // Autre fonction : texte obligatoire
+        if (a.function?.includes("autre")) {
+          const t = (a.other_function_text ?? "").trim();
+          if (!t) errs.push("Description de la fonction (autre) - texte requis");
         }
         break;
 
@@ -724,62 +751,211 @@ export default function Classification() {
             {currentStep === "function_energy" && (
               <div className="space-y-6">
                 <div>
-                  <Label className="text-base font-semibold mb-3 block">
-                    Fonction(s) du dispositif (sélection multiple)
+                  <Label className="text-base font-semibold mb-2 block">
+                    Finalité / fonction(s) principale(s) du dispositif (sélection multiple)
                   </Label>
-                  <div className="space-y-2">
-                    {[
-                      { value: "canaliser_stocker_sang", label: "Canaliser ou stocker du sang/liquides corporels" },
-                      { value: "modifier_composition", label: "Modifier la composition biologique/chimique" },
-                      { value: "administrer_energie", label: "Administrer ou échanger de l'énergie" },
-                      { value: "energie_dangereuse", label: "Administrer énergie de manière potentiellement dangereuse" },
-                      { value: "diagnostic_monitoring", label: "Diagnostic ou monitoring" },
-                      { value: "monitoring_vital", label: "Monitoring de paramètres vitaux critiques" },
-                      { value: "administrer_medicament", label: "Administrer médicaments/substances" },
-                      { value: "radiations_ionisantes", label: "Émettre des radiations ionisantes" },
-                      { value: "contraception", label: "Contraception ou prévention IST" },
-                      { value: "sterilisation_dm", label: "Stérilisation/désinfection d'autres DM" }
-                    ].map(func => (
-                      <div key={func.value} className="flex items-center space-x-2">
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Sélectionnez toutes les fonctions qui correspondent à l&apos;intention d&apos;usage revendiquée.
+                    Certaines réponses déclenchent des questions complémentaires nécessaires pour appliquer les règles de l&apos;Annexe VIII (MDR 2017/745).
+                  </p>
+
+                  <div className="space-y-5">
+                    {/* Groupe 1: Dispositifs non actifs – support / barrière */}
+                    <div className="space-y-2">
+                      <div className="text-sm font-medium text-foreground">Non actif – support / protection / compression</div>
+                      {[
+                        { value: "support_compression_orthese", label: "Support, compression, immobilisation, orthèse, bas de contention, bandage de maintien" },
+                        { value: "barriere_mecanique", label: "Barrière mécanique / protection (ex. pansement barrière, écran, protection cutanée)" },
+                      ].map(func => (
+                        <div key={func.value} className="flex items-start space-x-2">
+                          <Checkbox
+                            id={func.value}
+                            checked={answers.function?.includes(func.value)}
+                            onCheckedChange={() => toggleArrayValue("function", func.value)}
+                          />
+                          <Label htmlFor={func.value} className="cursor-pointer leading-snug">
+                            {func.label}
+                          </Label>
+                        </div>
+                      ))}
+                    </div>
+
+                    <Separator />
+
+                    {/* Groupe 2: Gestion de liquides / tissus (non invasif) */}
+                    <div className="space-y-2">
+                      <div className="text-sm font-medium text-foreground">Gestion de sang / liquides corporels / tissus (non invasif)</div>
+                      {[
+                        { value: "canaliser_stocker_sang", label: "Canaliser ou stocker du sang, liquides corporels, tissus ou cellules" },
+                        { value: "modifier_composition", label: "Modifier la composition biologique/chimique (ex. dialyse, adsorption, échanges ioniques, purification)" },
+                      ].map(func => (
+                        <div key={func.value} className="flex items-start space-x-2">
+                          <Checkbox
+                            id={func.value}
+                            checked={answers.function?.includes(func.value)}
+                            onCheckedChange={() => toggleArrayValue("function", func.value)}
+                          />
+                          <Label htmlFor={func.value} className="cursor-pointer leading-snug">
+                            {func.label}
+                          </Label>
+                        </div>
+                      ))}
+
+                      {/* Sous-question: exception règle 3 (filtration/centrifugation...) */}
+                      {answers.function?.includes("modifier_composition") && (
+                        <div className="ml-6 mt-2 space-y-2">
+                          <Label className="text-sm font-medium block">
+                            La modification est-elle réalisée uniquement par filtration/centrifugation/échanges de gaz ou de chaleur (sans ajout de substances) ?
+                          </Label>
+                          <RadioGroup
+                            value={answers.modify_composition_simple ? "yes" : answers.modify_composition_simple === false ? "no" : ""}
+                            onValueChange={(v) => updateAnswer("modify_composition_simple", v === "yes")}
+                            className="space-y-2"
+                          >
+                            <div className="flex items-center space-x-2">
+                              <RadioGroupItem value="yes" id="mcs_yes" />
+                              <Label htmlFor="mcs_yes">Oui</Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <RadioGroupItem value="no" id="mcs_no" />
+                              <Label htmlFor="mcs_no">Non</Label>
+                            </div>
+                          </RadioGroup>
+                          <p className="text-xs text-muted-foreground">
+                            Nécessaire pour distinguer la classe IIa vs IIb selon l&apos;Annexe VIII (règle sur la modification de composition).
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    <Separator />
+
+                    {/* Groupe 3: Dispositifs actifs – thérapeutiques / diagnostiques */}
+                    <div className="space-y-2">
+                      <div className="text-sm font-medium text-foreground">Dispositif actif – énergie / diagnostic / monitoring</div>
+                      {[
+                        { value: "administrer_energie", label: "Administrer ou échanger de l'énergie (ex. chaleur, froid, ultrasons, RF, laser, stimulation électrique, ventilation, perfusion motorisée…)" },
+                        { value: "diagnostic_monitoring", label: "Diagnostic ou monitoring (mesure/surveillance d'un paramètre physiologique)" },
+                        { value: "monitoring_vital", label: "Monitoring de paramètres vitaux dont les variations peuvent entraîner un danger immédiat" },
+                        { value: "radiations_ionisantes", label: "Émettre des radiations ionisantes (imagerie / radiothérapie / CT, etc.)" },
+                      ].map(func => (
+                        <div key={func.value} className="flex items-start space-x-2">
+                          <Checkbox
+                            id={func.value}
+                            checked={answers.function?.includes(func.value)}
+                            onCheckedChange={() => toggleArrayValue("function", func.value)}
+                          />
+                          <Label htmlFor={func.value} className="cursor-pointer leading-snug">
+                            {func.label}
+                          </Label>
+                        </div>
+                      ))}
+
+                      {(answers.function?.includes("administrer_energie") ||
+                        answers.function?.includes("diagnostic_monitoring") ||
+                        answers.function?.includes("monitoring_vital") ||
+                        answers.function?.includes("radiations_ionisantes")) && (
+                        <div className="ml-6 mt-2 space-y-2">
+                          <Label className="text-sm font-medium block">
+                            Le fonctionnement peut-il présenter un danger potentiel pour le patient (énergie/pilotage/monitoring critique) ?
+                          </Label>
+                          <RadioGroup
+                            value={answers.danger_level ?? ""}
+                            onValueChange={(v) => updateAnswer("danger_level", v)}
+                            className="space-y-2"
+                          >
+                            <div className="flex items-center space-x-2">
+                              <RadioGroupItem value="normal" id="dl_normal" />
+                              <Label htmlFor="dl_normal">Normal</Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <RadioGroupItem value="potentiellement_dangereux" id="dl_danger" />
+                              <Label htmlFor="dl_danger">Potentiellement dangereux</Label>
+                            </div>
+                          </RadioGroup>
+                        </div>
+                      )}
+                    </div>
+
+                    <Separator />
+
+                    {/* Groupe 4: Substances / stérilisation / contraception */}
+                    <div className="space-y-2">
+                      <div className="text-sm font-medium text-foreground">Autres finalités pertinentes pour la classification</div>
+                      {[
+                        { value: "administrer_medicament", label: "Administrer, retirer ou contrôler l'administration de médicaments/substances/fluids (ex. pompe, perfuseur, injecteur)" },
+                        { value: "contraception", label: "Contraception ou prévention des IST" },
+                        { value: "sterilisation_dm", label: "Désinfection, nettoyage, rinçage ou stérilisation d'autres dispositifs médicaux" },
+                      ].map(func => (
+                        <div key={func.value} className="flex items-start space-x-2">
+                          <Checkbox
+                            id={func.value}
+                            checked={answers.function?.includes(func.value)}
+                            onCheckedChange={() => toggleArrayValue("function", func.value)}
+                          />
+                          <Label htmlFor={func.value} className="cursor-pointer leading-snug">
+                            {func.label}
+                          </Label>
+                        </div>
+                      ))}
+
+                      {answers.function?.includes("sterilisation_dm") && (
+                        <div className="ml-6 mt-2 space-y-2">
+                          <Label className="text-sm font-medium block">
+                            Type de dispositif ciblé par la désinfection/stérilisation
+                          </Label>
+                          <RadioGroup
+                            value={answers.disinfection_target ?? ""}
+                            onValueChange={(v) => updateAnswer("disinfection_target", v)}
+                            className="space-y-2"
+                          >
+                            <div className="flex items-center space-x-2">
+                              <RadioGroupItem value="non_invasif" id="dt_non" />
+                              <Label htmlFor="dt_non">Dispositifs non invasifs</Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <RadioGroupItem value="invasif" id="dt_inv" />
+                              <Label htmlFor="dt_inv">Dispositifs invasifs / instruments chirurgicaux</Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <RadioGroupItem value="implantable" id="dt_impl" />
+                              <Label htmlFor="dt_impl">Dispositifs implantables</Label>
+                            </div>
+                          </RadioGroup>
+                        </div>
+                      )}
+                    </div>
+
+                    <Separator />
+
+                    {/* Groupe 5: Autre */}
+                    <div className="space-y-2">
+                      <div className="text-sm font-medium text-foreground">Autre (si aucune option ne correspond)</div>
+                      <div className="flex items-start space-x-2">
                         <Checkbox
-                          id={func.value}
-                          checked={answers.function?.includes(func.value)}
-                          onCheckedChange={() => toggleArrayValue("function", func.value)}
+                          id="autre_fonction"
+                          checked={answers.function?.includes("autre")}
+                          onCheckedChange={() => toggleArrayValue("function", "autre")}
                         />
-                        <Label htmlFor={func.value} className="cursor-pointer">
-                          {func.label}
+                        <Label htmlFor="autre_fonction" className="cursor-pointer leading-snug">
+                          Autre fonction à préciser
                         </Label>
                       </div>
-                    ))}
+                      {answers.function?.includes("autre") && (
+                        <div className="ml-6">
+                          <Textarea
+                            value={answers.other_function_text ?? ""}
+                            onChange={(e) => updateAnswer("other_function_text", e.target.value)}
+                            placeholder="Décrivez brièvement la fonction/intention d'usage (1–3 phrases)"
+                          />
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
-
-                {(answers.function?.includes("administrer_energie") || answers.function?.includes("administrer_medicament")) && (
-                  <div>
-                    <Label className="text-base font-semibold mb-3 block">
-                      Niveau de danger
-                    </Label>
-                    <RadioGroup
-                      value={answers.danger_level}
-                      onValueChange={(value) => updateAnswer("danger_level", value)}
-                    >
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="normal" id="normal" />
-                        <Label htmlFor="normal" className="cursor-pointer">Normal</Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="potentiellement_dangereux" id="dangereux" />
-                        <Label htmlFor="dangereux" className="cursor-pointer">
-                          Potentiellement dangereux
-                        </Label>
-                      </div>
-                    </RadioGroup>
-                  </div>
-                )}
               </div>
             )}
-
-            {/* Step: Sterility */}
+{/* Step: Sterility */}
             {currentStep === "sterility" && (
               <div className="space-y-6">
                 <div>
