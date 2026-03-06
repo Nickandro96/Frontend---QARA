@@ -36,6 +36,9 @@ import AnalyticsDashboard from "./pages/AnalyticsDashboard";
 import DashboardV2 from "./pages/DashboardV2";
 import FDAQualification from "./pages/FDAQualification";
 import FDAAuditNew from "./pages/FDAAudit";
+import FdaDocuments from "./pages/FdaDocuments";
+import FdaReports from "./pages/FdaReports";
+import FdaWatchRoadmap from "./pages/FdaWatchRoadmap";
 import ReportGeneration from "./pages/ReportGeneration";
 import ReportHistory from "./pages/ReportHistory";
 import AuditDetail from "./pages/AuditDetail";
@@ -74,8 +77,14 @@ function Router() {
         <Redirect to="/dashboard-executive" />
       </Route>
 
-      <Route path={"/fda/qualification"} component={FDAQualification} />
-      <Route path={"/fda/audit"} component={FDAAuditNew} />
+      <Route path={"/fda/qualification"}><Redirect to="/us/fda-qualification" /></Route>
+      <Route path={"/fda/audit"}><Redirect to="/us/fda-audit" /></Route>
+      <Route path={"/us/fda-qualification"} component={FDAQualification} />
+      <Route path={"/us/fda-audit"} component={FDAAuditNew} />
+      <Route path={"/us/fda-dashboard"} component={FdaDashboard} />
+      <Route path={"/us/fda-watch"} component={FdaWatchRoadmap} />
+      <Route path={"/us/fda-documents"} component={FdaDocuments} />
+      <Route path={"/us/fda-reports"} component={FdaReports} />
 
       {/* ✅ MDR ROUTING FIX (ORDER MATTERS) */}
       <Route path="/mdr/audit/:auditId/review" component={MDRAuditReview} />
