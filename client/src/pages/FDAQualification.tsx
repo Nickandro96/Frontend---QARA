@@ -1,271 +1,109 @@
-/**
- * FDA Role Qualification Page
- * 9 boolean questions to determine user's FDA role(s)
- */
-
-import { useState, useEffect } from "react";
-import { useLocation } from "wouter";
+import { useMemo, useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Progress } from "@/components/ui/progress";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, CheckCircle2, AlertCircle, Info } from "lucide-react";
-
-const FDA_QUESTIONS = [
-  {
-    id: "brandOnLabel",
-    label: "Your company name appears on the device label",
-    description: "You are the brand owner / specification developer",
-  },
-  {
-    id: "designsOrSpecifiesDevice",
-    label: "You design or specify the device",
-    description: "You establish the device specifications and design controls",
-  },
-  {
-    id: "manufacturesOrReworks",
-    label: "You manufacture or rework devices",
-    description: "You perform manufacturing operations (assembly, sterilization, packaging, etc.)",
-  },
-  {
-    id: "manufacturesForThirdParty",
-    label: "You manufacture devices for another company",
-    description: "You are a contract manufacturer (CMO) producing for a third party",
-  },
-  {
-    id: "firstImportIntoUS",
-    label: "You are the first importer of devices into the United States",
-    description: "You import devices from foreign manufacturers for US distribution",
-  },
-  {
-    id: "distributesWithoutModification",
-    label: "You distribute devices without modification",
-    description: "You are a distributor who does not modify, repackage, or relabel devices",
-  },
-  {
-    id: "relabelingOrRepackaging",
-    label: "You relabel or repackage devices",
-    description: "You modify the labeling or packaging of finished devices",
-  },
-  {
-    id: "servicing",
-    label: "You service or repair medical devices",
-    description: "You perform maintenance, repair, or servicing activities",
-  },
-  {
-    id: "softwareAsMedicalDevice",
-    label: "You develop Software as a Medical Device (SaMD)",
-    description: "You develop standalone software intended for medical purposes",
-  },
-];
-
-const ROLE_DESCRIPTIONS = {
-  FDA_LM: {
-    name: "Legal Manufacturer / Specification Developer",
-    description: "Entity whose name appears on the device label",
-    color: "bg-blue-100 text-blue-800",
-  },
-  FDA_CMO: {
-    name: "Contract Manufacturer",
-    description: "Entity that manufactures for another company",
-    color: "bg-green-100 text-green-800",
-  },
-  FDA_IMP: {
-    name: "Initial Importer",
-    description: "Entity that imports devices into the US",
-    color: "bg-purple-100 text-purple-800",
-  },
-  FDA_DIST: {
-    name: "Distributor",
-    description: "Entity that distributes without modifying",
-    color: "bg-orange-100 text-orange-800",
-  },
-};
+import { Loader2, ShieldCheck } from "lucide-react";
+import { exportQualificationPdf } from "@/lib/fdaExports";
 
 export default function FDAQualification() {
-  const [, setLocation] = useLocation();
-  const [answers, setAnswers] = useState<Record<string, boolean>>({});
-  const [computedRoles, setComputedRoles] = useState<string[]>([]);
-  
-  // Load existing qualification
-  const { data: existingQualification, isLoading: loadingQualification } = trpc.fda.getQualification.useQuery({});
-  
-  // Save qualification mutation
-  const saveQualification = trpc.fda.saveQualification.useMutation({
-    onSuccess: (data) => {
-      setComputedRoles(data.computedRoles);
-    },
-  });
-  
-  // Initialize answers from existing qualification
-  useEffect(() => {
-    if (existingQualification) {
-      setAnswers({
-        brandOnLabel: existingQualification.brandOnLabel || false,
-        designsOrSpecifiesDevice: existingQualification.designsOrSpecifiesDevice || false,
-        manufacturesOrReworks: existingQualification.manufacturesOrReworks || false,
-        manufacturesForThirdParty: existingQualification.manufacturesForThirdParty || false,
-        firstImportIntoUS: existingQualification.firstImportIntoUS || false,
-        distributesWithoutModification: existingQualification.distributesWithoutModification || false,
-        relabelingOrRepackaging: existingQualification.relabelingOrRepackaging || false,
-        servicing: existingQualification.servicing || false,
-        softwareAsMedicalDevice: existingQualification.softwareAsMedicalDevice || false,
-      });
-      setComputedRoles(existingQualification.computedRoles || []);
-    }
-  }, [existingQualification]);
-  
-  const handleCheckboxChange = (questionId: string, checked: boolean) => {
-    setAnswers(prev => ({ ...prev, [questionId]: checked }));
-  };
-  
-  const handleSubmit = async () => {
-    await saveQualification.mutateAsync({
-      brandOnLabel: answers.brandOnLabel || false,
-      designsOrSpecifiesDevice: answers.designsOrSpecifiesDevice || false,
-      manufacturesOrReworks: answers.manufacturesOrReworks || false,
-      manufacturesForThirdParty: answers.manufacturesForThirdParty || false,
-      firstImportIntoUS: answers.firstImportIntoUS || false,
-      distributesWithoutModification: answers.distributesWithoutModification || false,
-      relabelingOrRepackaging: answers.relabelingOrRepackaging || false,
-      servicing: answers.servicing || false,
-      softwareAsMedicalDevice: answers.softwareAsMedicalDevice || false,
-    });
-  };
-  
-  const handleContinueToAudit = () => {
-    setLocation("/fda/audit");
-  };
-  
-  if (loadingQualification) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
+  const { data, isLoading } = trpc.fda.getQualificationQuestions.useQuery();
+  const { data: existing } = trpc.fda.getQualification.useQuery();
+  const save = trpc.fda.saveQualification.useMutation();
+  const [answers, setAnswers] = useState<Record<string, any>>({});
+
+  const questions = data?.questions || [];
+  const steps = useMemo(() => Array.from(new Set(questions.map((q: any) => q.step))).sort((a, b) => a - b), [questions]);
+  const [step, setStep] = useState(steps[0] || 1);
+  const currentQuestions = questions.filter((q: any) => q.step === step);
+  const progress = steps.length ? Math.round((steps.indexOf(step) + 1) / steps.length * 100) : 0;
+
+  const result = save.data || existing?.resultJson;
+
+  if (isLoading) {
+    return <div className="min-h-screen flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>;
   }
-  
+
   return (
-    <div className="container max-w-4xl py-8">
-      <div className="space-y-6">
-        {/* Header */}
-        <div>
-          <h1 className="text-3xl font-bold">FDA Role Qualification</h1>
-          <p className="text-muted-foreground mt-2">
-            Answer the following questions to determine your FDA regulatory role(s) and applicable requirements.
-          </p>
-        </div>
-        
-        {/* Info Alert */}
-        <Alert>
-          <Info className="h-4 w-4" />
-          <AlertDescription>
-            Your answers will determine which FDA requirements apply to your organization. 
-            You may have multiple roles (e.g., both Legal Manufacturer and Contract Manufacturer).
-          </AlertDescription>
-        </Alert>
-        
-        {/* Questions */}
-        <Card>
+    <div className="container max-w-5xl py-8 space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold">FDA Qualification</h1>
+        <p className="text-muted-foreground mt-2">Assistant guidé pour qualifier votre produit et vos obligations FDA US.</p>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Progression</CardTitle>
+          <CardDescription>Étape {steps.indexOf(step) + 1} sur {steps.length}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Progress value={progress} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Étape {step}</CardTitle>
+          <CardDescription>Répondez de façon simple. Le moteur calcule un résultat explicable et exportable.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {currentQuestions.map((q: any) => (
+            <div key={q.id} className="space-y-2">
+              <Label className="font-medium">{q.label}</Label>
+              {q.kind === "boolean" ? (
+                <RadioGroup value={answers[q.id] === true ? "yes" : answers[q.id] === false ? "no" : ""} onValueChange={(value) => setAnswers((prev) => ({ ...prev, [q.id]: value === "yes" }))}>
+                  <div className="flex items-center gap-2"><RadioGroupItem value="yes" id={`${q.id}-yes`} /><Label htmlFor={`${q.id}-yes`}>Oui</Label></div>
+                  <div className="flex items-center gap-2"><RadioGroupItem value="no" id={`${q.id}-no`} /><Label htmlFor={`${q.id}-no`}>Non</Label></div>
+                </RadioGroup>
+              ) : (
+                <Textarea value={answers[q.id] || ""} onChange={(e) => setAnswers((prev) => ({ ...prev, [q.id]: e.target.value }))} rows={4} />
+              )}
+            </div>
+          ))}
+          <div className="flex justify-between">
+            <Button variant="outline" disabled={step === steps[0]} onClick={() => setStep((prev) => steps[Math.max(0, steps.indexOf(prev) - 1)])}>Précédent</Button>
+            {step === steps[steps.length - 1] ? (
+              <Button onClick={() => save.mutate({ answers, sessionName: "FDA Qualification" })} disabled={save.isPending}>
+                {save.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Calculer le résultat
+              </Button>
+            ) : (
+              <Button onClick={() => setStep((prev) => steps[Math.min(steps.length - 1, steps.indexOf(prev) + 1)])}>Suivant</Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {result && (
+        <Card className="border-primary/30">
           <CardHeader>
-            <CardTitle>Qualification Questions</CardTitle>
-            <CardDescription>
-              Check all statements that apply to your organization
-            </CardDescription>
+            <CardTitle className="flex items-center gap-2"><ShieldCheck className="h-5 w-5" />Résultat FDA</CardTitle>
+            <CardDescription>{result.rationale}</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6">
-            {FDA_QUESTIONS.map((question, index) => (
-              <div key={question.id} className="flex items-start space-x-3 p-4 rounded-lg border hover:bg-accent/50 transition-colors">
-                <Checkbox
-                  id={question.id}
-                  checked={answers[question.id] || false}
-                  onCheckedChange={(checked) => handleCheckboxChange(question.id, checked as boolean)}
-                  className="mt-1"
-                />
-                <div className="flex-1">
-                  <Label
-                    htmlFor={question.id}
-                    className="text-base font-medium cursor-pointer"
-                  >
-                    {index + 1}. {question.label}
-                  </Label>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {question.description}
-                  </p>
+          <CardContent className="space-y-4">
+            <div className="flex flex-wrap gap-2">
+              <Badge>{result.probableDeviceStatus ? "Medical device probable" : "Review needed"}</Badge>
+              <Badge variant="secondary">Classe probable: {result.deviceClass}</Badge>
+              <Badge variant="secondary">Pathway: {result.pathway}</Badge>
+              <Badge variant="outline">Confiance: {result.confidence}%</Badge>
+            </div>
+            <div className="grid md:grid-cols-2 gap-4">
+              {(result.obligations || []).map((item: any) => (
+                <div key={item.code} className="rounded-lg border p-3">
+                  <div className="font-medium">{item.label}</div>
+                  <div className="text-sm text-muted-foreground mt-1">{item.required ? "Requis / à planifier" : "À confirmer selon périmètre"}</div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
+            <div className="flex gap-3">
+              <Button onClick={() => exportQualificationPdf(result)}>Exporter PDF</Button>
+            </div>
           </CardContent>
         </Card>
-        
-        {/* Computed Roles */}
-        {computedRoles.length > 0 && (
-          <Card className="border-green-200 bg-green-50">
-            <CardHeader>
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="h-5 w-5 text-green-600" />
-                <CardTitle className="text-green-900">Your FDA Role(s)</CardTitle>
-              </div>
-              <CardDescription className="text-green-700">
-                Based on your answers, the following FDA roles apply to your organization:
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {computedRoles.map(roleCode => {
-                  const role = ROLE_DESCRIPTIONS[roleCode as keyof typeof ROLE_DESCRIPTIONS];
-                  if (!role) return null;
-                  
-                  return (
-                    <div key={roleCode} className="flex items-start gap-3 p-3 bg-white rounded-lg border">
-                      <Badge className={role.color}>{roleCode}</Badge>
-                      <div>
-                        <p className="font-medium">{role.name}</p>
-                        <p className="text-sm text-muted-foreground">{role.description}</p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-        
-        {/* No Roles Warning */}
-        {saveQualification.isSuccess && computedRoles.length === 0 && (
-          <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              No FDA roles were identified based on your answers. Please review your responses to ensure accuracy.
-            </AlertDescription>
-          </Alert>
-        )}
-        
-        {/* Actions */}
-        <div className="flex gap-4">
-          <Button
-            onClick={handleSubmit}
-            disabled={saveQualification.isPending}
-            size="lg"
-          >
-            {saveQualification.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {existingQualification ? "Update Qualification" : "Save Qualification"}
-          </Button>
-          
-          {computedRoles.length > 0 && (
-            <Button
-              onClick={handleContinueToAudit}
-              variant="outline"
-              size="lg"
-            >
-              Continue to FDA Audit
-            </Button>
-          )}
-        </div>
-      </div>
+      )}
     </div>
   );
 }
