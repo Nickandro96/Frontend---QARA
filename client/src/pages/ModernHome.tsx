@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { ModernSidebar } from "@/components/ModernSidebar";
+import { OnboardingResumeBanner } from "@/components/OnboardingResumeBanner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Link } from "wouter";
@@ -75,6 +76,7 @@ export default function ModernHome() {
     <>
       <ModernSidebar />
       <div className="ml-64">
+        <OnboardingResumeBanner />
         {/* Hero Section */}
         <div className="min-h-[calc(100vh-4rem)] bg-gradient-to-br from-blue-600 to-blue-700 flex items-center">
           <div className="container mx-auto px-8 py-16">

@@ -54,6 +54,7 @@ import AuditResults from "./pages/AuditResults";
 import AuditComparison from "./pages/AuditComparison";
 import SiteManagement from "./pages/SiteManagement";
 import MDRAuditWizard from "./pages/MDRAudit";
+import Onboarding from "./pages/Onboarding";
 
 // ✅ FIX: chemins corrects dans ./pages
 import MDRAuditDrilldown from "./pages/MDRAuditDrilldown";
@@ -65,6 +66,7 @@ function Router() {
       <Route path={"/"} component={ModernHome} />
       <Route path={"/login"} component={Login} />
       <Route path={"/register"} component={Register} />
+      <Route path={"/onboarding"} component={Onboarding} />
       <Route path={"/action-dashboard"} component={ActionDashboard} />
       <Route path={"/home-old"} component={Home} />
       <Route path="/classification" component={Classification} />

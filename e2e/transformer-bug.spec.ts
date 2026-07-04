@@ -19,6 +19,10 @@ test("une session serveur valide est bien reconnue par l'UI (non-régression C-0
   await page.fill("#password", password);
   await page.fill("#confirmPassword", password);
   await page.click('button[type="submit"]');
+  // Un nouvel utilisateur sans périmètre configuré atterrit sur /onboarding (gate
+  // d'onboarding, voir docs/audit/12-onboarding.md) — pas de sidebar là-bas ; on
+  // navigue explicitement vers "/" pour vérifier la reconnaissance de session
+  // dans la sidebar, qui est l'objet réel de ce test de non-régression.
   await page.waitForURL((url) => !url.pathname.includes("/register"), { timeout: 15_000 });
   await page.waitForTimeout(1500);
 
@@ -32,5 +36,6 @@ test("une session serveur valide est bien reconnue par l'UI (non-régression C-0
   // L'UI (via trpc.auth.me.useQuery()) doit refléter la même session : le nom de
   // l'utilisateur doit apparaître dans le menu de la sidebar (toujours visible quand
   // isAuthenticated est vrai, contrairement à l'email qui n'apparaît que dropdown ouvert).
+  await page.goto("/", { waitUntil: "domcontentloaded" });
   await expect(page.getByText(name, { exact: true }).first()).toBeVisible({ timeout: 8_000 });
 });

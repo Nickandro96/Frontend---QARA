@@ -20,8 +20,10 @@ test.describe("Authentification", () => {
     await page.fill("#confirmPassword", password);
     await page.click('button[type="submit"]');
 
-    // L'inscription doit rediriger vers /login ou connecter directement l'utilisateur.
-    await page.waitForURL(/\/(login|$)/, { timeout: 15_000 });
+    // L'inscription doit rediriger vers /login, ou connecter directement l'utilisateur
+    // (vers "/" si son onboarding est déjà complet, vers "/onboarding" sinon — voir
+    // le gate d'onboarding, docs/audit/12-onboarding.md).
+    await page.waitForURL((url) => ["/", "/login", "/onboarding"].includes(url.pathname), { timeout: 15_000 });
 
     if (page.url().includes("/login")) {
       await page.fill("#email", email);
