@@ -11,6 +11,7 @@ type UseAuthOptions = {
 export function useAuth(options?: UseAuthOptions) {
   const { redirectOnUnauthenticated = false, redirectPath = "/login" } =
     options ?? {};
+  const [, navigate] = useLocation();
   const utils = trpc.useUtils();
 
   const meQuery = trpc.auth.me.useQuery(undefined, {
@@ -70,6 +71,7 @@ export function useAuth(options?: UseAuthOptions) {
     logoutMutation.isPending,
     meQuery.isLoading,
     state.user,
+    navigate,
   ]);
 
   return {

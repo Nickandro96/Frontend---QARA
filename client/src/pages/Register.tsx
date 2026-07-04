@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Shield, Loader2 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import {
   Select,
   SelectContent,
@@ -26,11 +26,12 @@ export default function Register() {
   });
   const [error, setError] = useState("");
   const { refresh } = useAuth();
-  
+  const [, navigate] = useLocation();
+
   const registerMutation = trpc.system.register.useMutation({
     onSuccess: () => {
       refresh().then(() => {
-        window.location.href = "/";
+        navigate("/");
       });
     },
     onError: (err) => {
