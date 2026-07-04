@@ -124,10 +124,6 @@ export default function Login() {
               </Link>
             </div>
           </div>
-
-          <div className="mt-6 text-center text-xs text-muted-foreground">
-            <p>Ce mode de connexion est autonome et ne dépend pas de Manus OAuth.</p>
-          </div>
         </CardContent>
       </Card>
     </div>

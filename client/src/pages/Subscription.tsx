@@ -310,7 +310,7 @@ export default function Subscription() {
           <div className="flex gap-4">
             <Button
               variant="outline"
-              onClick={() => window.open("https://help.manus.im", "_blank")}
+              onClick={() => (window.location.href = "/contact")}
             >
               Contacter le support
             </Button>

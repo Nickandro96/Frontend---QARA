@@ -4,7 +4,7 @@
   
   <!-- Homepage -->
   <url>
-    <loc>https://mdrcompliance-jqqkzfyu.manus.space/</loc>
+    <loc>https://frontend-qara.vercel.app/</loc>
     <lastmod>2026-01-30</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
@@ -12,7 +12,7 @@
   
   <!-- Pricing -->
   <url>
-    <loc>https://mdrcompliance-jqqkzfyu.manus.space/pricing</loc>
+    <loc>https://frontend-qara.vercel.app/pricing</loc>
     <lastmod>2026-01-30</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.9</priority>
@@ -20,7 +20,7 @@
   
   <!-- Classification EU -->
   <url>
-    <loc>https://mdrcompliance-jqqkzfyu.manus.space/classification</loc>
+    <loc>https://frontend-qara.vercel.app/classification</loc>
     <lastmod>2026-01-30</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
@@ -28,7 +28,7 @@
   
   <!-- FDA Classification -->
   <url>
-    <loc>https://mdrcompliance-jqqkzfyu.manus.space/fda-classification</loc>
+    <loc>https://frontend-qara.vercel.app/fda-classification</loc>
     <lastmod>2026-01-30</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
@@ -36,7 +36,7 @@
   
   <!-- Audit EU -->
   <url>
-    <loc>https://mdrcompliance-jqqkzfyu.manus.space/audit</loc>
+    <loc>https://frontend-qara.vercel.app/audit</loc>
     <lastmod>2026-01-30</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
@@ -44,7 +44,7 @@
   
   <!-- FDA Qualification -->
   <url>
-    <loc>https://mdrcompliance-jqqkzfyu.manus.space/fda/qualification</loc>
+    <loc>https://frontend-qara.vercel.app/fda/qualification</loc>
     <lastmod>2026-01-30</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
@@ -52,7 +52,7 @@
   
   <!-- FDA Audit -->
   <url>
-    <loc>https://mdrcompliance-jqqkzfyu.manus.space/fda/audit</loc>
+    <loc>https://frontend-qara.vercel.app/fda/audit</loc>
     <lastmod>2026-01-30</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
@@ -60,7 +60,7 @@
   
   <!-- Dashboard V2 -->
   <url>
-    <loc>https://mdrcompliance-jqqkzfyu.manus.space/dashboard-v2</loc>
+    <loc>https://frontend-qara.vercel.app/dashboard-v2</loc>
     <lastmod>2026-01-30</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
@@ -68,7 +68,7 @@
   
   <!-- Contact -->
   <url>
-    <loc>https://mdrcompliance-jqqkzfyu.manus.space/contact</loc>
+    <loc>https://frontend-qara.vercel.app/contact</loc>
     <lastmod>2026-01-30</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
@@ -76,7 +76,7 @@
   
   <!-- Regulatory Watch EU -->
   <url>
-    <loc>https://mdrcompliance-jqqkzfyu.manus.space/regulatory-watch</loc>
+    <loc>https://frontend-qara.vercel.app/regulatory-watch</loc>
     <lastmod>2026-01-30</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
@@ -84,7 +84,7 @@
   
   <!-- FDA Regulatory Watch -->
   <url>
-    <loc>https://mdrcompliance-jqqkzfyu.manus.space/fda-regulatory-watch</loc>
+    <loc>https://frontend-qara.vercel.app/fda-regulatory-watch</loc>
     <lastmod>2026-01-30</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>

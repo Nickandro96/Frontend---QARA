@@ -10,4 +10,4 @@ Disallow: /fda/audit
 Disallow: /api/
 Disallow: /admin/
 
-Sitemap: https://mdrcompliance-jqqkzfyu.manus.space/sitemap.xml
+Sitemap: https://frontend-qara.vercel.app/sitemap.xml

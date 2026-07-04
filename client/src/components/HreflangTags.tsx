@@ -8,7 +8,7 @@ import { useTranslation } from "react-i18next";
 export function HreflangTags() {
   const { i18n } = useTranslation();
   const currentLang = i18n.language;
-  const baseUrl = "https://mdrcompliance-jqqkzfyu.manus.space";
+  const baseUrl = "https://frontend-qara.vercel.app";
 
   useEffect(() => {
     // Update the html lang attribute

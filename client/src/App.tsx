@@ -35,7 +35,7 @@ import AdminUsers from "./pages/AdminUsers";
 import AnalyticsDashboard from "./pages/AnalyticsDashboard";
 import DashboardV2 from "./pages/DashboardV2";
 import FDAQualification from "./pages/FDAQualification";
-import FDAAuditNew from "./pages/FDAAudit";
+import FDAAuditNew from "./pages/FdaAudit";
 import FdaDocuments from "./pages/FdaDocuments";
 import FdaReports from "./pages/FdaReports";
 import FdaWatchRoadmap from "./pages/FdaWatchRoadmap";
