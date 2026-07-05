@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { AlertCircle, ArrowLeft, Download, Printer, RefreshCw } from "lucide-react";
+import { AssistantChatPanel } from "@/components/AssistantChatPanel";
 
 type StatusKey = "compliant" | "partial" | "non_compliant" | "not_applicable" | "in_progress";
 
@@ -31,6 +32,8 @@ export default function MDRAuditReview() {
   const [, setLocation] = useLocation();
 
   const utils = trpc.useUtils();
+
+  const assistantAuditorMutation = trpc.assistant.assistantAuditor.useMutation();
 
   const dashboardQuery = trpc.mdr.getAuditDashboard.useQuery({ auditId: (auditId ?? 0) as number }, { enabled });
 
@@ -402,6 +405,26 @@ ${htmlBody}
             </div>
           </CardContent>
         </Card>
+
+        {auditId ? (
+          <Card className="xl:col-span-12">
+            <CardContent className="space-y-3 p-4">
+              <div className="font-medium">Analyser mes résultats</div>
+              <Separator />
+              <AssistantChatPanel
+                key={auditId}
+                title="Assistant réglementaire — analyse d'audit"
+                placeholder="Ex : quels écarts dois-je traiter en priorité ?"
+                emptyStateHint="Demandez pourquoi un écart compte, ce qu'un auditeur externe y verrait, ou par où commencer."
+                disclaimer="Outil d'aide basé sur les écarts réellement détectés par le moteur de scoring ; ne remplace pas le jugement d'un professionnel qualité ni un audit de certification. Le plan d'action CAPA reste l'outil de suivi officiel."
+                onSend={async (messages) => {
+                  const result = await assistantAuditorMutation.mutateAsync({ auditId, messages });
+                  return result.reply;
+                }}
+              />
+            </CardContent>
+          </Card>
+        ) : null}
       </div>
     </div>
   );

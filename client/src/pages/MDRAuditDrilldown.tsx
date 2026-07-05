@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import { AssistantChatPanel } from "@/components/AssistantChatPanel";
 import { Progress } from "@/components/ui/progress";
 import {
   AlertCircle,
@@ -249,6 +250,7 @@ export default function MDRAuditDrilldown() {
 
   const saveResponseMutation = trpc.mdr.saveResponse.useMutation();
   const completeAuditMutation = trpc.mdr.completeAudit.useMutation();
+  const assistantUserMutation = trpc.assistant.assistantUser.useMutation();
 
   const responsesMap = useMemo(() => {
     const localList = Object.values(localDrafts);
@@ -934,6 +936,26 @@ export default function MDRAuditDrilldown() {
                   <Sparkles className="mr-2 h-4 w-4" />
                   Rafraîchir suggestions
                 </Button>
+
+                <Separator />
+
+                {currentQuestion?.questionKey && auditId ? (
+                  <AssistantChatPanel
+                    key={currentQuestion.questionKey}
+                    title="Assistant réglementaire — Aide-moi à répondre"
+                    placeholder="Ex : je ne comprends pas ce qui est attendu ici..."
+                    emptyStateHint="Posez une question sur l'exigence, les preuves attendues, ou demandez un exemple concret."
+                    disclaimer="Outil d'aide basé sur le corpus vérifié de cette question ; ne remplace pas le jugement d'un professionnel qualité ni un audit de certification. Vous seul décidez de votre réponse."
+                    onSend={async (messages) => {
+                      const result = await assistantUserMutation.mutateAsync({
+                        auditId,
+                        questionKey: currentQuestion.questionKey,
+                        messages,
+                      });
+                      return result.reply;
+                    }}
+                  />
+                ) : null}
               </div>
             )}
 
