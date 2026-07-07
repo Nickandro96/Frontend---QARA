@@ -17,7 +17,7 @@ export default function Login() {
   const loginMutation = trpc.system.login.useMutation({
     onSuccess: () => {
       refresh().then(() => {
-        navigate("/");
+        navigate("/dashboard");
       });
     },
     onError: (err) => {
