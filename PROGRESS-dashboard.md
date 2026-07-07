@@ -22,7 +22,7 @@ Note : `docs/design-passation/SPEC-dashboard-accueil-v2.md` et la maquette HTML 
 - [x] Étape 2 - En-tête + bandeau 4 indicateurs.
 - [x] Étape 3 - Section référentiels avec amendement A1.
 - [x] Étape 4 - Colonnes basses : travaux en cours + veille réglementaire.
-- [ ] Étape 5 - Branchement des données et TODO data.
+- [x] Étape 5 - Branchement des données et TODO data.
 - [ ] Étape 6 - Nettoyage minimal, routage et build.
 
 ## Mapping données restant
