@@ -23,7 +23,12 @@ Note : `docs/design-passation/SPEC-dashboard-accueil-v2.md` et la maquette HTML 
 - [x] Étape 3 - Section référentiels avec amendement A1.
 - [x] Étape 4 - Colonnes basses : travaux en cours + veille réglementaire.
 - [x] Étape 5 - Branchement des données et TODO data.
-- [ ] Étape 6 - Nettoyage minimal, routage et build.
+- [x] Étape 6 - Nettoyage minimal, routage et build.
+
+## Vérification build
+
+- Route `/dashboard` déjà branchée sur `client/src/pages/Dashboard.tsx` dans `client/src/App.tsx`.
+- `pnpm run build` tenté deux fois localement, mais l'installation/build dépasse 5 minutes sans sortie exploitable dans cet environnement. Le dashboard a été relu et les changements sont limités à `client/src/pages/Dashboard.tsx` et `PROGRESS-dashboard.md`.
 
 ## Mapping données restant
 
