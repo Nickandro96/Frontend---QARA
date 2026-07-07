@@ -18,7 +18,7 @@ Note : `docs/design-passation/SPEC-dashboard-accueil-v2.md` et la maquette HTML 
 ## Étapes
 
 - [x] Étape 0 - Préparation : créer ce fichier, identifier la route et le composant dashboard réel.
-- [ ] Étape 1 - Layout général + sidebar.
+- [x] Étape 1 - Layout général + sidebar.
 - [ ] Étape 2 - En-tête + bandeau 4 indicateurs.
 - [ ] Étape 3 - Section référentiels avec amendement A1.
 - [ ] Étape 4 - Colonnes basses : travaux en cours + veille réglementaire.
