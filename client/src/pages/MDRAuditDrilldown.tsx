@@ -473,7 +473,7 @@ export default function MDRAuditDrilldown() {
     goNext();
   };
 
-  const goBackToWizard = () => setLocation("/mdr");
+  const goBackToWizard = () => setLocation("/mdr/audit");
 
   const loading = loadingContext || loadingQuestions || loadingResponses;
 

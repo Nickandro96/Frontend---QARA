@@ -242,7 +242,7 @@ ${htmlBody}
           <CardContent className="space-y-3 p-6">
             <div className="font-semibold">Audit invalide</div>
             <div className="text-sm text-muted-foreground">ID audit manquant.</div>
-            <Button variant="secondary" onClick={() => setLocation("/mdr")}>Retour</Button>
+            <Button variant="secondary" onClick={() => setLocation("/mdr/audit")}>Retour</Button>
           </CardContent>
         </Card>
       </div>
@@ -283,7 +283,7 @@ ${htmlBody}
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="outline">Statut: {data?.audit?.status || "draft"}</Badge>
             <Badge variant="outline">Progression: {percent(stats.answered, stats.totalQuestions)}%</Badge>
-            <Button variant="outline" onClick={() => setLocation("/mdr")}><ArrowLeft className="mr-2 h-4 w-4" />Liste audits</Button>
+            <Button variant="outline" onClick={() => setLocation("/mdr/audit")}><ArrowLeft className="mr-2 h-4 w-4" />Liste audits</Button>
             <Button variant="outline" onClick={downloadReport}><Download className="mr-2 h-4 w-4" />Télécharger rapport</Button>
             <Button variant="outline" onClick={printReport}><Printer className="mr-2 h-4 w-4" />Imprimer rapport</Button>
             <Button variant="outline" onClick={() => setLocation(`/mdr/audit/${auditId}`)}><RefreshCw className="mr-2 h-4 w-4" />Reprendre audit</Button>
