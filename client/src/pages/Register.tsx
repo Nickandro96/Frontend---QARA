@@ -30,7 +30,7 @@ export default function Register() {
   const registerMutation = trpc.system.register.useMutation({
     onSuccess: () => {
       refresh().then(() => {
-        window.location.href = "/";
+        window.location.href = "/dashboard";
       });
     },
     onError: (err) => {
@@ -226,15 +226,16 @@ export default function Register() {
               </div>
             </div>
 
-            <Link href="/login">
-              <Button variant="outline" className="w-full">
-                Déjà inscrit ? Se connecter
-              </Button>
-            </Link>
-          </div>
-
-          <div className="mt-6 text-center text-xs text-muted-foreground">
-            <p>En créant un compte, vous acceptez nos conditions d'utilisation.</p>
+            <div>
+              <p className="text-sm text-gray-600 text-center mb-3">
+                Déjà un compte ?
+              </p>
+              <Link href="/login">
+                <Button variant="outline" className="w-full">
+                  Se connecter
+                </Button>
+              </Link>
+            </div>
           </div>
         </CardContent>
       </Card>
