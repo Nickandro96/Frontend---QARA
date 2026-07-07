@@ -63,6 +63,25 @@ simple prop : nouvelle sidebar dédiée créée pour cet écran (voir Étape 1),
 | Travaux en cours | `trpc.audit.getRecentAudits({limit:5})` | Réel |
 | Veille réglementaire (liste) | `trpc.watch.updates({limit:3})` | Réel |
 
+## Régression corrigée après premier déploiement : page "/" cassée pour un visiteur non authentifié
+
+Signalée par l'utilisateur juste après le déploiement du lot ci-dessus :
+"il manque l'onglet de connexion sur la page d'accueil". Cause : la
+première version de `DashboardHome` lançait ses 5 requêtes protégées
+(`profile.get`, `dashboard.getKPIs`, `onboarding.getMyScope`,
+`audit.getRecentAudits`, `watch.updates`) **sans condition d'authentification**.
+Pour un visiteur non connecté, ces requêtes échouent en `UNAUTHORIZED`, ce
+qui déclenche le handler global de `main.tsx`
+(`redirectToLoginIfUnauthorized`) : un **rechargement complet de page**
+vers `/login` — sans jamais laisser le temps d'afficher un contenu public
+avec un lien de connexion visible.
+
+**Fix** : chaque requête protégée de `DashboardHome` reçoit désormais
+`{ enabled: isAuthenticated }` ; si l'utilisateur n'est pas authentifié
+(`useAuth()`), le composant affiche `ModernHome` (page publique existante,
+avec sa propre sidebar et son lien "Se connecter") au lieu du dashboard.
+`npm run build` : OK après correctif.
+
 ## Bug pré-existant noté au passage (non corrigé, hors périmètre)
 
 `AuditsList.tsx` (route `/audits`) appelle `trpc.audit.listAudits`, qui

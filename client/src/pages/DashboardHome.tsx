@@ -11,6 +11,8 @@ import {
   Bell,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
+import ModernHome from "./ModernHome";
 
 /**
  * Dashboard d'accueil — spec figée docs/design-passation/SPEC-dashboard-accueil.md
@@ -124,11 +126,25 @@ function statusLabel(status?: string) {
 }
 
 export default function DashboardHome() {
-  const { data: profile } = trpc.profile.get.useQuery();
-  const { data: kpis } = trpc.dashboard.getKPIs.useQuery();
-  const { data: scope } = trpc.onboarding.getMyScope.useQuery();
-  const { data: recentAudits } = trpc.audit.getRecentAudits.useQuery({ limit: 5 });
-  const { data: watch } = trpc.watch.updates.useQuery({ limit: 3 });
+  const { isAuthenticated, loading: authLoading } = useAuth();
+
+  // Requêtes protégées : désactivées tant que l'utilisateur n'est pas
+  // authentifié, sinon elles échouent en UNAUTHORIZED et le handler global
+  // (main.tsx) fait un rechargement complet vers /login — masquant tout
+  // accès public à "/" (page d'accueil sans onglet de connexion visible).
+  const { data: profile } = trpc.profile.get.useQuery(undefined, { enabled: isAuthenticated });
+  const { data: kpis } = trpc.dashboard.getKPIs.useQuery(undefined, { enabled: isAuthenticated });
+  const { data: scope } = trpc.onboarding.getMyScope.useQuery(undefined, { enabled: isAuthenticated });
+  const { data: recentAudits } = trpc.audit.getRecentAudits.useQuery({ limit: 5 }, { enabled: isAuthenticated });
+  const { data: watch } = trpc.watch.updates.useQuery({ limit: 3 }, { enabled: isAuthenticated });
+
+  // Visiteur non authentifié : on garde ModernHome (page publique existante,
+  // avec sa propre sidebar et son lien "Se connecter") plutôt que d'afficher
+  // un dashboard vide/protégé. Le nouveau dashboard cockpit n'est montré
+  // qu'une fois connecté.
+  if (!authLoading && !isAuthenticated) {
+    return <ModernHome />;
+  }
 
   const activeCodes = new Set<ReferentialCode>((scope?.referentialCodes ?? []) as ReferentialCode[]);
   const activeProductRefs = PRODUCT_REFS.filter((c) => activeCodes.has(c));
