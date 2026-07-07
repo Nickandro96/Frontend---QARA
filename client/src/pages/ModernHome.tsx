@@ -13,6 +13,7 @@ import {
   Award,
 } from "lucide-react";
 
+/** @deprecated Remplacé par DashboardHome sur la route "/" (voir PROGRESS-dashboard.md). Non routé, conservé pour référence. */
 export default function ModernHome() {
   const { t } = useTranslation();
 

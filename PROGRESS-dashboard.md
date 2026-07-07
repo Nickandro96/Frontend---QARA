@@ -26,15 +26,27 @@ simple prop : nouvelle sidebar dédiée créée pour cet écran (voir Étape 1),
 
 - [x] Étape 0 — Préparation : ce fichier créé, composant cible identifié
       (`ModernHome.tsx` → remplacé, routé sur `/`).
-- [ ] Étape 1 — Layout général + nouvelle sidebar (`CockpitSidebar.tsx`).
-- [ ] Étape 2 — En-tête + bandeau 4 indicateurs.
-- [ ] Étape 3 — Section référentiels (amendement A1 : ISO 13485 en carte,
-      ISO 14971/9001 en bandeau transverse compact).
-- [ ] Étape 4 — Colonnes basses (Travaux en cours + Veille réglementaire).
-- [ ] Étape 5 — Branchement des données réelles (voir §Mapping ci-dessous).
-- [ ] Étape 6 — Nettoyage minimal : route `/` pointe vers le nouveau
-      composant, `ModernHome.tsx` marqué `@deprecated` (non supprimé, non
-      routé).
+- [x] Étape 1 — Layout général + nouvelle sidebar (`CockpitSidebar.tsx`) :
+      sidebar bleu nuit 194px, logo, 7 items, carte compte ; zone de
+      contenu `max-width` 1280px centrée (règle d'affichage critique
+      respectée).
+- [x] Étape 2 — En-tête + bandeau 4 indicateurs (`DashboardHome.tsx`).
+- [x] Étape 3 — Section référentiels : grille 2 colonnes pour les
+      référentiels "produit" actifs (MDR/IVDR/FDA QMSR/MDSAP/ISO 13485) +
+      carte pointillée "Activer un référentiel" ; bandeau "Normes
+      transverses" séparé pour ISO 14971/9001 (amendement A1), masqué si
+      aucune transverse active.
+- [x] Étape 4 — Colonnes basses : Travaux en cours (1.25fr) + Veille
+      réglementaire (1fr).
+- [x] Étape 5 — Branchement des données réelles (voir §Mapping ci-dessous).
+      Aucun changement backend nécessaire : `onboarding.getMyScope()` (déjà
+      existant) expose directement `referentialCodes`, la source correcte
+      pour "référentiels actifs" — plus fiable que le champ `audits.type`
+      envisagé un temps (incohérent selon le référentiel : ISO l'écrit
+      toujours "internal", FDA toujours "fda").
+- [x] Étape 6 — Nettoyage minimal : route `/` pointe vers `DashboardHome`,
+      `ModernHome.tsx` marqué `@deprecated` en tête de fichier (non
+      supprimé, non routé). `npm run build` passe sans erreur.
 
 ## Mapping données — ce qui est réel vs démo
 
@@ -46,7 +58,7 @@ simple prop : nouvelle sidebar dédiée créée pour cet écran (voir Étape 1),
 | Écarts ouverts (« X majeurs ») | — | `TODO(data)`: pas de comptage par criticité exposé par `getKPIs` ; nécessiterait `dashboard.getDrilldown({type:"findings", filters:{criticality:"critical"}})` — non branché dans ce lot |
 | Dispositifs classés | — | `TODO(data)`: aucune procédure backend ne persiste/liste les classifications (`classification.classify` est une mutation à la volée, sans historique) — valeur de démonstration affichée |
 | Alertes de veille (compteur + « nouvelles ») | `trpc.watch.updates({limit:5})` | Réel pour le total ; `TODO(data)` pour la distinction « nouvelles » (pas de champ lu/non-lu exposé) |
-| Référentiels actifs (liste + outils) | `trpc.audit.getRecentAudits({limit:50})`, groupé par `auditType` | Réel pour la présence/l'absence d'un référentiel ; scores par référentiel non disponibles (aucune procédure n'agrège un score par référentiel) |
+| Référentiels actifs (liste + outils) | `trpc.onboarding.getMyScope().referentialCodes` | Réel |
 | Score par carte référentiel | — | `TODO(data)`: valeur de démonstration affichée, nécessiterait `dashboard.getScoring({referentialIds:[...]})` branché référentiel par référentiel (hors périmètre de ce lot) |
 | Travaux en cours | `trpc.audit.getRecentAudits({limit:5})` | Réel |
 | Veille réglementaire (liste) | `trpc.watch.updates({limit:3})` | Réel |

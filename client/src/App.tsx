@@ -9,7 +9,9 @@ import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import ActionDashboard from "./pages/ActionDashboard";
-import ModernHome from "./pages/ModernHome";
+import DashboardHome from "./pages/DashboardHome";
+// ModernHome: @deprecated, non routé — remplacé par DashboardHome (voir
+// PROGRESS-dashboard.md). Conservé en place, non supprimé.
 import Classification from "./pages/Classification";
 import Dashboard from "./pages/Dashboard";
 import DashboardExecutive from "./pages/DashboardExecutive";
@@ -63,7 +65,7 @@ import MDRAuditReview from "./pages/MDRAuditReview";
 function Router() {
   return (
     <Switch>
-      <Route path={"/"} component={ModernHome} />
+      <Route path={"/"} component={DashboardHome} />
       <Route path={"/login"} component={Login} />
       <Route path={"/register"} component={Register} />
       <Route path={"/onboarding"} component={Onboarding} />
