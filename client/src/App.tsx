@@ -62,8 +62,7 @@ import MDRAuditReview from "./pages/MDRAuditReview";
 function Router() {
   return (
     <Switch>
-      <Route path={"/"} component={Dashboard} />
-      <Route path={"/landing"} component={ModernHome} />
+      <Route path={"/"} component={ModernHome} />
       <Route path={"/login"} component={Login} />
       <Route path={"/register"} component={Register} />
       <Route path={"/action-dashboard"} component={ActionDashboard} />
