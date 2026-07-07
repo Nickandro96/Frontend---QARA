@@ -19,7 +19,7 @@ Note : `docs/design-passation/SPEC-dashboard-accueil-v2.md` et la maquette HTML 
 
 - [x] Étape 0 - Préparation : créer ce fichier, identifier la route et le composant dashboard réel.
 - [x] Étape 1 - Layout général + sidebar.
-- [ ] Étape 2 - En-tête + bandeau 4 indicateurs.
+- [x] Étape 2 - En-tête + bandeau 4 indicateurs.
 - [ ] Étape 3 - Section référentiels avec amendement A1.
 - [ ] Étape 4 - Colonnes basses : travaux en cours + veille réglementaire.
 - [ ] Étape 5 - Branchement des données et TODO data.
@@ -27,4 +27,9 @@ Note : `docs/design-passation/SPEC-dashboard-accueil-v2.md` et la maquette HTML 
 
 ## Mapping données restant
 
-- À compléter pendant l'étape 5.
+- `profile.activeFrameworks` : source backend pressentie pour les référentiels et normes activés par l'utilisateur ou l'organisation.
+- `dashboard.getKPIs.frameworkScores` : source backend pressentie pour les scores par référentiel (`MDR`, `IVDR`, `FDA QMSR`, `MDSAP`, `ISO 13485`, `ISO 14971`, `ISO 9001`).
+- `dashboard.getKPIs.classifiedDevices` : source backend pressentie pour le compteur `Dispositifs classés`.
+- `dashboard.getKPIs.watchAlerts` : source backend pressentie pour le compteur `Alertes de veille`.
+- File mixte `Travaux en cours` : source backend pressentie combinant audits, classifications et voies FDA.
+- `RegulatoryWatch` : source backend pressentie pour les alertes de veille avec référentiel, criticité et date.
