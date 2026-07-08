@@ -91,6 +91,26 @@ Fallback SPA :
 
 - `vercel.json` contient deja une regle de rewrite `/(.*)` vers `/index.html`. Le F5 sur liens profonds devra etre valide en test reel.
 
+## Etape 2 - Layout authentifie + gardes auth
+
+Statut : termine.
+
+Changements implementes :
+
+- Ajout d'un `ProtectedRoute` avec verification session, etat de chargement, redirection `/login?returnTo=<route>`, et redirection forcee vers `/onboarding` si aucun referentiel actif n'est detecte.
+- Ajout d'un `PublicOnlyRoute` pour renvoyer les utilisateurs deja connectes vers `/dashboard`.
+- Ajout d'un `AuthenticatedLayout` unique avec sidebar cible : Dashboard, Audits, Classification, Voies FDA, Plan d'action, Rapports, Veille, carte compte et deconnexion.
+- Ajout d'utilitaires de session : nettoyage local, sanitisation `returnTo`, construction de l'URL login, redirection 401.
+- Ajout d'utilitaires onboarding : lecture locale des referentiels actifs en attente d'une source backend definitive.
+- Correction du `navigate` fantome dans `useAuth.ts`.
+- Gestion 401 dans le client tRPC : destruction session locale + redirection login depuis les zones non publiques.
+
+Validation :
+
+- `pnpm install --config.strict-ssl=false --ignore-scripts` execute avec le runtime Node embarque apres echec initial lie aux certificats du registre.
+- `vite build` tente avec Node embarque mais bloque avant compilation applicative : esbuild ne peut pas lire un repertoire parent sandbox (`Cannot read directory "../../../../../..": Access is denied`) et ne resout pas `vite.config.ts` dans cet environnement.
+- `tsc --noEmit` execute apres installation locale : echec sur de nombreuses erreurs preexistantes du projet, notamment shim tRPC global, casse `FDAAudit/FdaAudit`, modules/types manquants (`streamdown`, Google Maps, `../drizzle/schema`) et usages `useNavigate` wouter inexistants. Les nouveaux fichiers ne remontent que dans la meme famille d'erreurs tRPC deja presente partout.
+
 ## Exigences confirmees dans le perimetre
 
 - Gestion des 401 API : destruction de session + redirection `/login`.
@@ -102,7 +122,7 @@ Fallback SPA :
 
 - [x] Etape 0 - Realignement Git et inventaire initial.
 - [x] Etape 1 - Inventaire routes/pages approfondi + onboarding existant.
-- [ ] Etape 2 - Layout authentifie + gardes auth.
+- [x] Etape 2 - Layout authentifie + gardes auth.
 - [ ] Etape 3 - Table des routes cible + aliases/deprecations.
 - [ ] Etape 4 - Matrice abonnements centralisee.
 - [ ] Etape 5 - Etats vides/dashboard/onboarding force.

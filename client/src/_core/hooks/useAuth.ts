@@ -1,4 +1,5 @@
 import { trpc } from "@/lib/trpc";
+import { buildLoginUrl, clearClientSession } from "@/lib/session";
 import { TRPCClientError } from "@trpc/client";
 import { useCallback, useEffect, useMemo } from "react";
 import { useLocation } from "wouter";
@@ -11,6 +12,7 @@ type UseAuthOptions = {
 export function useAuth(options?: UseAuthOptions) {
   const { redirectOnUnauthenticated = false, redirectPath = "/login" } =
     options ?? {};
+  const [location, navigate] = useLocation();
   const utils = trpc.useUtils();
 
   const meQuery = trpc.auth.me.useQuery(undefined, {
@@ -36,16 +38,24 @@ export function useAuth(options?: UseAuthOptions) {
       }
       throw error;
     } finally {
+      clearClientSession();
       utils.auth.me.setData(undefined, null);
       await utils.auth.me.invalidate();
     }
   }, [logoutMutation, utils]);
 
   const state = useMemo(() => {
-    localStorage.setItem(
-      "manus-runtime-user-info",
-      JSON.stringify(meQuery.data)
-    );
+    if (typeof window !== "undefined") {
+      if (meQuery.data) {
+        window.localStorage.setItem(
+          "manus-runtime-user-info",
+          JSON.stringify(meQuery.data)
+        );
+      } else {
+        clearClientSession();
+      }
+    }
+
     return {
       user: meQuery.data ?? null,
       loading: meQuery.isLoading || logoutMutation.isPending,
@@ -67,8 +77,10 @@ export function useAuth(options?: UseAuthOptions) {
     if (typeof window === "undefined") return;
     if (window.location.pathname === redirectPath) return;
 
-    navigate(redirectPath);
+    navigate(redirectPath === "/login" ? buildLoginUrl(location) : redirectPath);
   }, [
+    location,
+    navigate,
     redirectOnUnauthenticated,
     redirectPath,
     logoutMutation.isPending,
