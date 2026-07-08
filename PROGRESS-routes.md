@@ -111,6 +111,33 @@ Validation :
 - `vite build` tente avec Node embarque mais bloque avant compilation applicative : esbuild ne peut pas lire un repertoire parent sandbox (`Cannot read directory "../../../../../..": Access is denied`) et ne resout pas `vite.config.ts` dans cet environnement.
 - `tsc --noEmit` execute apres installation locale : echec sur de nombreuses erreurs preexistantes du projet, notamment shim tRPC global, casse `FDAAudit/FdaAudit`, modules/types manquants (`streamdown`, Google Maps, `../drizzle/schema`) et usages `useNavigate` wouter inexistants. Les nouveaux fichiers ne remontent que dans la meme famille d'erreurs tRPC deja presente partout.
 
+## Etape 3 - Table des routes cible + aliases/deprecations
+
+Statut : termine.
+
+Changements implementes :
+
+- Remplacement de la table de routes `App.tsx` par les routes cible : `/`, `/login`, `/signup`, `/forgot-password`, `/onboarding`, `/dashboard`, `/audits`, `/audits/:id`, `/classification`, `/classification/:id`, `/fda`, `/fda/:id`, `/action-plan`, `/reports`, `/reports/:id`, `/veille`, `/account`.
+- Creation d'une landing publique minimale `Landing.tsx` avec marque QARA et `TODO(design): landing definitive a venir`.
+- Creation de `ForgotPassword.tsx`.
+- Creation de `Onboarding.tsx` : wizard 4 etapes Referentiels -> Role economique -> Marches -> Apercu chiffre, avec stockage local temporaire.
+- Correction login : prise en charge `returnTo` apres connexion.
+- Correction signup : route officielle `/signup`, redirection vers `/onboarding` apres creation du compte.
+- 404 QARA propre avec retour dashboard si connecte, login sinon.
+- Depreciation par redirection des doublons historiques :
+  - `/register` -> `/signup`
+  - `/profile` et `/subscription*` -> `/account`
+  - `/regulatory-watch`, `/watch-dashboard`, `/fda-regulatory-watch`, `/us/fda-watch` -> `/veille`
+  - `/action-dashboard` -> `/action-plan`
+  - `/dashboard-v2`, `/dashboard-executive`, `/home-old` -> `/dashboard`
+  - anciennes routes FDA qualification/classification/dashboard -> `/fda`
+  - anciennes routes FDA audit -> `/audits`
+
+Validation :
+
+- Controle TypeScript cible sur `App.tsx`, `Login.tsx`, `Register.tsx`, `ForgotPassword.tsx`, `Landing.tsx`, `Onboarding.tsx`, `NotFound.tsx` : seules restent les erreurs tRPC globales deja documentees (`Provider`, `system`) dues au shim `AppRouter`.
+- Point restant reporte et assume pour etape 5 : plusieurs pages historiques gardent encore leur header/layout interne. Le layout authentifie cible englobe les routes, mais le nettoyage visuel fin du dashboard/pages anciennes sera traite avec les etats vides.
+
 ## Exigences confirmees dans le perimetre
 
 - Gestion des 401 API : destruction de session + redirection `/login`.
@@ -123,7 +150,7 @@ Validation :
 - [x] Etape 0 - Realignement Git et inventaire initial.
 - [x] Etape 1 - Inventaire routes/pages approfondi + onboarding existant.
 - [x] Etape 2 - Layout authentifie + gardes auth.
-- [ ] Etape 3 - Table des routes cible + aliases/deprecations.
+- [x] Etape 3 - Table des routes cible + aliases/deprecations.
 - [ ] Etape 4 - Matrice abonnements centralisee.
 - [ ] Etape 5 - Etats vides/dashboard/onboarding force.
 - [ ] Etape 6 - Plan de test execute.
