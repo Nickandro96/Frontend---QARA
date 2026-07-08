@@ -1,6 +1,7 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
+import { getPlanLabel } from "@/lib/plans";
 import {
   BarChart3,
   Bell,
@@ -24,14 +25,6 @@ const navItems = [
   { label: "Rapports", path: "/reports", icon: FileText },
   { label: "Veille", path: "/veille", icon: Bell },
 ];
-
-function planLabel(plan: unknown) {
-  const value = typeof plan === "string" ? plan.toLowerCase() : "free";
-  if (value === "pro") return "Plan Pro";
-  if (value === "expert") return "Plan Expert";
-  if (value === "entreprise") return "Plan Entreprise";
-  return "Plan Free";
-}
 
 type AuthenticatedLayoutProps = {
   children: ReactNode;
@@ -99,7 +92,7 @@ export function AuthenticatedLayout({ children }: AuthenticatedLayoutProps) {
               <UserCircle className="h-8 w-8 text-[#3b6fe0]" />
               <div className="min-w-0">
                 <div className="truncate text-sm font-semibold">{organization}</div>
-                <div className="text-xs text-[#6b7688]">{planLabel((profile as any)?.subscriptionTier)}</div>
+                <div className="text-xs text-[#6b7688]">{getPlanLabel((profile as any)?.subscriptionTier)}</div>
               </div>
             </Link>
             <Button variant="outline" className="w-full justify-start gap-2" onClick={handleLogout}>

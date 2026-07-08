@@ -1,4 +1,5 @@
-import { UpgradeRequired } from "@/components/UpgradeRequired";
+import { LockedFeature } from "@/components/LockedFeature";
+import { hasCapability } from "@/lib/plans";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,9 +21,8 @@ export default function FdaClassification() {
   const { user, isAuthenticated, loading } = useAuth();
   const { data: profile } = trpc.profile.get.useQuery(undefined, { enabled: isAuthenticated });
 
-  // Block FREE users
-  if (isAuthenticated && profile && profile.subscriptionTier === 'free' && user?.role !== 'admin') {
-    return <UpgradeRequired feature="Classification FDA (US)" />;
+  if (isAuthenticated && !hasCapability("canUseFDA", profile, user)) {
+    return <LockedFeature feature="Voies FDA (510(k), De Novo, PMA)" />;
   }
   const [, setLocation] = useLocation();
 

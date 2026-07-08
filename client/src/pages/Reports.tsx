@@ -1,9 +1,10 @@
-import { UpgradeRequired } from "@/components/UpgradeRequired";
+import { LockedFeature } from "@/components/LockedFeature";
+import { hasCapability } from "@/lib/plans";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
-import { Shield, Loader2, FileSpreadsheet, FileText, Download } from "lucide-react";
+import { Loader2, FileSpreadsheet, FileText, Download } from "lucide-react";
 import { Link } from "wouter";
 import { getLoginUrl } from "@/const";
 import { toast } from "sonner";
@@ -13,11 +14,7 @@ import { useState } from "react";
 export default function Reports() {
   const { user, isAuthenticated, loading } = useAuth();
   const { data: profile } = trpc.profile.get.useQuery(undefined, { enabled: isAuthenticated });
-
-  // Block FREE users
-  if (isAuthenticated && profile && profile.subscriptionTier === 'free' && user?.role !== 'admin') {
-    return <UpgradeRequired feature="Rapports & Exports" />;
-  }
+  const canExport = hasCapability("canExportReports", profile, user);
   const { data: globalScore } = trpc.audit.getScore.useQuery({}, { enabled: isAuthenticated });
   const [exporting, setExporting] = useState(false);
 
@@ -81,40 +78,7 @@ export default function Reports() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="border-b bg-white sticky top-0 z-50">
-        <div className="container flex h-16 items-center justify-between">
-          <div className="flex items-center gap-6">
-            <Link href="/">
-              <div className="flex items-center gap-2 cursor-pointer">
-                <Shield className="h-6 w-6 text-primary" />
-                <span className="font-bold">MDR Compliance</span>
-              </div>
-            </Link>
-            <nav className="flex items-center gap-4">
-              <Link href="/dashboard">
-                <Button variant="ghost">Dashboard</Button>
-              </Link>
-              <Link href="/audit">
-                <Button variant="ghost">Audit</Button>
-              </Link>
-              <Link href="/reports">
-                <Button variant="ghost" className="font-medium">Rapports</Button>
-              </Link>
-              <Link href="/regulatory-watch">
-                <Button variant="ghost">Veille</Button>
-              </Link>
-            </nav>
-          </div>
-          <div className="flex items-center gap-4">
-            <Link href="/profile">
-              <Button variant="outline">{user?.name || "Profil"}</Button>
-            </Link>
-          </div>
-        </div>
-      </header>
-
+    <div>
       <main className="container py-8">
         <h1 className="text-3xl font-bold mb-8">Rapports & Exports</h1>
 
@@ -147,39 +111,47 @@ export default function Reports() {
         </Card>
 
         {/* Export Options */}
-        <div className="grid md:grid-cols-2 gap-6">
-          <Card>
-            <CardHeader>
-              <FileSpreadsheet className="h-10 w-10 text-green-600 mb-2" />
-              <CardTitle>Export Excel</CardTitle>
-              <CardDescription>
-                Rapport détaillé avec résumé, résultats par processus, plan d'action et index des preuves
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button onClick={() => handleExport("excel")} className="w-full" disabled={exporting}>
-                {exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-                Télécharger Excel
-              </Button>
-            </CardContent>
-          </Card>
+        {canExport ? (
+          <div className="grid md:grid-cols-2 gap-6">
+            <Card>
+              <CardHeader>
+                <FileSpreadsheet className="h-10 w-10 text-green-600 mb-2" />
+                <CardTitle>Export Excel</CardTitle>
+                <CardDescription>
+                  Rapport détaillé avec résumé, résultats par processus, plan d'action et index des preuves
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button onClick={() => handleExport("excel")} className="w-full" disabled={exporting}>
+                  {exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                  Télécharger Excel
+                </Button>
+              </CardContent>
+            </Card>
 
-          <Card>
-            <CardHeader>
-              <FileText className="h-10 w-10 text-red-600 mb-2" />
-              <CardTitle>Export PDF</CardTitle>
-              <CardDescription>
-                Rapport professionnel prêt pour les audits ON et les inspections autorités
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button onClick={() => handleExport("pdf")} variant="outline" className="w-full" disabled={exporting}>
-                {exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-                Télécharger PDF
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
+            <Card>
+              <CardHeader>
+                <FileText className="h-10 w-10 text-red-600 mb-2" />
+                <CardTitle>Export PDF</CardTitle>
+                <CardDescription>
+                  Rapport professionnel prêt pour les audits ON et les inspections autorités
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button onClick={() => handleExport("pdf")} variant="outline" className="w-full" disabled={exporting}>
+                  {exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                  Télécharger PDF
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+        ) : (
+          <LockedFeature
+            feature="Export des rapports"
+            description="Le rapport reste consultable à l'écran. L'export Excel/PDF nécessite le Plan Pro."
+            variant="block"
+          />
+        )}
 
         {/* Advanced Features */}
         <div className="mt-8 space-y-6">

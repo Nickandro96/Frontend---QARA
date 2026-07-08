@@ -173,6 +173,26 @@ Ecarts mineurs non bloquants (non traites ici, notes pour memoire) :
 - La page `/onboarding` s'affiche avec le chrome complet de `AuthenticatedLayout` (sidebar visible) alors que l'utilisateur n'a pas encore de referentiel actif — incoherence UX mineure, pas de blocage fonctionnel.
 - Deux `Failed to load resource: net::ERR_CONNECTION_RESET` observes en console sur la Landing/404 (ressources tierces non bloquantes, a confirmer en etape 7 si elles persistent apres build).
 
+## Etape 4 - Matrice abonnements centralisee
+
+Statut : termine.
+
+Changements implementes :
+
+- Creation de `client/src/lib/plans.ts` : source de verite unique par **capacites** (`canUseClassification`, `canUseFDA`, `canUseVeille`, `canExportReports`, `canUseAI`, `maxReferentiels`), pas par nom de plan code en dur. Matrice de depart : Free = 1 referentiel, pas de classification/FDA/veille/IA, pas d'export. Pro (et expert/entreprise, traites comme Pro pour l'instant) = tout, IA explicitement desactivee (`canUseAI: false`) tant que la cle API serveur n'est pas branchee — aucune cle en dur dans le code.
+- `hasCapability(capability, profile, user)` centralise aussi le bypass admin historique (`user.role === "admin"` -> acces complet), qui existait deja de facon dispersee dans chaque page.
+- Creation de `client/src/components/LockedFeature.tsx` : composant reutilisable ecran (`variant="page"`) ou bloc (`variant="block"`) avec cadenas, plan requis, et bouton "Passer au Plan Pro" vers `/account`. Une fonctionnalite verrouillee reste toujours visible (jamais masquee, jamais une erreur).
+- Remplacement des verrouillages disperses par la matrice centralisee dans les pages reellement routees (verifie via `client/src/App.tsx`) :
+  - `Classification.tsx` : `UpgradeRequired` -> `hasCapability("canUseClassification", ...)` + `LockedFeature`.
+  - `FdaClassification.tsx` (route `/fda`) : idem avec `canUseFDA`.
+  - `RegulatoryWatch.tsx` (route `/veille`) : idem avec `canUseVeille`.
+  - `Reports.tsx` (route `/reports`) : **correction de fond** — la page bloquait entierement les utilisateurs Free (contraire au cahier des charges "rapport a l'ecran sans export"). Le score reste desormais visible pour tous ; seul le bloc d'export Excel/PDF est remplace par un `LockedFeature` en variante bloc pour les comptes sans `canExportReports`. En profitant de l'edition, suppression du header/nav interne duplique (`Dashboard/Audit/Rapports/Veille`) qui faisait double emploi avec la sidebar `AuthenticatedLayout`.
+  - `Documents.tsx` : import `UpgradeRequired` mort (jamais utilise) retire.
+  - `AuthenticatedLayout.tsx` : fonction locale `planLabel` dupliquee remplacee par `getPlanLabel` de `plans.ts`.
+- Pages non routees dans `App.tsx` (`Audit.tsx`, `Home.tsx`, `FdaRegulatoryWatch.tsx`, `SubscriptionSuccess.tsx`) continuent d'importer l'ancien `UpgradeRequired` : code mort non atteignable, non touche (hors perimetre, pas de route qui les monte).
+- `UpgradeRequired.tsx` conserve tel quel (encore reference par le code mort ci-dessus) mais n'est plus utilise par aucune page reellement routee.
+- Acces direct par URL a une route verrouillee -> ecran verrouillee (verifie : chaque page gate son propre rendu au niveau du composant de page, monte inconditionnellement par `ProtectedRoute`/`AuthenticatedLayout`, donc toute navigation directe vers `/classification`, `/fda`, `/veille` avec un compte Free affichera `LockedFeature` et non la fonctionnalite).
+
 ## Exigences confirmees dans le perimetre
 
 - Gestion des 401 API : destruction de session + redirection `/login`.
@@ -186,7 +206,7 @@ Ecarts mineurs non bloquants (non traites ici, notes pour memoire) :
 - [x] Etape 1 - Inventaire routes/pages approfondi + onboarding existant.
 - [x] Etape 2 - Layout authentifie + gardes auth.
 - [x] Etape 3 - Table des routes cible + aliases/deprecations.
-- [ ] Etape 4 - Matrice abonnements centralisee.
+- [x] Etape 4 - Matrice abonnements centralisee.
 - [ ] Etape 5 - Etats vides/dashboard/onboarding force.
 - [ ] Etape 6 - Plan de test execute.
 - [ ] Etape 7 - Failles backend consignees et build.

@@ -14,7 +14,8 @@ import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, Download, FileTex
 import { toast } from "sonner";
 import { exportClassificationToExcel, exportClassificationToPDF } from "@/lib/exportUtils";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { UpgradeRequired } from "@/components/UpgradeRequired";
+import { LockedFeature } from "@/components/LockedFeature";
+import { hasCapability } from "@/lib/plans";
 import { getLoginUrl } from "@/const";
 
 type WizardStep = 
@@ -138,10 +139,8 @@ export default function Classification() {
     return null;
   }
 
-  // Check subscription tier
-  const tier = profile?.subscriptionTier?.toUpperCase();
-  if (tier === "FREE") {
-    return <UpgradeRequired feature="la classification MDR" />;
+  if (!hasCapability("canUseClassification", profile, user)) {
+    return <LockedFeature feature="Classification MDR" />;
   }
 
   const steps: { id: WizardStep; title: string; description: string }[] = [
