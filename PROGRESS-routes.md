@@ -252,7 +252,7 @@ Aucun des 10 parcours n'est reste en echec : le seul echec reel (parcours 4) a e
 - [x] Etape 4 - Matrice abonnements centralisee.
 - [x] Etape 5 - Etats vides/dashboard/onboarding force.
 - [x] Etape 6 - Plan de test execute.
-- [ ] Etape 7 - Failles backend consignees et build.
+- [x] Etape 7 - Failles backend consignees et build.
 
 ## Resultats des tests obligatoires
 
@@ -269,6 +269,34 @@ Executes le 2026-07-08. Detail complet dans la section "Etape 6" ci-dessus.
 9. 404 propre : **PASS**.
 10. Parcours metier MDR complet : **PASS**.
 
-## Failles backend a corriger
+## Etape 7 - Build, types et failles backend
 
-- A verifier pendant les tests : controle serveur de session et de plan pour les endpoints classification, FDA, veille, exports et rapports.
+Statut : termine.
+
+### Build et types
+
+- `npx vite build` : **passe** (contrairement au sandbox de l'agent precedent). Build de production complet en ~20s, warning non bloquant sur la taille du bundle principal (2.9 Mo) — non traite ici, hors perimetre routes/auth.
+- `npx tsc --noEmit` : deux erreurs **fatales** qui empechaient meme l'analyse du reste du projet, corrigees en commit separe `fix(legacy)` :
+  - `client/src/pages/FdaAudit.tsx` et `client/src/pages/FDAAudit.tsx` etaient deux fichiers strictement identiques (diff vide) ne differant que par la casse, tous deux orphelins (aucune route ni import ne les reference dans `App.tsx` ni ailleurs). TypeScript refuse de compiler avec deux noms de fichiers ne differant que par la casse (`TS1149`). Suppression de `FdaAudit.tsx` (doublon mort), conservation de `FDAAudit.tsx` (aligne avec `FDAQualification.tsx`).
+  - `@types/node` n'etait pas declare en devDependency alors que `tsconfig.json` le requiert (`types: ["node", "vite/client"]`), provoquant une erreur fatale `TS2688`. Ajout de `@types/node@^22.20.1` en devDependency (aligne sur le runtime Node 22 utilise).
+- Apres ces deux correctifs, `tsc --noEmit` remonte **271 erreurs preexistantes**, aucune dans le perimetre routes/auth/plans introduit par ce chantier (verifie fichier par fichier : les seules occurrences dans les fichiers touches ici — `App.tsx`, `useAuth.ts`, `AuthenticatedLayout.tsx`, `Dashboard.tsx`, `Classification.tsx`, `FdaClassification.tsx`, `RegulatoryWatch.tsx`, `Reports.tsx`, `Profile.tsx`, `AuditsList.tsx`, `trpc.ts` — relevent toutes de la meme famille d'erreur preexistante decrite ci-dessous, deja documentee par l'agent precedent en etape 2).
+- Ces 271 erreurs ne bloquent pas `vite build` (qui n'execute pas de verification de types complete), donc n'entrent pas dans le critere "bloque le build" de la mission. Non corrigees ici (corrigerait de la logique metier / infrastructure partagee hors perimetre).
+
+### Dette technique preexistante (non corrigee, hors perimetre)
+
+- **Shim tRPC `AppRouter` global** (155 erreurs `TS2339`, la grande majorite du total) : le type partage `shared/types.ts` / `@/server-types` ne correspond pas a la forme reelle du routeur backend (`server/routers.ts`), donc tout appel `trpc.<router>.<procedure>` remonte une erreur de type generique ("collides with a built-in method..."). Deja identifie par l'agent precedent et par le backend lui-meme (`docs/audit/00-etat-du-projet.md` section 6 : "Lot 2 — partage du type AppRouter — est le plus naturel ensuite"). Corriger cela necessite de partager le vrai type `AppRouter` entre les deux depots (actuellement deux projets separes) : hors perimetre de ce chantier routes/auth, a traiter dans le lot dedie deja identifie cote backend.
+- **Incoherence de casse `FDAAudit`/`FdaAudit`** : partiellement resolue (suppression du doublon mort ci-dessus). Le fichier restant `FDAAudit.tsx` (13 erreurs internes) n'est route nulle part dans `App.tsx` : code mort, non touche.
+- **Modules/types manquants** : `streamdown` (`AIChatBox.tsx`), `@/hooks/use-toast` (`dashboard/ExportTools.tsx`), `./MDRAuditDrilldown` (import casse dans `mdrRoutes.tsx`, different de `MDRAuditDrilldown.tsx` reellement present), `../drizzle/schema` (`shared/types.ts` — normal, le schema Drizzle vit dans le depot backend separe). Aucun de ces fichiers n'est dans le perimetre routes/auth.
+- **77 erreurs `TS7006`** (parametres implicitement `any`) et **9 `TS2353`** (proprietes d'objet excedentaires) dispersees dans des pages non liees a ce chantier (`DashboardV2.tsx`, `MDRAudit.tsx`, `AuditDetail.tsx`, `ISOAuditWizard.tsx`, etc.) : non corrigees, logique metier hors perimetre.
+
+### Failles backend a corriger (a traiter dans un lot dedie, non corrige ici)
+
+Verification effectuee sur `server/routers.ts`, `server/classification-router.ts`, `server/fda-router.ts`, `server/watch-router.ts` : tous les endpoints verifient la session (`protectedProcedure`, qui rejette les requetes sans utilisateur authentifie), mais **aucun endpoint ne verifie le plan d'abonnement (`subscriptionTier`) cote serveur**. Le verrouillage des fonctionnalites Pro (etape 4) est **entierement cote frontend**. Un compte Free authentifie peut, en appelant directement les endpoints tRPC (ex. via la console navigateur), contourner l'ecran verrouille et obtenir les memes reponses qu'un compte Pro :
+
+1. **Classification** — `classification.classify` (`server/classification-router.ts:673`) : `protectedProcedure` seul, aucun controle de plan. Criticite : moyenne (contournement d'un verrou commercial, pas de fuite de donnees tierces).
+2. **FDA** — tous les endpoints de `server/fda-router.ts` (`getFrameworks`, `getQualification`, `saveQualification`, `createAudit`, `getQuestions`, `saveResponse`, `getAuditDashboard`, `getReports`, `getDocuments`...) : idem, `protectedProcedure` seul. Un compte Free peut piloter un audit FDA complet via l'API. Criticite : moyenne.
+3. **Veille reglementaire** — `server/watch-router.ts` (`updates`, `latest`, `critical`, profil veille `get`/`upsert`) : idem. Criticite : moyenne.
+4. **Export de rapports** — pas d'endpoint dedie : la generation PDF/Excel (`client/src/lib/exportUtils.ts`) est **entierement cote client**, a partir de donnees deja recuperees via `audit.getScore`/`questions.list`/`audit.getResponses` (elles-memes sans controle de plan, mais deja legitimement visibles a l'ecran pour le Plan Free selon le cahier des charges). Le verrou d'export n'est donc qu'un verrou d'interface, contournable depuis la console navigateur. Criticite : faible a moyenne (pas de fuite au-dela de ce qui est deja visible, mais contourne l'intention commerciale).
+5. **Point positif verifie** — `system.updateUserProfile` (mutation qui permet de changer `subscriptionTier` d'un utilisateur, utilisee par `AdminUsers.tsx`) est correctement protegee par `adminProcedure` (`server/_core/trpc.ts`, verifie `user.role === "admin"` cote serveur). Aucune faille trouvee sur ce point precis.
+
+Recommandation pour le lot dedie : ajouter un middleware/helper serveur equivalent a `hasCapability` (deja cree cote frontend dans `client/src/lib/plans.ts`) qui verifie `ctx.user`/`subscriptionTier` avant d'executer les procedures listees ci-dessus, en reutilisant si possible la meme matrice de capacites pour eviter toute divergence entre frontend et backend.
