@@ -51,7 +51,7 @@ export function useAuth(options?: UseAuthOptions) {
           "manus-runtime-user-info",
           JSON.stringify(meQuery.data)
         );
-      } else {
+      } else if (!meQuery.isLoading) {
         clearClientSession();
       }
     }
