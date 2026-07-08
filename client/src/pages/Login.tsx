@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { sanitizeReturnTo } from "@/lib/session";
 import { trpc } from "@/lib/trpc";
 
+const AUTH_REFRESH_TIMEOUT_MS = 1500;
+
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -17,10 +19,15 @@ export default function Login() {
 
   const loginMutation = trpc.system.login.useMutation({
     onSuccess: () => {
-      refresh().then(() => {
-        const params = new URLSearchParams(window.location.search);
-        navigate(sanitizeReturnTo(params.get("returnTo")));
-      });
+      void Promise.race([
+        refresh(),
+        new Promise((resolve) => window.setTimeout(resolve, AUTH_REFRESH_TIMEOUT_MS)),
+      ])
+        .catch(() => undefined)
+        .finally(() => {
+          const params = new URLSearchParams(window.location.search);
+          navigate(sanitizeReturnTo(params.get("returnTo")));
+        });
     },
     onError: (err: { message?: string }) => {
       setError(err.message || "Une erreur est survenue");

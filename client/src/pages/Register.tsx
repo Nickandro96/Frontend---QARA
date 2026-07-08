@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { trpc } from "@/lib/trpc";
 
+const AUTH_REFRESH_TIMEOUT_MS = 1500;
+
 export default function Register() {
   const [formData, setFormData] = useState({
     name: "",
@@ -24,9 +26,14 @@ export default function Register() {
 
   const registerMutation = trpc.system.register.useMutation({
     onSuccess: () => {
-      refresh().then(() => {
-        navigate("/onboarding");
-      });
+      void Promise.race([
+        refresh(),
+        new Promise((resolve) => window.setTimeout(resolve, AUTH_REFRESH_TIMEOUT_MS)),
+      ])
+        .catch(() => undefined)
+        .finally(() => {
+          navigate("/onboarding");
+        });
     },
     onError: (err: { message?: string }) => {
       setError(err.message || "Une erreur est survenue");
