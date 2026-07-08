@@ -138,6 +138,41 @@ Validation :
 - Controle TypeScript cible sur `App.tsx`, `Login.tsx`, `Register.tsx`, `ForgotPassword.tsx`, `Landing.tsx`, `Onboarding.tsx`, `NotFound.tsx` : seules restent les erreurs tRPC globales deja documentees (`Provider`, `system`) dues au shim `AppRouter`.
 - Point restant reporte et assume pour etape 5 : plusieurs pages historiques gardent encore leur header/layout interne. Le layout authentifie cible englobe les routes, mais le nettoyage visuel fin du dashboard/pages anciennes sera traite avec les etats vides.
 
+## Audit de reprise (2026-07-08)
+
+Statut : **conforme avec un ecart connu deja documente, non bloquant** (voir sous-etape 4.0 ci-dessous).
+
+Verifications effectuees :
+
+- `git log` : les commits `b7e08fa9`, `316a2469`, `2b926592`, `a27131df` sont bien presents et HEAD correspond a `origin/qara-design-passation` et `origin/claude/qara-routes-auth-stages-xk5awz` (les deux refs pointent sur le meme commit `a27131df`, aucune divergence).
+- `ProtectedRoute.tsx` / `PublicOnlyRoute.tsx` : garde de session reelle via `useAuth`, etat de chargement (`AuthLoadingScreen`) sans flash de contenu protege, redirection `/login?returnTo=...` via `buildLoginUrl`. Conforme.
+- `AuthenticatedLayout.tsx` : sidebar cible complete (Dashboard, Audits, Classification, Voies FDA, Plan d'action, Rapports, Veille, carte compte, deconnexion). Conforme sur le plan du composant lui-meme.
+- `App.tsx` : table de routes conforme au cahier des charges (publiques / protegees / onboarding / 404, alias de depreciation).
+- `client/src/lib/session.ts` : 401 -> `clearClientSession` + `redirectToLogin`, verifie dans `trpc.ts`. Conforme.
+- `useAuth.ts` : `navigate` bien utilise dans l'effet de redirection (plus de variable fantome). Conforme.
+- Pages `Landing`, `Login`, `Register`, `ForgotPassword`, `Onboarding`, `NotFound` : rendues sans erreur console/page bloquante lors du test de fumee reel (voir ci-dessous).
+
+Test de fumee reel (pas seulement declare) :
+
+- Environnement monte de bout en bout dans le sandbox : MariaDB installe localement (`apt-get install mariadb-server`), base `qara` creee, migrations appliquees avec `scripts/apply-sql-migrations.ts` (copie locale temporaire sans `ssl:{rejectUnauthorized:false}`, non committee, conformement a la note du backend), backend lance (`tsx watch server/_core/index.ts`, port 3001), frontend lance (`vite --port 5173`, `VITE_API_URL=http://127.0.0.1:3001/trpc`).
+- Navigateur pilote (Chromium/Playwright ad hoc, script non committe dans `client/` ni `e2e/` car ce dernier dossier n'existe pas sur cette branche — il existe uniquement sur `claude/qara-compliance-audit-qitbxl`, un autre chantier).
+- `/dashboard` sans session -> redirige vers `/login?returnTo=%2Fdashboard`. **Confirme.**
+- Creation de compte (`/signup`) -> redirection automatique vers `/onboarding`. **Confirme.**
+- Onboarding (selection MDR + ISO 13485, role Fabricant, marche UE) -> validation -> redirection `/dashboard`. **Confirme.**
+- F5 sur `/dashboard` connecte -> reste sur `/dashboard`, pas de boucle de redirection. **Confirme.**
+- Logout / bouton precedent : a re-tester formellement en etape 6 (voir ecart ci-dessous, un clic automatise a ete intercepte par l'element de sidebar dupliquee).
+
+Ecart trouve (deja signale par l'agent precedent en etape 3, confirme reel ici, traite en etape 5 comme prevu — **non bloquant pour la suite**, ne necessite pas de sous-etape 4.0 car deja planifie) :
+
+- `Dashboard.tsx` conserve une sidebar interne complete et fixee (`<aside class="fixed inset-y-0 left-0 ...">`), en plus de la sidebar de `AuthenticatedLayout` qui l'englobe. Les deux se superposent visuellement (capture ecran realisee). Consequence constatee : deux libelles de plan contradictoires affiches simultanement (sidebar interne fige sur `"Plan Pro"` par defaut via `getPlanLabel(... || "pro")`, sidebar `AuthenticatedLayout` affichant le vrai `"Plan Free"` du profil). Un clic automatise sur le bouton "Deconnexion" de la vraie sidebar a ete intercepte par l'element flottant de la fausse sidebar.
+- `Dashboard.tsx` affiche des referentiels actifs codes en dur (`activeFrameworks ?? ["mdr", "ivdr", "fda-qmsr", "iso-13485"]`) qui ignorent le choix reel fait a l'onboarding : le compte de test avec MDR + ISO 13485 selectionnes affichait quand meme IVDR et FDA QMSR actifs. KPIs (`scoreGlobal`, `nonConformitiesCount`, etc.), travaux en cours et alertes de veille sont egalement des fallbacks codes en dur (`?? 76`, `?? 12`, listes statiques) deja marques `// TODO(data)` par l'agent precedent.
+- Traitement : corrige en etape 5 ci-dessous (suppression de la sidebar interne dupliquee, branchement des referentiels reels, suppression des fallbacks).
+
+Ecarts mineurs non bloquants (non traites ici, notes pour memoire) :
+
+- La page `/onboarding` s'affiche avec le chrome complet de `AuthenticatedLayout` (sidebar visible) alors que l'utilisateur n'a pas encore de referentiel actif — incoherence UX mineure, pas de blocage fonctionnel.
+- Deux `Failed to load resource: net::ERR_CONNECTION_RESET` observes en console sur la Landing/404 (ressources tierces non bloquantes, a confirmer en etape 7 si elles persistent apres build).
+
 ## Exigences confirmees dans le perimetre
 
 - Gestion des 401 API : destruction de session + redirection `/login`.
