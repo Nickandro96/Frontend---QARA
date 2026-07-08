@@ -79,26 +79,18 @@ export default function AuditsList() {
   const filteredAudits = audits || [];
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="border-b bg-white sticky top-0 z-50">
-        <div className="container flex h-16 items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link href="/dashboard">
-              <Button variant="ghost">← Dashboard</Button>
-            </Link>
-            <h1 className="text-xl font-bold">Mes Audits</h1>
-          </div>
-          <Link href="/mdr/audit">
-            <Button className="gap-2">
-              <Plus className="h-4 w-4" />
-              Nouvel Audit
-            </Button>
-          </Link>
-        </div>
-      </header>
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-xl font-bold">Mes Audits</h1>
+        <Link href="/mdr/audit">
+          <Button className="gap-2">
+            <Plus className="h-4 w-4" />
+            Nouvel Audit
+          </Button>
+        </Link>
+      </div>
 
-      <div className="container py-8 space-y-6">
+      <div className="space-y-6">
         {/* Filters Card */}
         <Card>
           <CardHeader>

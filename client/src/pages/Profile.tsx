@@ -5,9 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { trpc } from "@/lib/trpc";
-import { Shield, Loader2, CheckCircle2 } from "lucide-react";
+import { Loader2, CheckCircle2 } from "lucide-react";
 import { useState, useEffect } from "react";
-import { Link } from "wouter";
 import { getLoginUrl } from "@/const";
 import { toast } from "sonner";
 
@@ -53,41 +52,8 @@ export default function Profile() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="border-b bg-white sticky top-0 z-50">
-        <div className="container flex h-16 items-center justify-between">
-          <div className="flex items-center gap-6">
-            <Link href="/">
-              <div className="flex items-center gap-2 cursor-pointer">
-                <Shield className="h-6 w-6 text-primary" />
-                <span className="font-bold">MDR Compliance</span>
-              </div>
-            </Link>
-            <nav className="flex items-center gap-4">
-              <Link href="/dashboard">
-                <Button variant="ghost">Dashboard</Button>
-              </Link>
-              <Link href="/audit">
-                <Button variant="ghost">Audit</Button>
-              </Link>
-              <Link href="/reports">
-                <Button variant="ghost">Rapports</Button>
-              </Link>
-              <Link href="/regulatory-watch">
-                <Button variant="ghost">Veille</Button>
-              </Link>
-            </nav>
-          </div>
-          <div className="flex items-center gap-4">
-            <Link href="/profile">
-              <Button variant="outline">{user?.name || "Profil"}</Button>
-            </Link>
-          </div>
-        </div>
-      </header>
-
-      <main className="container py-8 max-w-2xl">
+    <div>
+      <main className="max-w-2xl">
         <h1 className="text-3xl font-bold mb-8">Mon Profil</h1>
 
         {/* User Info Card */}

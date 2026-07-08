@@ -1,5 +1,4 @@
 import { useTranslation } from "react-i18next";
-import { ProfessionalLayout } from "@/components/ProfessionalLayout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
@@ -121,7 +120,7 @@ export default function ActionDashboard() {
   };
 
   return (
-    <ProfessionalLayout>
+    <div>
       <div className="p-8 max-w-7xl mx-auto space-y-8">
         {/* Welcome Section */}
         <div>
@@ -302,6 +301,6 @@ export default function ActionDashboard() {
           </Card>
         </div>
       </div>
-    </ProfessionalLayout>
+    </div>
   );
 }

@@ -219,6 +219,23 @@ Mapping donnees restant (a traiter dans un lot backend dedie) :
 - **Scores par referentiel** (`frameworkScores` sur les cartes MDR/IVDR/FDA/MDSAP/ISO) : aucun endpoint backend ne les fournit (`dashboard.getKPIs` ne retourne que `scoreGlobal`/`nonConformitiesCount`/`conforme`/`nonConforme`/`progression`). Valeur par defaut `0`, `// TODO(data)`.
 - **Dispositifs classes / alertes de veille** (KPIs du bandeau haut) : idem, aucun champ backend correspondant. Valeur par defaut `0`, `// TODO(data)`.
 
+## Etape 6 - Execution des 10 parcours de test
+
+Statut : termine. Les 10 parcours ont ete executes reellement (navigateur Chromium pilote par Playwright, ad hoc, non commite — `e2e/` n'existe pas sur cette branche) contre l'environnement local monte pour l'audit de reprise (MariaDB + backend + frontend, corpus MDR reimporte via `node scripts/import-mdr-questions.js` pour disposer de vraies questions). Date d'execution : 2026-07-08.
+
+1. **Acces direct sans session** (`/dashboard`, `/audits`, `/reports`, `/account`) -> **PASS**. Les 4 routes redirigent vers `/login?returnTo=<route>`.
+2. **Login avec `returnTo` vers `/reports`** -> **PASS** (apres correctif de methode de test, voir ci-dessous). Un compte deja onboarde (au moins 1 referentiel actif), deconnecte, visitant `/reports` -> `login?returnTo=%2Freports` -> apres connexion, atterrit bien sur `/reports`. Premier essai avec un compte tout juste cree (0 referentiel) faussement en echec : la redirection forcee `/onboarding` prenait le pas sur `returnTo`, ce qui est le comportement voulu (voir etape 2), pas un bug — corrige dans la methode de test, pas dans le code.
+3. **Nouveau compte : signup -> onboarding force -> 2 referentiels -> dashboard conforme** -> **PASS**. Compte cree, onboarding MDR + ISO 13485 + role Fabricant + marche UE, dashboard n'affiche que ces deux referentiels (capture ecran a l'appui, voir etape 5).
+4. **Navigation complete 7 entrees sidebar + bouton precedent** -> **ECHEC puis correctif puis PASS**. Premier essai : clic sur "Rapports" depuis `/action-plan` intercepte par une sidebar interne fantome (`ProfessionalLayout`/`ProfessionalSidebar`, texte "MDR Compliance Platform") que `ActionDashboard.tsx` rendait en plus de la sidebar `AuthenticatedLayout` — meme famille de bug que le dashboard (etape 5). Correctif : suppression du wrapper `ProfessionalLayout` dans `ActionDashboard.tsx`. En profitant du meme passage, suppression des `<header>` internes dupliques (mais non bloquants, simples bandeaux hauts sans chevauchement de sidebar) de `AuditsList.tsx` (`/audits`) et `Profile.tsx` (`/account`), conformement a l'exigence etape 5 "toutes les routes protegees passent par AuthenticatedLayout, une seule sidebar". Re-execution : les 7 entrees (Dashboard, Audits, Classification, Voies FDA, Plan d'action, Rapports, Veille) se chargent sans page blanche, puis 7 clics "precedent" navigateur retracent l'historique sans erreur (`page errors: []`).
+5. **F5 sur chaque route protegee connecte** -> **PASS**. Teste sur les 8 routes protegees (`/dashboard`, `/audits`, `/classification`, `/fda`, `/action-plan`, `/reports`, `/veille`, `/account`) : rechargement correct sur la meme URL a chaque fois, aucune boucle de redirection.
+6. **Plan Free : classification/FDA/veille verrouilles avec upsell, acces direct par URL -> ecran verrouille** -> **PASS**. Compte Free onboarde : `/classification`, `/fda`, `/veille` affichent chacun l'ecran `LockedFeature` avec le bouton "Passer au Plan Pro" en acces direct par URL. `/reports` reste visible (score affiche) avec uniquement le bloc d'export verrouille, conformement au correctif de l'etape 4.
+7. **Plan Pro : tout accessible** -> **PASS**. Meme compte promu `subscriptionTier = "pro"` (mise a jour directe en base pour le test, aucune UI de paiement reelle dans ce lot) : `/classification`, `/fda`, `/veille`, `/reports` accessibles sans aucun ecran verrouille.
+8. **Logout -> bouton precedent ne doit reafficher aucune page protegee** -> **PASS**. Deconnexion depuis le dashboard -> redirection `/login`. Clic "precedent" navigateur -> reste sur `/login?returnTo=%2Fdashboard` (le garde `ProtectedRoute` intercepte le retour arriere, aucune page protegee ne s'affiche).
+9. **URL inexistante -> 404 propre avec lien retour** -> **PASS**. `/nonexistent-route-xyz` affiche la page 404 QARA avec lien de retour, sans erreur bloquante.
+10. **Parcours metier complet : login -> carte MDR -> lancer un audit -> repondre a 3 questions -> retour dashboard -> travail visible dans "Travaux en cours"** -> **PASS**. Execute integralement : creation de site, remplissage etape 1 (obligatoire), etape 2 (facultative, ignoree), etape 3 (demarrage), reponse "Conforme" a 3 questions du questionnaire MDR reel (corpus 826 questions reimporte), retour `/dashboard` : "Audit MDR (fabricant) - 08/07/2026" apparait bien dans "Travaux en cours" avec barre de progression (capture ecran a l'appui).
+
+Aucun des 10 parcours n'est reste en echec : le seul echec reel (parcours 4) a ete corrige puis re-execute avec succes, conformement a la regle "un test qui echoue = un correctif + une re-execution".
+
 ## Exigences confirmees dans le perimetre
 
 - Gestion des 401 API : destruction de session + redirection `/login`.
@@ -234,21 +251,23 @@ Mapping donnees restant (a traiter dans un lot backend dedie) :
 - [x] Etape 3 - Table des routes cible + aliases/deprecations.
 - [x] Etape 4 - Matrice abonnements centralisee.
 - [x] Etape 5 - Etats vides/dashboard/onboarding force.
-- [ ] Etape 6 - Plan de test execute.
+- [x] Etape 6 - Plan de test execute.
 - [ ] Etape 7 - Failles backend consignees et build.
 
 ## Resultats des tests obligatoires
 
-1. Acces direct sans session aux routes protegees : non execute.
-2. Login avec `returnTo` : non execute.
-3. Premier compte signup -> onboarding -> dashboard : non execute.
-4. Navigation complete sidebar + retour navigateur : non execute.
-5. F5 sur chaque route protegee : non execute.
-6. Plan Free : verrouillage classification/FDA/veille : non execute.
-7. Plan Pro : tout accessible : non execute.
-8. Deconnexion + bouton precedent : non execute.
-9. 404 propre : non execute.
-10. Parcours metier MDR complet : non execute.
+Executes le 2026-07-08. Detail complet dans la section "Etape 6" ci-dessus.
+
+1. Acces direct sans session aux routes protegees : **PASS**.
+2. Login avec `returnTo` : **PASS**.
+3. Premier compte signup -> onboarding -> dashboard : **PASS**.
+4. Navigation complete sidebar + retour navigateur : **PASS** (apres correctif sidebar dupliquee `ActionDashboard`/`AuditsList`/`Profile`).
+5. F5 sur chaque route protegee : **PASS**.
+6. Plan Free : verrouillage classification/FDA/veille : **PASS**.
+7. Plan Pro : tout accessible : **PASS**.
+8. Deconnexion + bouton precedent : **PASS**.
+9. 404 propre : **PASS**.
+10. Parcours metier MDR complet : **PASS**.
 
 ## Failles backend a corriger
 
