@@ -193,6 +193,32 @@ Changements implementes :
 - `UpgradeRequired.tsx` conserve tel quel (encore reference par le code mort ci-dessus) mais n'est plus utilise par aucune page reellement routee.
 - Acces direct par URL a une route verrouillee -> ecran verrouillee (verifie : chaque page gate son propre rendu au niveau du composant de page, monte inconditionnellement par `ProtectedRoute`/`AuthenticatedLayout`, donc toute navigation directe vers `/classification`, `/fda`, `/veille` avec un compte Free affichera `LockedFeature` et non la fonctionnalite).
 
+## Etape 5 - Dashboard et etats vides
+
+Statut : termine.
+
+Changements implementes dans `client/src/pages/Dashboard.tsx` :
+
+- Suppression de la sidebar interne dupliquee (`<aside class="fixed ...">` avec sa propre nav et son propre libelle de plan). Le dashboard ne rend plus que son contenu ; `AuthenticatedLayout` (deja en place depuis l'etape 2) fournit desormais la seule et unique sidebar sur cette route. C'etait la cause racine de l'ecart trouve en audit de reprise (deux libelles de plan contradictoires affiches simultanement).
+- Referentiels actifs : remplacement du fallback code en dur (`activeFrameworks ?? ["mdr","ivdr","fda-qmsr","iso-13485"]`, actif meme quand l'utilisateur n'avait rien choisi) par `getActiveReferentials(profile)` (`lib/onboarding.ts`), la meme fonction deja utilisee par `ProtectedRoute` pour la redirection forcee onboarding. Verifie reellement : un compte cree puis onboarde avec MDR + ISO 13485 n'affiche desormais plus que ces deux cartes (capture ecran a l'appui), IVDR/FDA/MDSAP n'apparaissent plus a tort.
+- KPIs : les deux indicateurs sans endpoint backend (`classifiedDevices`, `watchAlerts`) et les scores par referentiel (`frameworkScores`) n'ont plus de valeur de demo positive inventee (`?? 18`, `?? 4`, `?? 82`...) : ils retombent sur `0` avec un commentaire `// TODO(data)` explicite. Les deux indicateurs qui existent reellement cote backend (`scoreGlobal`, `nonConformitiesCount` sur `dashboard.getKPIs`) gardent leur valeur reelle, avec un `0` neutre par defaut au lieu d'un chiffre de demo pendant le chargement.
+- `companyName` : le nom d'entreprise fictif fige `"N3-Conseil"` retire, remplace par le vrai `profile.companyName` (champ reellement persiste cote backend, `users.companyName`) puis par le nom de l'utilisateur, sans donnee inventee.
+- Etats vides "Travaux en cours" et "Veille reglementaire" : quand `recentAudits`/`recentFindings` sont vides (nouveau compte), affichage d'un message d'invitation avec bouton d'action ("Lancer votre premier audit" -> `/mdr/audit`, "Ouvrir la veille reglementaire" -> `/veille`) au lieu de la liste de 3 elements fictifs precedente.
+- Limite de referentiels par plan : nouvelle tuile verrouillee (`LockedFeature` variante bloc) affichee a la place de la tuile "Activer un referentiel" quand `activeReferentials.size >= maxReferentiels` (ex. Plan Free deja a sa limite de 1).
+- Le blocage integral du dashboard pour les comptes Free (`profile.subscriptionTier === "free" -> <UpgradeRequired feature="Dashboard" />`) est supprime : il contredisait le cahier des charges ("Free = audits + score, rapport a l'ecran"). Le dashboard est desormais accessible a tous les plans ; seules les fonctionnalites avancees (classification/FDA/veille/export) restent verrouillees via `plans.ts`.
+- Redirection forcee `/onboarding` si 0 referentiel actif : deja geree par `ProtectedRoute` (etape 2), reverifiee ici — le dashboard ne peut structurellement pas s'afficher avec 0 referentiel actif.
+
+Verification reelle (meme environnement local que l'audit de reprise) :
+
+- Capture ecran avant/apres : la double sidebar et le conflit "Plan Pro"/"Plan Free" ont disparu ; un seul sidebar clair, "Plan Free" coherent partout, uniquement MDR + ISO 13485 affiches pour le compte de test.
+- Logout puis clic "precedent" navigateur -> reste sur `/login?returnTo=%2Fdashboard`, aucune page protegee ne se re-affiche (le clic sur "Deconnexion" n'est plus intercepte par l'ancienne sidebar fantome).
+
+Mapping donnees restant (a traiter dans un lot backend dedie) :
+
+- **Referentiels actifs de l'onboarding** : stockes uniquement en `localStorage` (`qara:onboarding`, cle `client/src/lib/onboarding.ts`). Le backend (`users` table, `drizzle/schema.ts`) n'expose aucun champ `activeFrameworks`/`activeReferentials` ni sur `users` ni sur `organisations`/`sites` : verifie directement dans le schema Drizzle, aucune migration ne cree une telle colonne/table. Consequence assumee et documentee : un changement de navigateur ou un vidage du stockage local fait perdre les referentiels choisis (l'utilisateur est renvoye vers `/onboarding` par `ProtectedRoute`, ce qui est correct fonctionnellement mais oblige a resaisir le choix). Marque `// TODO(data): persistance referentiels -> backend` dans `Dashboard.tsx` et `ProtectedRoute` s'appuie sur la meme fonction `getActiveReferentials`.
+- **Scores par referentiel** (`frameworkScores` sur les cartes MDR/IVDR/FDA/MDSAP/ISO) : aucun endpoint backend ne les fournit (`dashboard.getKPIs` ne retourne que `scoreGlobal`/`nonConformitiesCount`/`conforme`/`nonConforme`/`progression`). Valeur par defaut `0`, `// TODO(data)`.
+- **Dispositifs classes / alertes de veille** (KPIs du bandeau haut) : idem, aucun champ backend correspondant. Valeur par defaut `0`, `// TODO(data)`.
+
 ## Exigences confirmees dans le perimetre
 
 - Gestion des 401 API : destruction de session + redirection `/login`.
@@ -207,7 +233,7 @@ Changements implementes :
 - [x] Etape 2 - Layout authentifie + gardes auth.
 - [x] Etape 3 - Table des routes cible + aliases/deprecations.
 - [x] Etape 4 - Matrice abonnements centralisee.
-- [ ] Etape 5 - Etats vides/dashboard/onboarding force.
+- [x] Etape 5 - Etats vides/dashboard/onboarding force.
 - [ ] Etape 6 - Plan de test execute.
 - [ ] Etape 7 - Failles backend consignees et build.
 
