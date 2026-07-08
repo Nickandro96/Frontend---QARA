@@ -53,6 +53,44 @@ Reference deployee fournie le 2026-07-08 :
 - `/account` -> compte/profil/abonnement/deconnexion.
 - `*` -> 404 propre avec lien retour adapte.
 
+## Etape 1 - Inventaire routes/pages approfondi
+
+Statut : termine.
+
+Constats routes actuelles (`client/src/App.tsx`) :
+
+- Publique/auth : `/`, `/login`, `/register`, `/pricing`, `/subscription`, `/contact`, `/faq`.
+- Dashboard et doublons : `/dashboard`, `/dashboard-v2`, `/dashboard-executive`, `/action-dashboard`, `/home-old`.
+- Audit generique : `/audits`, `/audit/:id`, `/audit/:id/results`, `/audit-history`, `/audit/compare`, `/audit/new`, `/audit/create`, `/audit`.
+- MDR : `/mdr/audit`, `/mdr/audit/:auditId`, `/mdr/audit/:auditId/review`, `/mdr/*`.
+- ISO : `/iso/qualification`, `/iso/audit`, `/iso/audit/:auditId`, `/iso/audit/:auditId/review`.
+- FDA historique : `/fda/qualification`, `/fda/audit`, `/us/fda-qualification`, `/us/fda-audit`, `/us/fda-dashboard`, `/us/fda-watch`, `/us/fda-documents`, `/us/fda-reports`, `/fda-audit`, `/fda-classification`, `/fda-regulatory-watch`, `/fda-dashboard`, `/fda-submission-tracker`.
+- Compte/admin/outils : `/profile`, `/settings/sites`, `/reports`, `/reports/comparative`, `/reports/generate`, `/reports/history`, `/regulatory-watch`, `/watch-dashboard`, `/documents`, `/admin/contacts`, `/admin/users`, `/analytics`.
+
+Decisions d'architecture a appliquer aux etapes suivantes :
+
+- `/` ne doit pas rester branche sur `ModernHome` tel quel : cette page est un ancien hub applicatif avec sidebar et liens vers modules proteges. Elle sera depubliee comme doublon et remplacee par une landing minimale propre avec `// TODO(design): landing definitive a venir`.
+- `ModernHome`, `Home`, `DashboardV2` et `DashboardExecutive` sont des doublons historiques a derouter/marquer deprecies, sans suppression.
+- `/fda` devient le seul point d'entree de determination de voie FDA. L'audit FDA QMSR rejoint les routes audit ; les anciennes routes FDA seront redirigees ou depreciees.
+- `/profile` devient alias historique de `/account`.
+- `/regulatory-watch` devient alias historique de `/veille`.
+- `/action-dashboard` devient alias historique de `/action-plan`.
+- `/register` devient alias historique de `/signup`.
+
+Inventaire onboarding :
+
+- Aucune page/composant `Onboarding` ni wizard 4 etapes dedie n'existe dans `client/src`.
+- Fragments existants reutilisables trouves :
+  - `MDRQualification.tsx` : role economique + marches cibles MDR.
+  - `ISOQualification.tsx` : role economique + qualification ISO.
+  - `components/watch/CompanyProfilePanel.tsx` : profil de veille avec role economique et marches.
+  - `Profile.tsx` : edition du role economique utilisateur.
+- Conclusion : il faut implementer une version minimale du wizard `/onboarding` en reutilisant les donnees/choix existants, puis remplacer par l'habillage final plus tard.
+
+Fallback SPA :
+
+- `vercel.json` contient deja une regle de rewrite `/(.*)` vers `/index.html`. Le F5 sur liens profonds devra etre valide en test reel.
+
 ## Exigences confirmees dans le perimetre
 
 - Gestion des 401 API : destruction de session + redirection `/login`.
@@ -63,7 +101,7 @@ Reference deployee fournie le 2026-07-08 :
 ## Etapes
 
 - [x] Etape 0 - Realignement Git et inventaire initial.
-- [ ] Etape 1 - Inventaire routes/pages approfondi + onboarding existant.
+- [x] Etape 1 - Inventaire routes/pages approfondi + onboarding existant.
 - [ ] Etape 2 - Layout authentifie + gardes auth.
 - [ ] Etape 3 - Table des routes cible + aliases/deprecations.
 - [ ] Etape 4 - Matrice abonnements centralisee.
