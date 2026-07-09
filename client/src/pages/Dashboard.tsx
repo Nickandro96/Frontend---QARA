@@ -1,7 +1,7 @@
-import { UpgradeRequired } from "@/components/UpgradeRequired";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { getLoginUrl } from "@/const";
+import { getPlanLabel } from "@/lib/plans";
 import { Link } from "wouter";
 import {
   AlertTriangle,
@@ -53,10 +53,10 @@ const navItems = [
   { label: "Tableau de bord", href: "/dashboard", icon: LayoutDashboard, active: true },
   { label: "Audits", href: "/audits", icon: ClipboardCheck },
   { label: "Classification", href: "/classification", icon: Tags },
-  { label: "Voies FDA", href: "/us/fda-qualification", icon: Route },
-  { label: "Plan d'action", href: "/action-dashboard", icon: ListChecks },
+  { label: "Voies FDA", href: "/fda", icon: Route },
+  { label: "Plan d'action", href: "/action-plan", icon: ListChecks },
   { label: "Rapports", href: "/reports", icon: FileText },
-  { label: "Veille", href: "/regulatory-watch", icon: RadioTower },
+  { label: "Veille", href: "/veille", icon: RadioTower },
 ];
 
 function scoreTone(score: number): ScoreTone {
@@ -74,11 +74,6 @@ function scoreColor(score: number) {
 
 function formatPercent(value: number) {
   return `${Math.round(Number.isFinite(value) ? value : 0)}%`;
-}
-
-function getPlanLabel(tier?: string | null) {
-  if (!tier) return "Plan Pro";
-  return `Plan ${tier.charAt(0).toUpperCase()}${tier.slice(1)}`;
 }
 
 export default function Dashboard() {
@@ -119,7 +114,7 @@ export default function Dashboard() {
         tools: ["Audit", "Classe DM", "Rapport"],
         badgeBg: "#e8eefb",
         badgeColor: "#2563eb",
-        href: "/mdr/audit",
+        href: "/audits",
         enabled: activeKeys.has("mdr"),
       },
       {
@@ -141,7 +136,7 @@ export default function Dashboard() {
         tools: ["Audit", "Voie 510(k)/PMA", "Rapport"],
         badgeBg: "#eaf3ec",
         badgeColor: "#16794c",
-        href: "/us/fda-audit",
+        href: "/audits",
         enabled: activeKeys.has("fda-qmsr"),
       },
       {
@@ -213,9 +208,9 @@ export default function Dashboard() {
 
     // TODO(data): mixed dashboard work queue -> endpoint combining audits, classifications and FDA pathways.
     return [
-      { title: "Audit MDR - Dossier technique", meta: "MDR 2017/745", progress: 68, href: "/mdr/audit" },
+      { title: "Audit MDR - Dossier technique", meta: "MDR 2017/745", progress: 68, href: "/audits" },
       { title: "Classification DM - Pompe connectée", meta: "Classe IIb", progress: 42, href: "/classification" },
-      { title: "Voie FDA - 510(k)", meta: "Pré-soumission", progress: 35, href: "/us/fda-qualification" },
+      { title: "Voie FDA - 510(k)", meta: "Pré-soumission", progress: 35, href: "/fda" },
     ];
   }, [recentAudits]);
 
@@ -250,12 +245,8 @@ export default function Dashboard() {
     return null;
   }
 
-  if (profile && profile.subscriptionTier === "free" && user?.role !== "admin") {
-    return <UpgradeRequired feature="Dashboard" />;
-  }
-
   const companyName = (profile as any)?.companyName || (user as any)?.organizationName || user?.name || "N3-Conseil";
-  const planLabel = getPlanLabel((profile as any)?.subscriptionTier || "pro");
+  const planLabel = getPlanLabel(profile);
 
   return (
     <div className="min-h-screen bg-[#f4f6f9] text-[#0e1c3d]">
@@ -287,7 +278,7 @@ export default function Dashboard() {
           })}
         </nav>
 
-        <Link href="/profile">
+        <Link href="/account">
           <div className="cursor-pointer rounded-xl bg-[#152a52] p-3">
             <div className="text-[12px] font-semibold text-white">{companyName}</div>
             <div className="mt-1 text-[11px] text-[#b8c6df]">{planLabel}</div>
@@ -312,13 +303,13 @@ export default function Dashboard() {
             </div>
 
             <div className="flex flex-wrap gap-2">
-              <Link href="/profile">
+              <Link href="/account">
                 <button className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#dfe4ea] bg-white px-3 text-[12px] font-medium text-[#0e1c3d] shadow-sm transition hover:border-[#c3ccd9]">
                   <Settings className="h-4 w-4" />
                   Gérer mes référentiels
                 </button>
               </Link>
-              <Link href="/audit/new">
+              <Link href="/audits">
                 <button className="inline-flex h-9 items-center gap-2 rounded-lg bg-[#3b6fe0] px-3 text-[12px] font-medium text-white shadow-sm transition hover:bg-[#2f5ec5]">
                   <Plus className="h-4 w-4" />
                   Nouvel audit
@@ -393,7 +384,7 @@ export default function Dashboard() {
                 </Link>
               ))}
 
-              <Link href="/profile">
+              <Link href="/account">
                 <div className="flex min-h-[78px] cursor-pointer items-center justify-center gap-2 rounded-[13px] border border-dashed border-[#c3ccd9] bg-transparent p-3 text-[12px] font-medium text-[#6b7688] transition hover:border-[#3b6fe0] hover:text-[#3b6fe0]">
                   <Plus className="h-4 w-4" />
                   Activer un référentiel (ex. MDSAP)
@@ -466,7 +457,7 @@ export default function Dashboard() {
             <div className="rounded-xl bg-white p-4 ring-1 ring-[#dfe4ea]">
               <div className="mb-3 flex items-center justify-between">
                 <h2 className="text-[13px] font-semibold text-[#0e1c3d]">Veille réglementaire</h2>
-                <Link href="/regulatory-watch">
+                <Link href="/veille">
                   <span className="cursor-pointer text-[11px] font-medium text-[#3b6fe0]">Ouvrir</span>
                 </Link>
               </div>

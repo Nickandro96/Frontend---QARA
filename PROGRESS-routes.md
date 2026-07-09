@@ -138,6 +138,65 @@ Validation :
 - Controle TypeScript cible sur `App.tsx`, `Login.tsx`, `Register.tsx`, `ForgotPassword.tsx`, `Landing.tsx`, `Onboarding.tsx`, `NotFound.tsx` : seules restent les erreurs tRPC globales deja documentees (`Provider`, `system`) dues au shim `AppRouter`.
 - Point restant reporte et assume pour etape 5 : plusieurs pages historiques gardent encore leur header/layout interne. Le layout authentifie cible englobe les routes, mais le nettoyage visuel fin du dashboard/pages anciennes sera traite avec les etats vides.
 
+## Correctif urgent - Deverrouillage login/signup
+
+Statut : termine.
+
+Contexte :
+
+- Symptomes remontes : clic sur "Connexion" ou "Creer un compte" puis blocage sur l'ecran "Chargement de votre espace QARA - verification de la session en cours".
+- Cause front identifiee : `PublicOnlyRoute` masquait les pages publiques pendant la verification de session, et `useAuth` nettoyait trop tot la session tant que la requete profil etait en chargement.
+
+Changements implementes et pousses :
+
+- `PublicOnlyRoute` affiche les pages publiques pendant le chargement, et ne redirige vers `/dashboard` que si la session est confirmee.
+- `useAuth.ts` ne detruit plus la session pendant `meQuery.isLoading`.
+- `Login.tsx` et `Register.tsx` bornent le `refresh()` post-authentification pour eviter un blocage infini si le backend tarde a repondre.
+
+Commit en ligne :
+
+- `9e854706 fix(auth): debloque les pages publiques`
+
+## Etape 4 - Matrice abonnements centralisee
+
+Statut : termine cote code.
+
+Changements implementes :
+
+- Creation de `client/src/lib/plans.ts`, source de verite front pour les capacites :
+  - Free : 1 referentiel, audits + score, rapports consultables, pas d'export, pas de classification, pas de voie FDA, pas de veille, pas d'IA.
+  - Pro : multi-referentiels, exports, classification, voies FDA, veille. IA volontairement desactivee tant que la cle serveur n'est pas branchee.
+- Remplacement de l'ancien composant premium marketing `UpgradeRequired` par un ecran de verrouillage QARA clair : cadenas, plan requis, bouton `/account`, retour dashboard.
+- Sidebar authentifiee : les modules verrouilles restent visibles avec cadenas.
+- `/classification` et `/classification/:id` : verrouillage au niveau du routeur via `canUseClassification`.
+- `/fda` et `/fda/:id` : verrouillage au niveau du routeur via `canUseFDA`.
+- `/veille` : verrouillage au niveau du routeur via `canUseVeille`.
+- `/reports` : page consultable en Free ; exports Excel/PDF visibles mais verrouilles.
+- `/reports/history` : historique consultable ; creation/telechargement de fichiers verrouilles en Free.
+- `/reports/generate` : acces direct verrouille en Free.
+- `/reports/comparative` : comparaison consultable ; generation PDF verrouillee en Free.
+- `/dashboard` : retrait du blocage Free. Le dashboard reste accessible aux utilisateurs Free.
+- `/account` : affichage du plan base sur la matrice Free/Pro, suppression des libelles Expert/Entreprise dans l'UX cible.
+- Ancienne page `Audit.tsx` : retrait du mode demo force pour Free afin de respecter la capacite "audits + score".
+
+Controle des anciens chemins :
+
+- Les liens restants dans `Dashboard.tsx` et `Reports.tsx` pointent vers les routes cible (`/account`, `/veille`, `/fda`, `/action-plan`, `/audits`).
+- `rg "subscriptionTier"` : la source de verite des droits est `plans.ts`. Des lectures legacy restent hors decision produit cible :
+  - `plans.ts` : lecture centralisee.
+  - `AdminUsers.tsx` : edition admin du champ.
+  - `SubscriptionSuccess.tsx` : affichage du retour abonnement.
+  - `Home.tsx` : ancienne page non montee dans la table cible actuelle, a deprecier/nettoyer dans un lot UI si elle revient.
+  - Quelques pages metier legacy gardent un fallback historique, mais les routes cible sont verrouillees avant rendu par la matrice centralisee.
+
+Validation :
+
+- `git diff --check` : OK.
+- Recherche anciens liens cible (`/profile`, `/regulatory-watch`, `/action-dashboard`, anciennes routes FDA) sur `Dashboard.tsx`, `Reports.tsx`, `AuthenticatedLayout.tsx` : OK, aucun resultat.
+- Verification TypeScript cible tentee via le binaire `tsc` present dans le store pnpm : aucune erreur ne remonte sur les fichiers modifies.
+- Verification TypeScript globale bloquee localement par l'installation `node_modules` incomplete apres tentative de reconstruction : `@types/node` et `vite/client` non resolus.
+- Reinstallation locale `pnpm install` bloquee par le reseau/certificat npm (`UNABLE_TO_VERIFY_LEAF_SIGNATURE`) et timeouts. `node_modules` est ignore par Git ; aucun impact sur les fichiers a pousser, mais l'environnement local devra relancer `pnpm install --config.strict-ssl=false --ignore-scripts` hors timeout si besoin.
+
 ## Exigences confirmees dans le perimetre
 
 - Gestion des 401 API : destruction de session + redirection `/login`.
@@ -151,7 +210,7 @@ Validation :
 - [x] Etape 1 - Inventaire routes/pages approfondi + onboarding existant.
 - [x] Etape 2 - Layout authentifie + gardes auth.
 - [x] Etape 3 - Table des routes cible + aliases/deprecations.
-- [ ] Etape 4 - Matrice abonnements centralisee.
+- [x] Etape 4 - Matrice abonnements centralisee.
 - [ ] Etape 5 - Etats vides/dashboard/onboarding force.
 - [ ] Etape 6 - Plan de test execute.
 - [ ] Etape 7 - Failles backend consignees et build.

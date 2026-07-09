@@ -1,20 +1,25 @@
 import { useState } from "react";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { FileText, Download, Trash2, Plus, Calendar, FileBarChart, ClipboardList, FolderArchive, FileSpreadsheet, Loader2 } from "lucide-react";
+import { FileText, Download, Trash2, Plus, Calendar, FileBarChart, ClipboardList, FolderArchive, FileSpreadsheet, Loader2, Lock } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
+import { canUseCapability } from "@/lib/plans";
 
 export default function ReportHistory() {
   const [, navigate] = useLocation();
+  const { user, isAuthenticated } = useAuth();
 
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const { data: reports, isLoading, refetch } = trpc.reports.list.useQuery({ limit: 50 });
+  const { data: profile, isLoading: profileLoading } = trpc.profile.get.useQuery(undefined, { enabled: isAuthenticated });
+  const canExportReports = canUseCapability(profile, "canExportReports", user);
 
   const deleteMutation = trpc.reports.delete.useMutation({
     onSuccess: () => {
@@ -65,7 +70,7 @@ export default function ReportHistory() {
     return `${mb.toFixed(2)} MB`;
   };
 
-  if (isLoading) {
+  if (isLoading || profileLoading) {
     return (
       <div className="container max-w-6xl py-8">
         <div className="flex items-center justify-center h-64">
@@ -84,10 +89,19 @@ export default function ReportHistory() {
             Consultez et téléchargez vos rapports d'audit générés.
           </p>
         </div>
-        <Button onClick={() => navigate("/reports/generate")}>
-          <Plus className="mr-2 h-4 w-4" />
-          Nouveau Rapport
-        </Button>
+        {canExportReports ? (
+          <Button onClick={() => navigate("/reports/generate")}>
+            <Plus className="mr-2 h-4 w-4" />
+            Nouveau Rapport
+          </Button>
+        ) : (
+          <Button asChild variant="outline">
+            <Link href="/account">
+              <Lock className="mr-2 h-4 w-4" />
+              Plan Pro requis
+            </Link>
+          </Button>
+        )}
       </div>
 
       {!reports || reports.length === 0 ? (
@@ -99,10 +113,19 @@ export default function ReportHistory() {
               <p className="text-muted-foreground mb-4">
                 Commencez par générer votre premier rapport d'audit.
               </p>
-              <Button onClick={() => navigate("/reports/generate")}>
-                <Plus className="mr-2 h-4 w-4" />
-                Générer un Rapport
-              </Button>
+              {canExportReports ? (
+                <Button onClick={() => navigate("/reports/generate")}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Générer un Rapport
+                </Button>
+              ) : (
+                <Button asChild variant="outline">
+                  <Link href="/account">
+                    <Lock className="mr-2 h-4 w-4" />
+                    Plan Pro requis
+                  </Link>
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -148,14 +171,23 @@ export default function ReportHistory() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => window.open(report.fileUrl, "_blank")}
-                      >
-                        <Download className="mr-2 h-4 w-4" />
-                        Télécharger
-                      </Button>
+                      {canExportReports ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => window.open(report.fileUrl, "_blank")}
+                        >
+                          <Download className="mr-2 h-4 w-4" />
+                          Télécharger
+                        </Button>
+                      ) : (
+                        <Button asChild variant="outline" size="sm">
+                          <Link href="/account">
+                            <Lock className="mr-2 h-4 w-4" />
+                            Plan Pro
+                          </Link>
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="sm"

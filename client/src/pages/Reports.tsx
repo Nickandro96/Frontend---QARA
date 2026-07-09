@@ -1,27 +1,23 @@
-import { UpgradeRequired } from "@/components/UpgradeRequired";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
-import { Shield, Loader2, FileSpreadsheet, FileText, Download } from "lucide-react";
+import { Shield, Loader2, FileSpreadsheet, FileText, Download, Lock } from "lucide-react";
 import { Link } from "wouter";
 import { getLoginUrl } from "@/const";
 import { toast } from "sonner";
 import { exportAuditToExcel, exportAuditToPDF } from "@/lib/exportUtils";
 import { useState } from "react";
+import { canUseCapability } from "@/lib/plans";
 
 export default function Reports() {
   const { user, isAuthenticated, loading } = useAuth();
-  const { data: profile } = trpc.profile.get.useQuery(undefined, { enabled: isAuthenticated });
-
-  // Block FREE users
-  if (isAuthenticated && profile && profile.subscriptionTier === 'free' && user?.role !== 'admin') {
-    return <UpgradeRequired feature="Rapports & Exports" />;
-  }
+  const { data: profile, isLoading: profileLoading } = trpc.profile.get.useQuery(undefined, { enabled: isAuthenticated });
   const { data: globalScore } = trpc.audit.getScore.useQuery({}, { enabled: isAuthenticated });
   const [exporting, setExporting] = useState(false);
+  const canExportReports = canUseCapability(profile, "canExportReports", user);
 
-  if (loading) {
+  if (loading || (isAuthenticated && profileLoading)) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -35,6 +31,11 @@ export default function Reports() {
   }
 
   const handleExport = async (format: "excel" | "pdf") => {
+    if (!canExportReports) {
+      toast.error("Export reserve au Plan Pro");
+      return;
+    }
+
     if (!user || !globalScore) {
       toast.error("Impossible d'exporter : données manquantes");
       return;
@@ -102,13 +103,13 @@ export default function Reports() {
               <Link href="/reports">
                 <Button variant="ghost" className="font-medium">Rapports</Button>
               </Link>
-              <Link href="/regulatory-watch">
+              <Link href="/veille">
                 <Button variant="ghost">Veille</Button>
               </Link>
             </nav>
           </div>
           <div className="flex items-center gap-4">
-            <Link href="/profile">
+            <Link href="/account">
               <Button variant="outline">{user?.name || "Profil"}</Button>
             </Link>
           </div>
@@ -157,10 +158,19 @@ export default function Reports() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Button onClick={() => handleExport("excel")} className="w-full" disabled={exporting}>
-                {exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-                Télécharger Excel
-              </Button>
+              {canExportReports ? (
+                <Button onClick={() => handleExport("excel")} className="w-full" disabled={exporting}>
+                  {exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                  Télécharger Excel
+                </Button>
+              ) : (
+                <Button asChild variant="outline" className="w-full">
+                  <Link href="/account">
+                    <Lock className="mr-2 h-4 w-4" />
+                    Plan Pro requis
+                  </Link>
+                </Button>
+              )}
             </CardContent>
           </Card>
 
@@ -173,10 +183,19 @@ export default function Reports() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Button onClick={() => handleExport("pdf")} variant="outline" className="w-full" disabled={exporting}>
-                {exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-                Télécharger PDF
-              </Button>
+              {canExportReports ? (
+                <Button onClick={() => handleExport("pdf")} variant="outline" className="w-full" disabled={exporting}>
+                  {exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                  Télécharger PDF
+                </Button>
+              ) : (
+                <Button asChild variant="outline" className="w-full">
+                  <Link href="/account">
+                    <Lock className="mr-2 h-4 w-4" />
+                    Plan Pro requis
+                  </Link>
+                </Button>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -248,11 +267,11 @@ export default function Reports() {
                     <span>Recommandations automatisées</span>
                   </div>
                 </div>
-                <Link href="/reports/comparative">
-                  <Button className="w-full mt-4" variant="outline">
-                    Comparer des Audits
-                  </Button>
-                </Link>
+                <Button asChild className="w-full mt-4" variant="outline">
+                  <Link href={canExportReports ? "/reports/comparative" : "/account"}>
+                    {canExportReports ? "Comparer des Audits" : "Comparer - Plan Pro requis"}
+                  </Link>
+                </Button>
               </CardContent>
             </Card>
 

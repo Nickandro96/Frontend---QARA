@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
-import { Shield, Loader2, CheckCircle2, XCircle, MinusCircle, Sparkles, AlertCircle, FileText } from "lucide-react";
+import { Shield, Loader2, CheckCircle2, XCircle, MinusCircle, AlertCircle, FileText } from "lucide-react";
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { getLoginUrl } from "@/const";
@@ -13,8 +13,6 @@ import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
 
 import { EvidenceUpload } from "@/components/EvidenceUpload";
-import { UpgradeRequired } from "@/components/UpgradeRequired";
-import { AuditDemo } from "@/components/AuditDemo";
 
 export default function Audit() {
   const { t } = useTranslation();
@@ -90,18 +88,6 @@ export default function Audit() {
   if (!isAuthenticated) {
     window.location.href = getLoginUrl();
     return null;
-  }
-
-  // Check subscription tier and admin bypass
-  const isAdmin = profile?.user?.role === "admin";
-  const tier = profile?.subscriptionTier?.toUpperCase();
-  
-  // Admin bypass: full access
-  if (isAdmin) {
-    // Admin has full access, continue to normal audit page
-  } else if (tier === "FREE") {
-    // FREE users get limited demo
-    return <AuditDemo />;
   }
 
   if (!profile?.economicRole) {

@@ -1,13 +1,16 @@
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
+import { canUseCapability, getPlanLabel, type PlanCapability } from "@/lib/plans";
 import {
   BarChart3,
   Bell,
   ClipboardCheck,
   FileText,
   LayoutDashboard,
+  Lock,
   LogOut,
+  type LucideIcon,
   Route as RouteIcon,
   Shield,
   UserCircle,
@@ -15,23 +18,20 @@ import {
 import { ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 
-const navItems = [
+const navItems: Array<{
+  label: string;
+  path: string;
+  icon: LucideIcon;
+  capability?: PlanCapability;
+}> = [
   { label: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
   { label: "Audits", path: "/audits", icon: ClipboardCheck },
-  { label: "Classification", path: "/classification", icon: BarChart3 },
-  { label: "Voies FDA", path: "/fda", icon: RouteIcon },
+  { label: "Classification", path: "/classification", icon: BarChart3, capability: "canUseClassification" },
+  { label: "Voies FDA", path: "/fda", icon: RouteIcon, capability: "canUseFDA" },
   { label: "Plan d'action", path: "/action-plan", icon: FileText },
   { label: "Rapports", path: "/reports", icon: FileText },
-  { label: "Veille", path: "/veille", icon: Bell },
+  { label: "Veille", path: "/veille", icon: Bell, capability: "canUseVeille" },
 ];
-
-function planLabel(plan: unknown) {
-  const value = typeof plan === "string" ? plan.toLowerCase() : "free";
-  if (value === "pro") return "Plan Pro";
-  if (value === "expert") return "Plan Expert";
-  if (value === "entreprise") return "Plan Entreprise";
-  return "Plan Free";
-}
 
 type AuthenticatedLayoutProps = {
   children: ReactNode;
@@ -75,6 +75,9 @@ export function AuthenticatedLayout({ children }: AuthenticatedLayoutProps) {
             {navItems.map((item) => {
               const Icon = item.icon;
               const active = location === item.path || location.startsWith(`${item.path}/`);
+              const locked = Boolean(
+                item.capability && profile && !canUseCapability(profile, item.capability, user),
+              );
 
               return (
                 <Link
@@ -88,7 +91,8 @@ export function AuthenticatedLayout({ children }: AuthenticatedLayoutProps) {
                   ].join(" ")}
                 >
                   <Icon className="h-4 w-4" />
-                  {item.label}
+                  <span className="flex-1">{item.label}</span>
+                  {locked ? <Lock className="h-3.5 w-3.5 text-[#8a95a8]" aria-label="Verrouille" /> : null}
                 </Link>
               );
             })}
@@ -99,7 +103,7 @@ export function AuthenticatedLayout({ children }: AuthenticatedLayoutProps) {
               <UserCircle className="h-8 w-8 text-[#3b6fe0]" />
               <div className="min-w-0">
                 <div className="truncate text-sm font-semibold">{organization}</div>
-                <div className="text-xs text-[#6b7688]">{planLabel((profile as any)?.subscriptionTier)}</div>
+                <div className="text-xs text-[#6b7688]">{getPlanLabel(profile)}</div>
               </div>
             </Link>
             <Button variant="outline" className="w-full justify-start gap-2" onClick={handleLogout}>

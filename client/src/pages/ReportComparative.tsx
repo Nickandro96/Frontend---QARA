@@ -4,22 +4,25 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { trpc } from "@/lib/trpc";
-import { Loader2, TrendingUp, TrendingDown, Minus, FileText, ArrowRight } from "lucide-react";
+import { Loader2, TrendingUp, TrendingDown, Minus, FileText, ArrowRight, Lock } from "lucide-react";
 import { Link } from "wouter";
 import { getLoginUrl } from "@/const";
+import { canUseCapability } from "@/lib/plans";
 
 export default function ReportComparative() {
-  const { isAuthenticated, loading } = useAuth();
+  const { user, isAuthenticated, loading } = useAuth();
   const [audit1Id, setAudit1Id] = useState<string>("");
   const [audit2Id, setAudit2Id] = useState<string>("");
 
   const { data: audits } = trpc.audit.listAudits.useQuery({}, { enabled: isAuthenticated });
+  const { data: profile, isLoading: profileLoading } = trpc.profile.get.useQuery(undefined, { enabled: isAuthenticated });
+  const canExportReports = canUseCapability(profile, "canExportReports", user);
   const { data: comparison, isLoading: isComparing } = trpc.reports.compare.useQuery(
     { audit1Id: parseInt(audit1Id), audit2Id: parseInt(audit2Id) },
     { enabled: isAuthenticated && !!audit1Id && !!audit2Id }
   );
 
-  if (loading) {
+  if (loading || (isAuthenticated && profileLoading)) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -324,13 +327,13 @@ export default function ReportComparative() {
 
             {/* Export Button */}
             <div className="flex justify-end">
-              <Link href={`/reports/generate?auditId=${audit2Id}&compareWith=${audit1Id}`}>
-                <Button className="gap-2">
-                  <FileText className="h-4 w-4" />
-                  Générer Rapport Comparatif PDF
-                  <ArrowRight className="h-4 w-4" />
-                </Button>
-              </Link>
+              <Button asChild className="gap-2" variant={canExportReports ? "default" : "outline"}>
+                <Link href={canExportReports ? `/reports/generate?auditId=${audit2Id}&compareWith=${audit1Id}` : "/account"}>
+                  {canExportReports ? <FileText className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
+                  {canExportReports ? "Générer Rapport Comparatif PDF" : "Plan Pro requis"}
+                  {canExportReports ? <ArrowRight className="h-4 w-4" /> : null}
+                </Link>
+              </Button>
             </div>
           </>
         )}

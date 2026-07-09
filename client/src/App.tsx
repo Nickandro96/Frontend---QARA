@@ -6,6 +6,10 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthenticatedLayout } from "./components/AuthenticatedLayout";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { HreflangTags } from "./components/HreflangTags";
+import { UpgradeRequired } from "./components/UpgradeRequired";
+import { useAuth } from "./_core/hooks/useAuth";
+import { canUseCapability, type PlanCapability } from "./lib/plans";
+import { AuthLoadingScreen } from "./components/routing/AuthLoadingScreen";
 import { ProtectedRoute } from "./components/routing/ProtectedRoute";
 import { PublicOnlyRoute } from "./components/routing/PublicOnlyRoute";
 import { ThemeProvider } from "./contexts/ThemeContext";
@@ -62,6 +66,31 @@ function ProtectedPage({
       <AuthenticatedLayout>{children}</AuthenticatedLayout>
     </ProtectedRoute>
   );
+}
+
+function PlanCapabilityPage({
+  children,
+  capability,
+  feature,
+}: {
+  children: ReactNode;
+  capability: PlanCapability;
+  feature: string;
+}) {
+  const { user, isAuthenticated } = useAuth();
+  const profileQuery = trpc.profile.get.useQuery(undefined, {
+    enabled: isAuthenticated,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+
+  if (profileQuery.isLoading) return <AuthLoadingScreen />;
+
+  if (!canUseCapability(profileQuery.data, capability, user)) {
+    return <UpgradeRequired feature={feature} capability={capability} />;
+  }
+
+  return <>{children}</>;
 }
 
 function LegacyAuditRedirect() {
@@ -122,12 +151,16 @@ function Router() {
       </Route>
       <Route path="/classification/:id">
         <ProtectedPage>
-          <Classification />
+          <PlanCapabilityPage capability="canUseClassification" feature="Classification MDR">
+            <Classification />
+          </PlanCapabilityPage>
         </ProtectedPage>
       </Route>
       <Route path="/classification">
         <ProtectedPage>
-          <Classification />
+          <PlanCapabilityPage capability="canUseClassification" feature="Classification MDR">
+            <Classification />
+          </PlanCapabilityPage>
         </ProtectedPage>
       </Route>
       <Route path="/fda/qualification">
@@ -171,12 +204,16 @@ function Router() {
       </Route>
       <Route path="/fda/:id">
         <ProtectedPage>
-          <FdaClassification />
+          <PlanCapabilityPage capability="canUseFDA" feature="Determination de voie FDA">
+            <FdaClassification />
+          </PlanCapabilityPage>
         </ProtectedPage>
       </Route>
       <Route path="/fda">
         <ProtectedPage>
-          <FdaClassification />
+          <PlanCapabilityPage capability="canUseFDA" feature="Determination de voie FDA">
+            <FdaClassification />
+          </PlanCapabilityPage>
         </ProtectedPage>
       </Route>
       <Route path="/action-plan">
@@ -211,7 +248,9 @@ function Router() {
       </Route>
       <Route path="/veille">
         <ProtectedPage>
-          <RegulatoryWatch />
+          <PlanCapabilityPage capability="canUseVeille" feature="Veille reglementaire">
+            <RegulatoryWatch />
+          </PlanCapabilityPage>
         </ProtectedPage>
       </Route>
       <Route path="/account">

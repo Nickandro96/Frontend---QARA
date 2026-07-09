@@ -10,6 +10,7 @@ import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { getLoginUrl } from "@/const";
 import { toast } from "sonner";
+import { getPlanFromProfile, getPlanLabel } from "@/lib/plans";
 
 export default function Profile() {
   const { user, isAuthenticated, loading, logout } = useAuth();
@@ -18,6 +19,7 @@ export default function Profile() {
 
   const [economicRole, setEconomicRole] = useState<string>("");
   const [companyName, setCompanyName] = useState("");
+  const plan = getPlanFromProfile(profile);
 
   useEffect(() => {
     if (profile) {
@@ -176,14 +178,11 @@ export default function Profile() {
           <CardContent>
             <div className="flex items-center justify-between mb-4">
               <div>
-                <p className="font-medium text-lg">
-                  Plan {profile?.subscriptionTier?.toUpperCase() || "FREE"}
-                </p>
+                <p className="font-medium text-lg">{getPlanLabel(profile)}</p>
                 <p className="text-sm text-muted-foreground">
-                  {profile?.subscriptionTier === "free" && "Accès limité aux fonctionnalités de base"}
-                  {profile?.subscriptionTier === "pro" && "Accès complet aux audits et rapports"}
-                  {profile?.subscriptionTier === "expert" && "IA contextuelle + exports avancés"}
-                  {profile?.subscriptionTier === "entreprise" && "Solution complète avec support prioritaire"}
+                  {plan === "free"
+                    ? "Audits, score et rapports consultables. Exports, classification, FDA et veille sont reserves au Plan Pro."
+                    : "Acces complet aux exports, a la classification, aux voies FDA et a la veille reglementaire."}
                 </p>
               </div>
             </div>

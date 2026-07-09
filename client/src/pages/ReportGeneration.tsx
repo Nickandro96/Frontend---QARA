@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
+import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
+import { UpgradeRequired } from "@/components/UpgradeRequired";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -8,9 +10,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { FileText, Download, Loader2, CheckCircle2, FileBarChart, FileSpreadsheet, ClipboardList, FolderArchive } from "lucide-react";
+import { canUseCapability } from "@/lib/plans";
 
 export default function ReportGeneration() {
   const [location, navigate] = useLocation();
+  const { user, isAuthenticated } = useAuth();
+  const { data: profile, isLoading: profileLoading } = trpc.profile.get.useQuery(undefined, { enabled: isAuthenticated });
+  const canExportReports = canUseCapability(profile, "canExportReports", user);
 
 
   // Get auditId from URL query params
@@ -100,6 +106,18 @@ export default function ReportGeneration() {
   ];
 
   const selectedOption = reportTypeOptions.find((opt) => opt.value === reportType);
+
+  if (profileLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!canExportReports) {
+    return <UpgradeRequired feature="Generation de rapports exportables" capability="canExportReports" />;
+  }
 
   return (
     <div className="container max-w-4xl py-8">
