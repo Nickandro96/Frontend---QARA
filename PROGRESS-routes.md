@@ -300,3 +300,55 @@ Verification effectuee sur `server/routers.ts`, `server/classification-router.ts
 5. **Point positif verifie** — `system.updateUserProfile` (mutation qui permet de changer `subscriptionTier` d'un utilisateur, utilisee par `AdminUsers.tsx`) est correctement protegee par `adminProcedure` (`server/_core/trpc.ts`, verifie `user.role === "admin"` cote serveur). Aucune faille trouvee sur ce point precis.
 
 Recommandation pour le lot dedie : ajouter un middleware/helper serveur equivalent a `hasCapability` (deja cree cote frontend dans `client/src/lib/plans.ts`) qui verifie `ctx.user`/`subscriptionTier` avant d'executer les procedures listees ci-dessus, en reutilisant si possible la meme matrice de capacites pour eviter toute divergence entre frontend et backend.
+
+## Etape 8 - Reprise apres Codex : reconciliation des branches (2026-07-09)
+
+Statut : termine.
+
+### Contexte
+
+Nouvelle session, invoquee pour reprendre le travail apres qu'un agent Codex a rapporte avoir livre "etapes 4 et 5" sur une branche `qara-design-passation`, avec un dernier commit `d0a8e513 feat(routing): etape 5 — onboarding et etats vides`. La consigne de reprise signalait un risque de divergence avec `claude/qara-routes-auth-stages-xk5awz` (la branche de cette meme lignee, qui portait deja les etapes 0-7 ci-dessus) et demandait d'elucider la verite Git avant tout code.
+
+### Constat reel (via `git fetch --all`, `git merge-base`, `git log --oneline`)
+
+Les deux branches partagent une base commune exacte : `a27131d feat(routing): etape 3 — table routes cible`. A partir de ce point, elles divergent en deux lignes independantes (aucune n'est un sur-ensemble strict de l'autre) :
+
+- **`claude/qara-routes-auth-stages-xk5awz`** (7 commits propres) : `0352d76` (audit de reprise) -> `bef9e88` (etape 4 — matrice abonnements) -> `a354b09` (etape 5 — dashboard) -> `ea896ad` (**etape 6 — execution reelle des 10 parcours**) -> `0cd1857` (fix doublon FdaAudit.tsx + @types/node) -> `c93f970` (etape 7 — build/types + failles backend consignees) -> `d29ef27` (docs — etat des lieux). Tout ce travail est documente en detail plus haut dans ce fichier (etapes 4 a 7), avec verification reelle (captures ecran mentionnees, corpus MDR reimporte pour tester des vraies questions, bug reel trouve et corrige en etape 4 — sidebar dupliquee dans `ActionDashboard.tsx`).
+- **`qara-design-passation`** (3 commits propres, Codex) : `9e85470` (fix auth — debloque les pages publiques) -> `b41c364` (etape 4 — matrice abonnements, refaite independamment) -> `d0a8e51` (etape 5 — onboarding et etats vides, refaite independamment). Codex a explicitement reconnu ne pas avoir execute les 10 parcours de test (pas d'acces a la preview Vercel protegee).
+
+Une troisieme branche non mentionnee dans la consigne, `claude/qara-compliance-audit-qitbxl`, a ete trouvee lors du fetch : elle bifurque du point `6210cd7` (avant meme l'etape 0 routing), donc anterieure et non liee aux deux lignes ci-dessus. Non pertinente pour la decision, ignoree.
+
+### Analyse de contenu (pas seulement les messages de commit)
+
+- Diff `a27131d..claude/qara-routes-auth-stages-xk5awz` : cree `client/src/lib/plans.ts` (matrice de capacites) et `client/src/components/LockedFeature.tsx`, gate reellement `Classification.tsx`/`FdaClassification.tsx`/`RegulatoryWatch.tsx`/`Reports.tsx` (bloc export), nettoie le dashboard (sidebar dupliquee, donnees fictives), supprime un fichier mort (`FdaAudit.tsx`, doublon de casse qui empechait `tsc` de tourner), et **consigne dans ce meme fichier une liste precise de failles backend** (`classification.classify`, `fda.*`, `watch.*` sans controle de plan cote serveur) — verifiee independamment et confirmee exacte lors du lot backend "securite des plans" traite separement (memes 4 endpoints trouves, memes correctifs appliques cote serveur).
+- Diff `a27131d..qara-design-passation` : refait sa propre `plans.ts` (109 lignes, structure differente), retouche `Login.tsx`/`Register.tsx`/`useAuth.ts`/`PublicOnlyRoute.tsx` (voir ci-dessous), et modifie `Onboarding.tsx` pour y ajouter un `REFERENTIAL_CATALOG` (7 referentiels, distinction primary/transverse) avec **verrouillage des cartes au-dela de `maxReferentiels`** — piece de valeur reelle, absente de la branche `xk5awz` (qui applique la limite de referentiels uniquement sur la tuile dashboard, pas dans l'onboarding lui-meme). Codex tente aussi d'appeler `trpc.profile.update` avec des champs (`activeFrameworks`, `activeReferentials`, `markets`) que le schema Zod de cette procedure n'accepte pas (elle ne prend que `economicRole`/`companyName`) — tentative de raccord backend premature, silencieusement inefficace, et de toute facon hors perimetre de la mission de reprise actuelle (le raccord `onboarding.getProfile`/`saveProfile` reel, cree depuis cote backend, est explicitement un lot ulterieur).
+- Commit `9e85470` (Codex) : correctif independant et de bonne qualite, sans lien avec le reste — `refresh()` (apres login/register) pouvait bloquer indefiniment la navigation si la requete de session ne se resolvait jamais ; ajout d'un timeout de secours (`Promise.race`, 1500 ms) avant de naviguer quand meme. Touche des fichiers (`useAuth.ts`, `PublicOnlyRoute.tsx`, `Login.tsx`, `Register.tsx`) que la branche `xk5awz` n'a jamais modifies : aucun recouvrement, aucun risque de conflit.
+
+### Decision de branche de travail (consignee avant tout code Phase 1+)
+
+**Branche retenue : `claude/qara-routes-auth-stages-xk5awz`**, comme base de la branche de travail designee pour cette session (`claude/qara-backend-securite-persistance-bo77ju`, memes conventions de nommage que le lot backend, elle etait vide/identique a `main` avant cette session — deplacement en fast-forward, verifie avec `git merge-base --is-ancestor`, aucun commit perdu).
+
+Raisons :
+1. Strictement plus avancee (7 commits contre 3) et couvre la totalite du perimetre de cette mission de reprise (matrice, ecrans verrouilles, dashboard, **et surtout l'etape 6 — execution reelle des 10 parcours**, le coeur explicite du travail demande ici).
+2. Verification independante : la liste de failles backend qu'elle consigne (etape 7) correspond exactement, endpoint par endpoint, a ce qui a ete trouve et corrige de maniere independante lors du lot backend "securite des plans" (session separee, meme constat sur `classification.classify`, `fda.*`, `watch.*`) — forte evidence que son contenu est demontre, pas seulement declare.
+3. Codex n'a pas execute les 10 parcours (aveu explicite) ; la branche `xk5awz` les a executes avec details concrets et falsifiables (bug reel trouve et corrige en etape 4, commande de reimport de corpus citee, comportement observe apres correctif).
+
+**Ce qui n'est pas perdu du travail de Codex** :
+- `9e85470` (correctif refresh-timeout login/register) : **cherry-picke** tel quel sur la branche de travail (`ef824de` sur `claude/qara-backend-securite-persistance-bo77ju`) — aucun recouvrement de fichiers, correctif independant et sain.
+- Le concept de verrouillage des cartes de referentiels au-dela de `maxReferentiels` **dans l'onboarding lui-meme** (present chez Codex, absent de `xk5awz`) : sera **reimplemente proprement en Phase 1** de cette reprise (sans la tentative de raccord backend premature vers `profile.update`, hors perimetre ici).
+- `b41c364` (matrice abonnements de Codex) et `d0a8e51` (reste du commit onboarding) : **non repris tels quels** — la matrice equivalente de `xk5awz` est deja en place, testee, et coherente avec les failles backend independamment confirmees ; reprendre la version de Codex en plus aurait cree un doublon divergent sans benefice demontre.
+
+### Verification inventaire etapes 4/5 (demande explicite de la consigne de reprise)
+
+Fichier par fichier, sur la branche de travail retenue :
+
+| Element demande | Statut | Preuve |
+|---|---|---|
+| `client/src/lib/plans.ts` (matrice par capacites) | **Present** | Cree en etape 4 (`bef9e88`), verifie ci-dessus |
+| `LockedFeature.tsx` + ecrans verrouilles | **Present** | `Classification.tsx`, `FdaClassification.tsx`, `RegulatoryWatch.tsx`, bloc export `Reports.tsx` |
+| Sidebar avec modules verrouilles | **Present** | `AuthenticatedLayout.tsx`, verifie etape 4 |
+| Verrouillage routeur `/classification` `/fda` `/veille` | **Present** | Gating au niveau composant de page, monte par `ProtectedRoute` (etape 4) |
+| Rapports consultables en Free, exports verrouilles | **Present** | Correctif explicite en etape 4 : score visible pour tous, seul le bloc export est verrouille |
+| Dashboard sans etat "0 referentiel" -> onboarding | **Present** | `ProtectedRoute` (etape 2) + reverifie etape 5 |
+| Onboarding raccorde aux referentiels/role/marches | **Partiel** | Etat local (`localStorage`) fonctionnel et coherent avec `getActiveReferentials` (etape 5) ; **quota `maxReferentiels` dans l'onboarding lui-meme absent** avant cette session (piece de Codex non reprise telle quelle) — a completer en Phase 1 |
+
