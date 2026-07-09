@@ -103,6 +103,7 @@ export function getRequiredPlanLabel(capability: PlanCapability): string {
   return PLAN_MATRIX.pro.label;
 }
 
-export function getMaxReferentiels(profile: unknown): number {
+export function getMaxReferentiels(profile: unknown, user?: unknown): number {
+  if (isAdminUser(user, profile)) return Number.POSITIVE_INFINITY;
   return PLAN_MATRIX[getPlanFromProfile(profile)].maxReferentiels;
 }

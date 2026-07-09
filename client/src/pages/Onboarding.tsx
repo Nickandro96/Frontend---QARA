@@ -1,19 +1,18 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { ActiveReferential, saveOnboardingState } from "@/lib/onboarding";
-import { CheckCircle2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { getMaxReferentiels, getPlanLabel } from "@/lib/plans";
+import {
+  ActiveReferential,
+  getActiveReferentials,
+  readOnboardingState,
+  REFERENTIAL_CATALOG,
+  saveOnboardingState,
+} from "@/lib/onboarding";
+import { CheckCircle2, Loader2, Lock } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
-
-const referentials: { id: ActiveReferential; label: string; description: string }[] = [
-  { id: "mdr", label: "MDR", description: "Reglement (UE) 2017/745" },
-  { id: "ivdr", label: "IVDR", description: "Reglement (UE) 2017/746" },
-  { id: "fda-qmsr", label: "FDA QMSR", description: "Qualite et voie US" },
-  { id: "mdsap", label: "MDSAP", description: "Programme multi-marches" },
-  { id: "iso-13485", label: "ISO 13485", description: "Systeme qualite DM" },
-  { id: "iso-14971", label: "ISO 14971", description: "Gestion des risques" },
-  { id: "iso-9001", label: "ISO 9001", description: "Qualite transverse" },
-];
 
 const roles = [
   { id: "fabricant", label: "Fabricant" },
@@ -26,10 +25,32 @@ const markets = ["UE", "US", "UK", "Suisse", "Canada", "Australie"];
 
 export default function Onboarding() {
   const [, navigate] = useLocation();
+  const { user, isAuthenticated } = useAuth();
+  const profileQuery = trpc.profile.get.useQuery(undefined, { enabled: isAuthenticated });
+  const updateProfile = trpc.profile.update.useMutation();
   const [step, setStep] = useState(0);
-  const [selectedReferentials, setSelectedReferentials] = useState<ActiveReferential[]>([]);
-  const [economicRole, setEconomicRole] = useState("");
-  const [selectedMarkets, setSelectedMarkets] = useState<string[]>([]);
+  const storedState = readOnboardingState();
+  const [selectedReferentials, setSelectedReferentials] = useState<ActiveReferential[]>(storedState.referentials);
+  const [economicRole, setEconomicRole] = useState(storedState.economicRole || "");
+  const [selectedMarkets, setSelectedMarkets] = useState<string[]>(storedState.markets);
+  const [saveWarning, setSaveWarning] = useState("");
+  const maxReferentiels = getMaxReferentiels(profileQuery.data, user);
+  const planLabel = getPlanLabel(profileQuery.data);
+
+  useEffect(() => {
+    if (!profileQuery.data) return;
+
+    const activeReferentials = getActiveReferentials(profileQuery.data) as ActiveReferential[];
+    if (activeReferentials.length > 0) setSelectedReferentials(activeReferentials);
+
+    const profile = profileQuery.data as Record<string, unknown>;
+    if (typeof profile.economicRole === "string") setEconomicRole(profile.economicRole);
+  }, [profileQuery.data]);
+
+  useEffect(() => {
+    if (maxReferentiels === Number.POSITIVE_INFINITY) return;
+    setSelectedReferentials((current) => current.slice(0, maxReferentiels));
+  }, [maxReferentiels]);
 
   const canContinue = useMemo(() => {
     if (step === 0) return selectedReferentials.length > 0;
@@ -39,9 +60,11 @@ export default function Onboarding() {
   }, [economicRole, selectedMarkets.length, selectedReferentials.length, step]);
 
   const toggleReferential = (id: ActiveReferential) => {
-    setSelectedReferentials((current) =>
-      current.includes(id) ? current.filter((item) => item !== id) : [...current, id]
-    );
+    setSelectedReferentials((current) => {
+      if (current.includes(id)) return current.filter((item) => item !== id);
+      if (current.length >= maxReferentiels) return current;
+      return [...current, id];
+    });
   };
 
   const toggleMarket = (market: string) => {
@@ -50,13 +73,26 @@ export default function Onboarding() {
     );
   };
 
-  const finish = () => {
+  const finish = async () => {
+    setSaveWarning("");
     saveOnboardingState({
       referentials: selectedReferentials,
       economicRole,
       markets: selectedMarkets,
       completedAt: new Date().toISOString(),
     });
+
+    try {
+      await updateProfile.mutateAsync({
+        economicRole,
+        activeFrameworks: selectedReferentials,
+        activeReferentials: selectedReferentials,
+        markets: selectedMarkets,
+      } as any);
+    } catch {
+      setSaveWarning("Configuration conservee dans ce navigateur. La persistance serveur des referentiels reste a confirmer.");
+    }
+
     navigate("/dashboard");
   };
 
@@ -81,26 +117,34 @@ export default function Onboarding() {
         <CardContent>
           {step === 0 ? (
             <div className="grid gap-3 sm:grid-cols-2">
-              {referentials.map((item) => {
+              {REFERENTIAL_CATALOG.map((item) => {
                 const selected = selectedReferentials.includes(item.id);
+                const locked = !selected && selectedReferentials.length >= maxReferentiels;
                 return (
                   <button
                     key={item.id}
                     type="button"
                     onClick={() => toggleReferential(item.id)}
+                    disabled={locked}
                     className={[
                       "rounded-lg border p-4 text-left transition",
                       selected ? "border-[#3b6fe0] bg-[#e9efff]" : "border-[#dfe4ea] bg-white hover:border-[#9fb3e8]",
+                      locked ? "cursor-not-allowed opacity-60" : "",
                     ].join(" ")}
                   >
                     <div className="flex items-center justify-between gap-3">
-                      <span className="font-semibold">{item.label}</span>
+                      <span className="font-semibold">{item.title}</span>
                       {selected ? <CheckCircle2 className="h-4 w-4 text-[#3b6fe0]" /> : null}
+                      {locked ? <Lock className="h-4 w-4 text-[#8a95a8]" /> : null}
                     </div>
                     <p className="mt-1 text-sm text-[#6b7688]">{item.description}</p>
                   </button>
                 );
               })}
+              <div className="rounded-lg border border-[#dfe4ea] bg-[#f8fafc] p-4 text-sm text-[#526173] sm:col-span-2">
+                {planLabel} : {maxReferentiels === Number.POSITIVE_INFINITY ? "referentiels illimites" : `${maxReferentiels} referentiel actif maximum`}.
+                {user?.role === "admin" ? " Les administrateurs ne sont pas limites par cette regle UX." : null}
+              </div>
             </div>
           ) : null}
 
@@ -157,9 +201,13 @@ export default function Onboarding() {
                 Suivant
               </Button>
             ) : (
-              <Button onClick={finish}>Ouvrir le dashboard</Button>
+              <Button onClick={finish} disabled={updateProfile.isPending}>
+                {updateProfile.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Ouvrir le dashboard
+              </Button>
             )}
           </div>
+          {saveWarning ? <p className="mt-3 text-sm text-[#b45309]">{saveWarning}</p> : null}
         </CardContent>
       </Card>
     </div>
