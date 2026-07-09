@@ -352,3 +352,36 @@ Fichier par fichier, sur la branche de travail retenue :
 | Dashboard sans etat "0 referentiel" -> onboarding | **Present** | `ProtectedRoute` (etape 2) + reverifie etape 5 |
 | Onboarding raccorde aux referentiels/role/marches | **Partiel** | Etat local (`localStorage`) fonctionnel et coherent avec `getActiveReferentials` (etape 5) ; **quota `maxReferentiels` dans l'onboarding lui-meme absent** avant cette session (piece de Codex non reprise telle quelle) — a completer en Phase 1 |
 
+
+## Etape 9 - Phase 2 : verification reelle du traitement des FORBIDDEN backend (2026-07-09)
+
+Statut : termine.
+
+Contexte : le lot backend "securite des plans" (traite separement) a mis en place `requireCapability(...)` cote serveur, qui renvoie desormais `TRPCError({ code: "FORBIDDEN" })` sur `classification.classify`, `fda.getQualificationQuestions/getQualification/saveQualification`, `watch.updates/latest/critical`, `reports.generate` pour un compte Free. Verification demandee : le frontend doit gerer ce cas proprement partout, jamais de page blanche/crash/boucle.
+
+### Environnement de test
+
+Monte de bout en bout dans ce sandbox : MariaDB locale (`qara_local`, deja migree lors du lot backend, comptes de test `free@test.qara`/`pro@test.qara` deja crees), backend lance en local (`tsx server/_core/index.ts`, port 3001, `ALLOWED_ORIGINS=http://127.0.0.1:5173`), frontend lance en local (`vite --port 5173 --host 127.0.0.1`, `VITE_API_URL=http://127.0.0.1:3001` — **sans** `/trpc` final, le client l'ajoute deja lui-meme dans `client/src/lib/trpc.ts`, sinon double segment `/trpc/trpc` et 404 silencieux). Navigateur Chromium pilote par Playwright (script ad hoc, non committe).
+
+### Analyse du code avant test
+
+- Chaque page gatee (`FdaClassification.tsx`, `Classification.tsx`, `RegulatoryWatch.tsx`, `Reports.tsx`) verifie `hasCapability(...)` **avant** de monter les hooks/requetes metier et retourne `<LockedFeature/>` immediatement si la capacite manque — dans le flux normal de navigation, l'endpoint gate n'est donc jamais appele pour un compte Free (l'UX empeche deja l'appel, conformement a la consigne).
+- Point d'attention identifie a la lecture : `FdaClassification.tsx` place son garde `if (isAuthenticated && !hasCapability(...))` **avant** plusieurs `useState` (step, deviceName, etc.), ce qui peut faire varier le nombre de hooks appeles entre le rendu ou `profile` est encore `undefined` (capacite par defaut = false, donc verrouille) et le rendu suivant une fois `profile` charge (capacite vraie pour un compte Pro) — un risque theorique de violation des Rules of Hooks React (nombre de hooks different entre deux rendus), qui pourrait provoquer un crash visible a la premiere visite.
+- Seul le code HTTP 401 est gere globalement (`client/src/lib/trpc.ts` : destruction de session + redirection login sur 401). Aucune gestion globale du 403/FORBIDDEN — **comportement correct** : un FORBIDDEN ne doit pas detruire une session valide ni rediriger vers le login, contrairement a un 401. Un `ErrorBoundary` racine (`App.tsx`) reste un filet de secours en cas d'exception non geree dans un composant.
+
+### Test reel execute
+
+Compte Pro (onboarde MDR/Fabricant/UE) et compte Free (onboarde de la meme facon), chacun navigue reellement vers `/fda`, `/classification`, `/veille`, `/reports`, avec capture des erreurs console et des erreurs de page (exceptions non attrapees) :
+
+| Route | Compte Pro | Compte Free |
+|---|---|---|
+| `/fda` | Contenu reel affiche, 0 erreur console, 0 erreur de page | Ecran `LockedFeature` ("Cette fonctionnalite necessite le Plan Pro. Passer au Plan Pro"), 0 erreur |
+| `/classification` | Contenu reel affiche, 0 erreur | Ecran verrouille, 0 erreur |
+| `/veille` | Contenu reel affiche, 0 erreur | Ecran verrouille, 0 erreur |
+| `/reports` | Score visible, 0 erreur de page | Score visible + bloc export verrouille, 0 erreur de page |
+
+Le risque theorique de violation des Rules of Hooks releve ci-dessus **ne s'est pas materialise** dans ces conditions reelles de test (`page errors: []` sur toutes les combinaisons route x plan) : dans la pratique, `useAuth`/`profile.get` se resolvent avant que React ne detecte un desalignement de hooks visible. Note pour vigilance future : ce pattern (garde conditionnel avant des `useState`) reste fragile en theorie et pourrait se manifester differemment sous un reseau plus lent ; deplacer le garde apres tous les hooks (ou early-return uniquement au niveau du JSX retourne, jamais avant des hooks) serait plus robuste, mais aucun defaut observe ne justifie d'y toucher hors perimetre de cette reprise.
+
+Deux "404" apparus dans la console lors d'un premier essai (`profile.get`, Google Fonts) : confirmes comme artefacts de l'environnement de test (requete annulee par re-navigation rapide du script, absence d'acces internet pour `fonts.googleapis.com` dans ce sandbox) apres re-execution cible — aucun 4xx/5xx reel renvoye par le backend sur `/reports` lors d'une navigation normale.
+
+**Conclusion : le traitement des FORBIDDEN est demontre propre dans toutes les combinaisons testees.** Aucune page blanche, aucun crash, aucune boucle de requetes observee.

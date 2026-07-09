@@ -1,7 +1,10 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ActiveReferential, saveOnboardingState } from "@/lib/onboarding";
-import { CheckCircle2 } from "lucide-react";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { trpc } from "@/lib/trpc";
+import { getMaxReferentiels, getPlanLabel } from "@/lib/plans";
+import { CheckCircle2, Lock } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
 
@@ -26,6 +29,10 @@ const markets = ["UE", "US", "UK", "Suisse", "Canada", "Australie"];
 
 export default function Onboarding() {
   const [, navigate] = useLocation();
+  const { user, isAuthenticated } = useAuth();
+  const { data: profile } = trpc.profile.get.useQuery(undefined, { enabled: isAuthenticated });
+  const maxReferentiels = getMaxReferentiels(profile, user);
+  const planLabel = getPlanLabel(profile?.subscriptionTier);
   const [step, setStep] = useState(0);
   const [selectedReferentials, setSelectedReferentials] = useState<ActiveReferential[]>([]);
   const [economicRole, setEconomicRole] = useState("");
@@ -39,9 +46,11 @@ export default function Onboarding() {
   }, [economicRole, selectedMarkets.length, selectedReferentials.length, step]);
 
   const toggleReferential = (id: ActiveReferential) => {
-    setSelectedReferentials((current) =>
-      current.includes(id) ? current.filter((item) => item !== id) : [...current, id]
-    );
+    setSelectedReferentials((current) => {
+      if (current.includes(id)) return current.filter((item) => item !== id);
+      if (current.length >= maxReferentiels) return current;
+      return [...current, id];
+    });
   };
 
   const toggleMarket = (market: string) => {
@@ -80,27 +89,44 @@ export default function Onboarding() {
         </CardHeader>
         <CardContent>
           {step === 0 ? (
-            <div className="grid gap-3 sm:grid-cols-2">
-              {referentials.map((item) => {
-                const selected = selectedReferentials.includes(item.id);
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => toggleReferential(item.id)}
-                    className={[
-                      "rounded-lg border p-4 text-left transition",
-                      selected ? "border-[#3b6fe0] bg-[#e9efff]" : "border-[#dfe4ea] bg-white hover:border-[#9fb3e8]",
-                    ].join(" ")}
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="font-semibold">{item.label}</span>
-                      {selected ? <CheckCircle2 className="h-4 w-4 text-[#3b6fe0]" /> : null}
-                    </div>
-                    <p className="mt-1 text-sm text-[#6b7688]">{item.description}</p>
-                  </button>
-                );
-              })}
+            <div>
+              {Number.isFinite(maxReferentiels) ? (
+                <p className="mb-3 text-sm text-[#6b7688]">
+                  {planLabel} : {selectedReferentials.length}/{maxReferentiels} referentiel(s) selectionnable(s).
+                </p>
+              ) : null}
+              <div className="grid gap-3 sm:grid-cols-2">
+                {referentials.map((item) => {
+                  const selected = selectedReferentials.includes(item.id);
+                  const locked = !selected && selectedReferentials.length >= maxReferentiels;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      disabled={locked}
+                      onClick={() => toggleReferential(item.id)}
+                      className={[
+                        "rounded-lg border p-4 text-left transition",
+                        selected
+                          ? "border-[#3b6fe0] bg-[#e9efff]"
+                          : locked
+                            ? "cursor-not-allowed border-[#dfe4ea] bg-[#f5f6f8] opacity-60"
+                            : "border-[#dfe4ea] bg-white hover:border-[#9fb3e8]",
+                      ].join(" ")}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="font-semibold">{item.label}</span>
+                        {selected ? <CheckCircle2 className="h-4 w-4 text-[#3b6fe0]" /> : null}
+                        {locked ? <Lock className="h-4 w-4 text-[#9aa4b2]" /> : null}
+                      </div>
+                      <p className="mt-1 text-sm text-[#6b7688]">{item.description}</p>
+                      {locked ? (
+                        <p className="mt-1 text-xs font-medium text-[#9aa4b2]">Plan Pro requis pour ajouter ce referentiel</p>
+                      ) : null}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           ) : null}
 
