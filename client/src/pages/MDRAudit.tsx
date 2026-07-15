@@ -105,6 +105,16 @@ export default function MDRAudit() {
   const { data: qualification } = trpc.mdr.getQualification.useQuery({});
   const { data: processesData, isLoading: loadingProcesses } = trpc.mdr.getProcesses.useQuery();
 
+  // Résolution dynamique de l'ID référentiel MDR par code (jamais en dur) :
+  // qitbxl et l'ancienne base main n'utilisent pas les mêmes IDs auto-increment
+  // pour "MDR" (3 vs 1) — voir DIAGNOSTIC-topologie-branches.md côté backend.
+  const { data: referentialsData } = trpc.referentials.list.useQuery();
+  const mdrReferentialId = useMemo(() => {
+    const list = Array.isArray(referentialsData) ? (referentialsData as any[]) : [];
+    const mdr = list.find((r) => String(r?.code).toUpperCase() === "MDR");
+    return mdr?.id;
+  }, [referentialsData]);
+
   const {
     data: sitesData,
     isLoading: loadingSites,
@@ -227,7 +237,8 @@ export default function MDRAudit() {
       plannedStartDate &&
       auditLeader &&
       auditeeMainContact &&
-      auditeeContactEmail
+      auditeeContactEmail &&
+      mdrReferentialId
     );
   };
 
@@ -249,7 +260,7 @@ export default function MDRAudit() {
 
       status: "draft",
 
-      referentialIds: [1],
+      referentialIds: mdrReferentialId ? [mdrReferentialId] : [],
       processIds: selectedProcess === "all" ? [] : [selectedProcess],
 
       economicRole: selectedRole as any,
@@ -281,7 +292,7 @@ export default function MDRAudit() {
 
       status: "draft",
 
-      referentialIds: [1],
+      referentialIds: mdrReferentialId ? [mdrReferentialId] : [],
       processIds: selectedProcess === "all" ? [] : [selectedProcess],
 
       economicRole: selectedRole as any,
@@ -321,7 +332,7 @@ export default function MDRAudit() {
 
         status: "in_progress",
 
-        referentialIds: [1],
+        referentialIds: mdrReferentialId ? [mdrReferentialId] : [],
         processIds: selectedProcess === "all" ? [] : [selectedProcess],
 
         economicRole: selectedRole as any,
