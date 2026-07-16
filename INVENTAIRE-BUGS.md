@@ -1,0 +1,71 @@
+# INVENTAIRE-BUGS — Diagnostic systématique du parcours utilisateur
+
+*Rédigé le 2026-07-16. Session de diagnostic uniquement — aucune correction appliquée sauf mention explicite "CORRIGÉ" (aucune ici). Environnement : backend qitbxl + frontend bo77ju (branches réellement déployées, fetchées au tip du jour) lancés en local, base MariaDB locale peuplée via la vraie séquence de production (migrations + `scripts/import-corpus.mjs`, 473 questions réelles). Rien écrit sur la base de production.*
+
+**Convention** : **[PROUVÉ]** = testé en direct (Playwright ou requête manuelle) ou confirmé par lecture de code sans ambiguïté possible. **[SUPPOSÉ]** = déduit, à confirmer.
+
+---
+
+## Tableau priorisé
+
+| # | Fonctionnalité | Symptôme (utilisateur) | Cause technique (prouvée) | Fichier(s) | Gravité | Correction estimée |
+|---|---|---|---|---|---|---|
+| 1 | Reprendre un audit MDR/ISO en cours | Clic sur "Reprendre" ne fait rien (MDR) ou route mal (ISO) | **[PROUVÉ]** `handleResumeAudit` (`AuditHistory.tsx:53-69`) teste `referentialIds.includes(1)` = MDR, `.includes(2)`/`.includes(3)` = ISO — schéma d'IDs de l'ancienne branche `main` abandonnée. Sur qitbxl réel, MDR=3, ISO13485=7, ISO9001=9 : aucun ne matche jamais → `else { toast.error("Type d'audit non reconnu") }`, **zéro navigation**. Testé en direct : clic sur "Reprendre" reste sur `/audit-history`, aucune requête réseau émise. Second bug empilé pour MDR spécifiquement : même en corrigeant l'ID, `MDRAudit.tsx` ne lit `auditId` que via route param (`useRoute("/mdr/audit/:auditId")`), jamais via query string — testé en direct : `/mdr/audit?auditId=1` affiche un formulaire **entièrement vide**, pas l'audit existant. | `client/src/pages/AuditHistory.tsx`, `client/src/pages/MDRAudit.tsx` | **BLOQUANT** | Moyenne — résoudre l'ID par `code` (comme déjà fait pour la création dans `MDRAudit.tsx`) + faire naviguer vers `/mdr/audit/${audit.id}` (route param, cohérent avec ce que `MDRAudit.tsx` sait déjà lire) plutôt que `?auditId=` pour MDR. |
+| 2 | Génération de rapport Excel/PDF (page "Rapports") | Clic sur Excel/PDF ne produit rien d'exploitable | **[PROUVÉ]** `handleExport` (`Reports.tsx:34-66`) fait des `fetch()` bruts vers `/api/trpc/questions.list` et `/api/trpc/audit.getResponses` : (a) mauvais préfixe (`/api/trpc` au lieu de `/trpc`), (b) pas de `credentials:"include"` (cookie de session jamais envoyé), (c) les deux procédures **n'existent nulle part** côté backend — `questions.list` absent de tout `appRouter`, `getResponses` existe seulement sous `mdr.*`/`iso.*`, jamais sous `audit.*`. Triple rupture confirmée par lecture de code + test réel (clic sans erreur console visible mais sans résultat exploitable, cohérent avec un fetch qui échoue silencieusement côté `.then(r=>r.json())` sur une 404 HTML). | `client/src/pages/Reports.tsx` | **BLOQUANT** | Moyenne — remplacer les `fetch()` bruts par le client tRPC configuré, et router vers `mdr.getResponses`/`iso.getResponses` selon le type d'audit réel de l'utilisateur (pas de `questions.list` générique qui n'a jamais existé). |
+| 3 | Génération de rapport PDF (depuis `AuditResults.tsx`, bouton distinct de #2) | Erreur serveur (déjà identifié en Étape 2) | **[PROUVÉ]** `generateAuditReport` (`server/report-generator.ts:73`) plante systématiquement — `TypeError: Cannot read properties of undefined (reading 'length')` dans `generateContextSection` (ligne 377), confirmé par test réel contre le backend local. Bug préexistant, indépendant de la réconciliation frontend/backend. | `server/report-generator.ts` | **BLOQUANT** (pour cette voie spécifique) | Non estimée — cause exacte du champ `undefined` non investiguée dans cette session (diagnostic, pas correction). |
+| 4 | Sections "Constats"/"Actions" toujours vides sur le détail d'un audit | Page se charge mais ces deux blocs n'affichent jamais rien | **[PROUVÉ]** `trpc.findings.list`/`trpc.actions.list` (`AuditDetail.tsx:26,32`) appellent des namespaces **absents de `appRouter`** — recherche exhaustive dans tous les fichiers routeurs, zéro résultat. Dégradé gracieusement (`findings && findings.length > 0 ? ... : <état vide>`), donc pas de crash — la page se charge, ces sections restent juste silencieusement mortes. | `client/src/pages/AuditDetail.tsx` | **MAJEUR** | Grande — les tables `findings`/`actions` existent déjà dans le schéma (vues dans `report-generator.ts`/`db-dashboard-v2.ts`), il "reste" à écrire les routeurs manquants plutôt qu'à concevoir le modèle de données. |
+| 5 | Bouton "Liste audits" / retour depuis l'écran de résultats MDR | Page blanche après clic | **[PROUVÉ]** `setLocation("/mdr")` (`MDRAuditReview.tsx:242,283`, `MDRAuditDrilldown.tsx:474`) — aucune route ne matche une URL bare `/mdr` à l'intérieur de `MdrRoutesErrorBoundary` (qui ne connaît que `/mdr/qualification`, `/mdr/audit`, `/mdr/audit/:id`). Testé en direct : navigation vers `/mdr` affiche une page quasi vide (110 caractères de texte visible, juste la sidebar). C'est le bug nommé "Liste audits → /mdr" du prompt. | `client/src/pages/MDRAuditReview.tsx` (×2), `client/src/pages/MDRAuditDrilldown.tsx` (×1) | **MAJEUR** | Triviale — remplacer `"/mdr"` par `"/audits"` aux 3 emplacements. |
+| 6 | Formulaire de contact (`/contact`) | Soumission silencieusement cassée | **[PROUVÉ]** `trpc.contact.submit` (`Contact.tsx`) — namespace `contact` absent de `appRouter`. Page publique, réellement routée (`/contact`). | `client/src/pages/Contact.tsx` | **MAJEUR** | Moyenne. |
+| 7 | Page "Documents" (`/documents`) | Page entièrement non fonctionnelle | **[PROUVÉ]** `trpc.documents.{getAll,getById,getStats,getUserStatus,updateStatus,checkCoherence,explainDocument}` — namespace `documents` totalement absent côté backend. Page réellement routée. | `client/src/pages/Documents.tsx` | **MAJEUR** *(à confirmer avec vous si cette page est mise en avant dans le produit actuel — sinon MINEUR)* | Grande — 7 procédures à construire ou la logique métier associée à vérifier/écrire entièrement. |
+| 8 | Admin > Contacts (`/admin/contacts`) | Page admin cassée | **[PROUVÉ]** `trpc.contact.{list,updateStatus}` absents. Dépend de #6 (même namespace `contact` manquant). | `client/src/pages/AdminContacts.tsx` | MINEUR (admin seulement) | Faible une fois #6 traité (même routeur). |
+| 9 | Onglet "Mes Audits" (`/audits`) n'affiche rien | Signalé par vous en usage réel | **[NON REPRODUIT localement]** — testé en direct avec un compte réel ayant 2 audits en base : la liste s'affiche correctement (2 lignes, aucune erreur réseau tRPC). Hypothèse à vérifier : le déploiement de production n'avait peut-être pas encore pris effet au moment de votre test (voir `AUDIT-ETAT-REEL.md`, section toujours en attente de confirmation des SHA Railway/Vercel). | `client/src/pages/AuditsList.tsx` | **À RECONFIRMER** — pas de cause de code identifiable actuellement | — |
+| 10 | Score/type mal affichés dans les listes d'audits | Type d'audit et % de conformité absents ou par défaut dans "Mes Audits"/"Historique" | **[PROUVÉ]** `AuditsList.tsx`/`AuditHistory.tsx` lisent `audit.auditType` (colonne réelle : `type`) et `audit.conformityRate` (colonne inexistante dans le schéma `audits`) — dégradé gracieusement (labels par défaut, pas de barre de score), pas un crash. | `client/src/pages/AuditsList.tsx`, `client/src/pages/AuditHistory.tsx` | MINEUR (cosmétique) | Petite. |
+| 11 | Persistance de l'onboarding | Onboarding à refaire dans un nouveau navigateur/après nettoyage du cache, même si le compte a déjà des audits | **[PROUVÉ]** `Onboarding.tsx` écrit uniquement dans `localStorage` (`saveOnboardingState`), commentaires `// TODO(data): ... tant que le backend n'expose pas de persistance profil/organisation dédiée` déjà présents dans le code. Confirmé en testant : un compte existant avec audits réels est renvoyé vers `/onboarding` dans un contexte navigateur neuf. | `client/src/pages/Onboarding.tsx` | MINEUR à MAJEUR selon fréquence d'usage multi-appareil | Moyenne (persister côté serveur — qitbxl a déjà un moteur d'onboarding plus riche, `onboarding.*`, non branché sur cette page). |
+| 12 | Fichiers de routes morts/redondants | Aucun symptôme utilisateur direct — dette de maintenance | **[PROUVÉ]** `client/src/mdrRoutes.tsx` (composant `MDRRoutes`) n'est importé nulle part — remplacé de fait par `MdrRoutesErrorBoundary.tsx`, jamais supprimé, définitions de routes divergentes entre les deux fichiers. | `client/src/mdrRoutes.tsx` | MINEUR (dette) | Triviale (suppression). |
+| 13 | Pages jamais routées appelant des endpoints inexistants | Aucun symptôme utilisateur (inatteignables) | **[PROUVÉ]** `Audit.tsx` (`questions.list`), `FDAAudit.tsx` (`audit.saveResponse`/`getResponse`, déjà identifié Étape 3), `FdaRegulatoryWatch.tsx` (`regulatory.*`... `fdaRegulatoryWatch.list`), `ComponentShowcase.tsx`/`AIChatBox` (`ai.*`), `SubscriptionSuccess.tsx` (`subscription.getSubscription`, route redirige vers `/account` avant rendu) — aucun de ces composants n'est importé dans `App.tsx`. | Fichiers ci-dessus | MINEUR (dette, zéro impact utilisateur réel) | Triviale (suppression ou nettoyage à discuter). |
+| 14 | Verrouillage plan Free (Classification/FDA/Veille) | — | **[PROUVÉ]** Fonctionne correctement — testé en direct avec un compte Free : message de verrouillage affiché sur les 3 pages (`/classification`, `/fda-classification`, `/regulatory-watch`). | — | ✅ OK | — |
+| 15 | F5 reload sur route profonde (`/mdr/audit`) | — | **[PROUVÉ]** Fonctionne correctement en local (Vite dev server) — testé en direct, contenu réel après reload. **[SUPPOSÉ]** Le comportement en production (Vercel, hébergement statique) dépend d'une règle de rewrite SPA côté configuration Vercel, non vérifiable depuis cet environnement local — à confirmer par vous en production. | — | OK localement / à confirmer en prod | — |
+
+### Non testé (à signaler explicitement, par honnêteté de couverture)
+
+- **Mot de passe (changement)** : aucune page de changement de mot de passe identifiée dans les routes — **[SUPPOSÉ]** fonctionnalité absente, non confirmé par test actif.
+- **`returnTo` après connexion** : non retesté dans cette session (déjà testé et documenté comme fonctionnel lors d'une session antérieure, `PROGRESS-routes.md`) — je ne l'ai pas rejoué ici, donc **statut hérité, pas reconfirmé**.
+- **IVDR, FDA_QMSR, MDSAP, ISO14971, ISO9001** : audits créés et parcourus en profondeur uniquement pour MDR dans cette session (temps limité) — le scan statique des IDs en dur ne montre rien pour ces référentiels, mais je n'ai pas testé leurs wizards de bout en bout comme pour MDR.
+- **Plan d'action** (`/action-plan`) : page visitée dans le scan de la sidebar, contenu non vérifié en profondeur.
+
+---
+
+## Synthèse par nature
+
+| Nature | Nombre | Exemples |
+|---|---|---|
+| **IDs de référentiel codés en dur** (ancien schéma `main`, incompatible avec qitbxl) | 1 | `AuditHistory.tsx` (#1) — celui-ci avait échappé à la correction de l'Étape 3, qui n'avait scanné que le pattern `referentialIds: [N]`, pas `.includes(N)` |
+| **Endpoints backend inexistants appelés par une page réellement routée** | 4 | `findings`/`actions` (#4), `contact` (#6, #8), `documents` (#7), `questions.list`/`audit.getResponses` mal appelés en plus d'être inexistants (#2) |
+| **Bug de récupération de paramètre (route param vs query string)** | 1 | `MDRAudit.tsx` ne lit jamais `window.location.search` (#1, volet MDR) |
+| **Bug préexistant côté génération de contenu (non lié au désalignement)** | 1 | `report-generator.ts` (#3) |
+| **Lien mort simple (route inexistante)** | 1 | `/mdr` bare (#5) |
+| **Dégradation silencieuse sur champs de schéma mal nommés/absents** | 1 | `auditType`/`conformityRate` (#10) |
+| **Dette de code mort / fichiers redondants** | 2 | `mdrRoutes.tsx` (#12), pages jamais routées (#13) |
+| **Persistance manquante côté serveur** | 1 | Onboarding (#11) |
+
+**Cause racine commune, confirmée** : comme anticipé dans le prompt, la quasi-totalité des bugs BLOQUANT/MAJEUR (6 sur 8) proviennent du désalignement résiduel entre deux lignées développées séparément (frontend `bo77ju` vs backend `qitbxl`) — soit des noms d'endpoints qui n'ont jamais été alignés (`contact`, `documents`, `findings`, `actions`, `questions.list`), soit des schémas d'ID hérités de l'ancienne base `main` jamais entièrement purgés du frontend (`AuditHistory.tsx`). Le bug du rapport PDF (#3) est la seule exception notable — un bug préexistant sans rapport avec la réconciliation.
+
+---
+
+## Tests Playwright produits (réutilisables)
+
+Dans `tests/e2e/` de ce dépôt (branche `claude/qara-frontend-test-inventaire`, issue de `bo77ju`, non mergée) :
+- **`parcours-utilisateur.mjs`** — inscription → onboarding → dashboard → création audit MDR → Mes Audits → historique → rapports → navigation → pages verrouillées. Compte neuf à chaque exécution.
+- **`audits-existants.mjs`** — connexion à un compte existant avec audits réels, teste le vrai bouton "Reprendre", reproduit la navigation `/mdr/audit?auditId=N`.
+- **`README.md`** — prérequis, limites connues, instructions d'exécution.
+
+---
+
+## Recommandation de séquence de correction (priorisée)
+
+1. **#1 (reprendre un audit)** et **#5 (bouton "Liste audits")** — les deux corrections les plus citées par vous en usage réel, toutes deux triviales à moyennes, mêmes fichiers (`AuditHistory.tsx`, `MDRAudit.tsx`, `MDRAuditReview.tsx`, `MDRAuditDrilldown.tsx`). À traiter ensemble.
+2. **#2 (export Reports.tsx)** — bloquant, correction moyenne, indépendante du reste.
+3. **#4/#6/#7/#8 (namespaces backend manquants : findings/actions/contact/documents)** — à trier avec vous en premier : lesquelles de ces fonctionnalités sont réellement prioritaires pour le produit actuel (certaines peuvent être délibérément différées) avant d'investir dans leur construction.
+4. **#3 (crash `report-generator.ts`)** — nécessite une investigation dédiée (hors périmètre diagnostic de cette session) avant estimation de correction.
+5. **#9 (Mes Audits)** — à reconfirmer d'abord avec vous en production (probable résolution automatique une fois le déploiement effectif, voir `AUDIT-ETAT-REEL.md`) avant d'y consacrer du temps.
+6. **#10/#11/#12/#13** — nettoyage de dette, à faire en fin de lot (aucune urgence, aucun impact utilisateur direct pour #12/#13).
