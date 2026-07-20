@@ -36,6 +36,18 @@ export default function ISOAuditReview() {
 
   const listAuditsQuery = trpc.iso.listAudits.useQuery(undefined, { enabled: true });
 
+  const { data: referentialsData } = trpc.referentials.list.useQuery();
+  const codeById = useMemo(
+    () => new Map((Array.isArray(referentialsData) ? referentialsData : []).map((r: any) => [r.id, String(r.code).toUpperCase()])),
+    [referentialsData]
+  );
+  const referentialLabel = (referentialIds: number[] | undefined) => {
+    const codes = (referentialIds ?? []).map((id) => codeById.get(id));
+    if (codes.includes("ISO13485")) return "ISO 13485:2016";
+    if (codes.includes("ISO9001")) return "ISO 9001:2015";
+    return "ISO";
+  };
+
   const data = dashboardQuery.data as any;
   const stats = data?.stats || {
     totalQuestions: 0,
@@ -128,7 +140,7 @@ ${htmlBody}
       <div class="meta">
         <span class="pill">Audit #${escapeHtml(a?.id)}</span>
         <span class="pill">Statut: ${escapeHtml(a?.status ?? "n/a")}</span>
-        <span class="pill">Référentiel: ${escapeHtml(((a?.referentialIds ?? [])[0] === 3 ? "ISO 13485:2016" : "ISO 9001:2015"))}</span>
+        <span class="pill">Référentiel: ${escapeHtml(referentialLabel(a?.referentialIds))}</span>
         <span class="pill">Site: ${escapeHtml(a?.siteName ?? "n/a")}</span>
       </div>
 
@@ -137,7 +149,7 @@ ${htmlBody}
         <tr><th>Intitulé</th><td>${escapeHtml(a?.name ?? "")}</td></tr>
         <tr><th>Date de génération</th><td>${escapeHtml(now.toLocaleString())}</td></tr>
         <tr><th>Périmètre (processus drilldown)</th><td>${escapeHtml((a?.processIds ?? []).join(" • ") || "n/a")}</td></tr>
-        <tr><th>Référentiel</th><td>${escapeHtml(((a?.referentialIds ?? [])[0] === 3 ? "ISO 13485:2016" : "ISO 9001:2015"))}</td></tr>
+        <tr><th>Référentiel</th><td>${escapeHtml(referentialLabel(a?.referentialIds))}</td></tr>
       </table>
 
       <h2>2. Synthèse</h2>

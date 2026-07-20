@@ -471,7 +471,10 @@ export default function MDRAuditDrilldown() {
     goNext();
   };
 
-  const goBackToWizard = () => setLocation("/mdr");
+  // "/mdr" (sans suite) ne correspond à aucune route valide (voir
+  // INVENTAIRE-BUGS.md #5) — page blanche garantie. Retour à la liste des
+  // audits, seule destination cohérente pour ces boutons "Retour" génériques.
+  const goBackToWizard = () => setLocation("/audits");
 
   const loading = loadingContext || loadingQuestions || loadingResponses;
 

@@ -39,6 +39,14 @@ export default function AuditHistory() {
     status: statusFilter === "all" ? undefined : statusFilter as any,
   });
 
+  // Résolution dynamique des IDs de référentiel par code (jamais en dur) :
+  // qitbxl n'utilise pas le même schéma d'IDs que l'ancienne base main
+  // (MDR=3, ISO13485=7, ISO9001=9 ici, pas 1/2/3) — voir INVENTAIRE-BUGS.md #1.
+  const { data: referentialsData } = trpc.referentials.list.useQuery();
+  const codeById = new Map(
+    (Array.isArray(referentialsData) ? referentialsData : []).map((r: any) => [r.id, String(r.code).toUpperCase()])
+  );
+
   const deleteAudit = trpc.audit.delete.useMutation({
     onSuccess: () => {
       toast.success("Audit supprimé");
@@ -51,20 +59,31 @@ export default function AuditHistory() {
   });
 
   const handleResumeAudit = (audit: any) => {
-    // Determine audit type and navigate to appropriate page
-    const referentialIds = audit.referentialIds ? JSON.parse(audit.referentialIds) : [];
-    
-    if (referentialIds.includes(2)) {
-      // ISO 9001
-      setLocation(`/iso/audit?auditId=${audit.id}`);
-    } else if (referentialIds.includes(3)) {
-      // ISO 13485
-      setLocation(`/iso/audit?auditId=${audit.id}`);
-    } else if (referentialIds.includes(1)) {
-      // MDR
-      setLocation(`/mdr/audit?auditId=${audit.id}`);
+    // Détermine le type d'audit par code de référentiel (jamais par ID en
+    // dur, voir codeById ci-dessus) et navigue vers la page de
+    // "drilldown" correspondante (route /mdr|iso/audit/:auditId) — c'est
+    // le mécanisme réellement fonctionnel : la page assistant/wizard
+    // (bare /mdr/audit ou /iso/audit) ne sait pas reprendre un audit
+    // existant, seule la page de drilldown (réponse aux questions) le
+    // fait, sans condition de statut (voir INVENTAIRE-BUGS.md #1).
+    const rawIds = audit.referentialIds ? JSON.parse(audit.referentialIds) : [];
+    const codes = (Array.isArray(rawIds) ? rawIds : [])
+      .map((id: number) => codeById.get(id))
+      .filter(Boolean) as string[];
+
+    if (codes.includes("MDR")) {
+      setLocation(`/mdr/audit/${audit.id}`);
+    } else if (codes.includes("ISO9001") || codes.includes("ISO13485")) {
+      setLocation(`/iso/audit/${audit.id}`);
+    } else if (codes.length === 0 && codeById.size === 0) {
+      // Liste des référentiels pas encore chargée (requête referentials.list
+      // en vol) — éviter un faux "non reconnu" pendant le chargement.
+      toast.error("Chargement des référentiels en cours, réessayez dans un instant");
     } else {
-      toast.error("Type d'audit non reconnu");
+      // IVDR / FDA_QMSR / MDSAP / ISO14971 : aucune page de reprise dédiée
+      // n'existe actuellement dans le frontend pour ces référentiels
+      // (aucune route /ivdr/audit/:id ou équivalent) — voir INVENTAIRE-BUGS.md.
+      toast.error("Reprise non disponible pour ce type d'audit pour le moment");
     }
   };
 

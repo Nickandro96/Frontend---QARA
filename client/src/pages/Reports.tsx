@@ -18,6 +18,40 @@ export default function Reports() {
   const { data: globalScore } = trpc.audit.getScore.useQuery({}, { enabled: isAuthenticated });
   const [exporting, setExporting] = useState(false);
 
+  // L'export porte sur l'audit le plus récent de l'utilisateur (audit.list
+  // est déjà trié par date de création décroissante côté serveur) —
+  // résolution du type par code de référentiel, jamais par ID en dur (voir
+  // INVENTAIRE-BUGS.md #1/#2).
+  const { data: audits } = trpc.audit.list.useQuery(undefined, { enabled: isAuthenticated });
+  const { data: referentialsData } = trpc.referentials.list.useQuery();
+  const primaryAudit = Array.isArray(audits) && audits.length > 0 ? (audits[0] as any) : null;
+  const codeById = new Map(
+    (Array.isArray(referentialsData) ? referentialsData : []).map((r: any) => [r.id, String(r.code).toUpperCase()])
+  );
+  const primaryAuditCodes = (
+    primaryAudit?.referentialIds ? JSON.parse(primaryAudit.referentialIds) : []
+  ).map((id: number) => codeById.get(id));
+  const isMdr = primaryAuditCodes.includes("MDR");
+  const isIso = primaryAuditCodes.includes("ISO9001") || primaryAuditCodes.includes("ISO13485");
+  const primaryAuditId = primaryAudit?.id ?? 0;
+
+  const mdrQuestions = trpc.mdr.getQuestionsForAudit.useQuery(
+    { auditId: primaryAuditId },
+    { enabled: isAuthenticated && isMdr && !!primaryAuditId }
+  );
+  const mdrResponses = trpc.mdr.getResponses.useQuery(
+    { auditId: primaryAuditId },
+    { enabled: isAuthenticated && isMdr && !!primaryAuditId }
+  );
+  const isoQuestions = trpc.iso.getQuestionsForAudit.useQuery(
+    { auditId: primaryAuditId },
+    { enabled: isAuthenticated && isIso && !!primaryAuditId }
+  );
+  const isoResponses = trpc.iso.getResponses.useQuery(
+    { auditId: primaryAuditId },
+    { enabled: isAuthenticated && isIso && !!primaryAuditId }
+  );
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -36,22 +70,63 @@ export default function Reports() {
       toast.error("Impossible d'exporter : données manquantes");
       return;
     }
-    
+    if (!primaryAudit) {
+      toast.error("Aucun audit trouvé à exporter");
+      return;
+    }
+    if (!isMdr && !isIso) {
+      toast.error("Export non disponible pour ce type d'audit pour le moment (IVDR/FDA/MDSAP/ISO14971)");
+      return;
+    }
+
     setExporting(true);
     try {
-      // Fetch all questions for the user's role
-      const questions = await fetch(`/api/trpc/questions.list?input=${encodeURIComponent(JSON.stringify({
-        referentialId: undefined,
-        processId: undefined,
-        economicRole: profile?.economicRole || "fabricant"
-      }))}`).then(r => r.json()).then(d => d.result?.data || []);
-      
-      // Fetch real user responses
-      const questionIds = questions.map((q: any) => q.id);
-      const responses = await fetch(`/api/trpc/audit.getResponses?input=${encodeURIComponent(JSON.stringify({
-        questionIds
-      }))}`).then(r => r.json()).then(d => d.result?.data || []);
-      
+      // Utilise le client tRPC déjà configuré (cookie de session inclus)
+      // plutôt que des fetch() bruts vers un chemin/namespace inexistants
+      // (voir INVENTAIRE-BUGS.md #2) — mdr/iso.getQuestionsForAudit et
+      // getResponses existent déjà et sont déjà chargés ci-dessus.
+      const rawQuestions = (isMdr ? mdrQuestions.data : isoQuestions.data) as any;
+      const rawResponses = (isMdr ? mdrResponses.data : isoResponses.data) as any;
+      const questionRows: any[] = Array.isArray(rawQuestions)
+        ? rawQuestions
+        : Array.isArray(rawQuestions?.questions)
+          ? rawQuestions.questions
+          : [];
+      const responseRows: any[] = Array.isArray(rawResponses) ? rawResponses : [];
+
+      if (questionRows.length === 0) {
+        toast.error("Aucune question chargée pour cet audit — réessayez dans un instant");
+        setExporting(false);
+        return;
+      }
+
+      const questions = questionRows.map((q: any) => ({
+        id: q.id,
+        question: q.questionText,
+        article: q.article || "",
+        criticality: q.criticality || "",
+      }));
+
+      const responseByKey = new Map(responseRows.map((r: any) => [r.questionKey, r]));
+      const RESPONSE_STATUS_MAP: Record<string, "conforme" | "nok" | "na"> = {
+        compliant: "conforme",
+        non_compliant: "nok",
+        partial: "nok",
+        not_applicable: "na",
+      };
+      const responses = questionRows
+        .map((q: any) => {
+          const r = responseByKey.get(q.questionKey);
+          if (!r || r.responseValue === "in_progress" || !r.responseValue) return null;
+          return {
+            questionId: q.id,
+            response: r.responseValue,
+            status: RESPONSE_STATUS_MAP[r.responseValue] ?? "na",
+            comment: r.responseComment || undefined,
+          };
+        })
+        .filter(Boolean) as any[];
+
       if (format === "excel") {
         await exportAuditToExcel(
           globalScore,
