@@ -64,4 +64,30 @@ Ces deux jeux d'ID sont différents l'un de l'autre. **Ce n'est pas un problème
 
 **Recherche du bug "condition `else if` mal placée" décrit dans le prompt de cadrage** : recherche exhaustive dans `AuditsList.tsx`, `AuditHistory.tsx`, `audit-router.ts` (`list`/`listAudits`), `mdr-router.ts` (`listAudits`) — aucun filtre de statut n'exclut les audits "en cours" dans le code actuel de ces deux dépôts (`statusFilter` par défaut = "all", aucun filtre appliqué côté serveur si absent). Le seul mécanisme trouvé qui **masque réellement des audits** (tous statuts confondus) est le bug ISO `listAudits` corrigé au LOT 1 ci-dessus — je ne peux pas exclure que le prompt de cadrage fasse référence à ce même bug sous une description légèrement différente, ou à une version antérieure du code non retrouvée dans l'état actuel de `qitbxl`/`bo77ju`. À confirmer avec vous si un autre cas précis est observé en production.
 
-Suite : test réel du parcours complet de reprise (en cours).
+### Point de vigilance MDR (demandé explicitement) — ✅ vérifié, pas de masquage
+
+Recherche spécifique d'un filtre équivalent au bug ISO (LOT 1) qui masquerait les audits MDR (ou tout autre référentiel) dans les listes :
+- `audit.list`/`audit.listAudits` (générique, alimente `/audits` et `/audit-history`) : filtre par `referentialId` **uniquement si le frontend le passe explicitement** — ni `AuditsList.tsx` ni `AuditHistory.tsx` ne le font. Confirmé par lecture de code ET par test réel : `audit.listAudits` (curl authentifié) renvoie les 8 audits de test (3 MDR + 5 ISO confondus) sans aucun filtrage.
+- `mdr.listAudits` (spécifique MDR, alimente l'historique de `MDRAuditReview.tsx`) : ne filtre que par `userId`, aucun filtre de référentiel — vérifié dans `server/mdr-router.ts:905-923`.
+- `listAuditsByUserId` (helper partagé, `server/db.ts:533`) : ne filtre que par `userId`.
+- **Test réel (Playwright, navigateur réel)** : `/audits` affiche bien "Test MDR LOT1" ET "Audit MDR (fabricant)" ET les audits ISO, 8 lignes au total (correspond exactement au compte réel en base) ; `/audit-history` affiche les mêmes audits MDR.
+
+**Conclusion** : aucun bug de masquage MDR actif dans le code actuel de `qitbxl`/`bo77ju`. L'hypothèse la plus cohérente reste que votre symptôme original ("les audits ne s'affichent pas") était dû à l'ancien schéma d'ID en dur pour MDR — déjà corrigé lors d'une session de réconciliation antérieure (`MDRAudit.tsx` résout par code depuis, voir commentaire ligne 108-116 référençant `DIAGNOSTIC-topologie-branches.md`) — et que le bug ISO corrigé au LOT 1 est la même famille de cause racine, simplement pas encore corrigée pour ISO à ce moment-là. Si vous observez encore le symptôme en production après déploiement des LOT 1-3, ce sera un signal fort qu'il reste un troisième mécanisme non identifié ici — à investiguer immédiatement avec un accès aux logs/données de production.
+
+### Test réel de reprise avec continuité des réponses — ✅ prouvé
+
+Parcours réel (Playwright, clics réels, aucune simulation) sur un audit MDR créé pour ce test ("Test MDR LOT1", id=6, brouillon vide) :
+1. Ouverture de `/mdr/audit/6` (questionnaire réel, 62 questions réelles du corpus).
+2. Clic sur "Conforme" pour la question 1, puis "Enregistrer et continuer".
+3. Confirmé persisté côté serveur : `mdr.getResponses({auditId: 6})` renvoie une ligne réelle (`Q-MDR-MSM-6162`, `responseValue: "compliant"`, horodatée).
+4. Navigation complète vers `/dashboard` (quitte entièrement la page d'audit).
+5. Retour via `/audit-history` ("Mes audits"), clic sur le bouton "Reprendre" de la carte "Test MDR LOT1" (sélecteur scopé à la bonne carte, pas un clic au hasard).
+6. Atterrit bien sur `/mdr/audit/6` (pas de redémarrage à zéro), question 1/62 affichée avec le bouton "Conforme" toujours actif (classe `bg-emerald-600`, vert = sélectionné), barre de progression à 2% (1/62) — la réponse est bien préservée, pas réinitialisée.
+
+Aucune anomalie constatée : le mécanisme de reprise + persistance fonctionne correctement pour MDR. Comme aucun bug de masquage MDR n'a été trouvé (voir section ci-dessus), et que la reprise avec continuité est prouvée, **LOT 2 est considéré terminé** — rien à corriger, seulement à confirmer par ces preuves.
+
+### Trouvaille annexe : barre de recherche "Mes audits" non fonctionnelle
+
+En vérifiant `audit.listAudits`, trouvé que `AuditsList.tsx` envoie un champ `search` depuis toujours, jamais déclaré dans le schéma zod du routeur — zod (non strict) le supprimait silencieusement, la recherche ne filtrait donc jamais rien (confirmé : `filteredAudits = audits || []`, aucun filtre local non plus). Corrigé (`Backend---QARA` commit `8ae5db21`) : champ ajouté au schéma + filtre en mémoire sur le nom de l'audit. Testé en direct (curl) : `search=MDR` → 3 résultats MDR uniquement, `search=ISO9001` → 2 résultats ISO9001 uniquement.
+
+**Statut LOT 2 : ✅ TERMINÉ** — point de vigilance MDR vérifié négatif (pas de masquage), continuité de reprise prouvée, et un bug annexe (recherche non fonctionnelle) trouvé et corrigé au passage.
