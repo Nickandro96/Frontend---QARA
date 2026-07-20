@@ -91,3 +91,50 @@ Aucune anomalie constatée : le mécanisme de reprise + persistance fonctionne c
 En vérifiant `audit.listAudits`, trouvé que `AuditsList.tsx` envoie un champ `search` depuis toujours, jamais déclaré dans le schéma zod du routeur — zod (non strict) le supprimait silencieusement, la recherche ne filtrait donc jamais rien (confirmé : `filteredAudits = audits || []`, aucun filtre local non plus). Corrigé (`Backend---QARA` commit `8ae5db21`) : champ ajouté au schéma + filtre en mémoire sur le nom de l'audit. Testé en direct (curl) : `search=MDR` → 3 résultats MDR uniquement, `search=ISO9001` → 2 résultats ISO9001 uniquement.
 
 **Statut LOT 2 : ✅ TERMINÉ** — point de vigilance MDR vérifié négatif (pas de masquage), continuité de reprise prouvée, et un bug annexe (recherche non fonctionnelle) trouvé et corrigé au passage.
+
+---
+
+## LOT 3 — Navigation et 404 — ✅ TERMINÉ
+
+### Méthode
+Recensement exhaustif de toutes les cibles de navigation internes du frontend : `setLocation("...")`/`setLocation(\`...\`)`, `<Link href="...">` (littéraux et dynamiques), `<Redirect to="...">`, comparées à la table réelle des routes de `App.tsx` (`<Route path="...">`, y compris le catch-all final `<Route component={NotFound} />` qui matérialise un "404" applicatif — texte distinctif "Page introuvable").
+
+### Lien mort trouvé et corrigé
+
+**`/iso/qualification`** — `ISOAuditWizard.tsx` (ligne ~262) navigue vers cette URL quand la qualification ISO n'est pas complétée ("Compléter la qualification"), mais **aucune route ne l'enregistrait** dans `App.tsx` — un clic dessus atterrissait sur le catch-all `NotFound`. Le composant `ISOQualification.tsx` existe déjà (utilise les vraies procédures `iso.getQualification`/`iso.saveQualification`) mais n'était routé nulle part. Corrigé (`Frontend---QARA`) : route `/iso/qualification` ajoutée dans `App.tsx`, montée sur `ISOQualification`.
+
+*Note : cette condition est rarement atteinte en pratique — `iso.getQualification` renvoie toujours un objet par défaut (jamais `null`), donc la garde `if (!isoQualification)` ne se déclenche quasiment jamais. Corrigé quand même par exhaustivité (LOT 3 demande de corriger "chaque" lien mort), et pour la robustesse si ce comportement backend change un jour.*
+
+### Autres candidats examinés, non corrigés (code mort, cohérent avec la politique déjà appliquée en LOT précédent)
+- `client/src/pages/ComponentShowcase.tsx` : lien vers `/components` (route inexistante), mais page elle-même non routée dans `App.tsx` — inatteignable.
+- `client/src/components/ProfessionalLayout.tsx` : `<Link href="/>">` — typo évidente (devrait être `"/"`), mais ce composant (et son `ProfessionalSidebar`) n'est importé nulle part — inatteignable.
+- `client/src/pages/ModernHome.tsx`/`ModernSidebar.tsx`, `Home.tsx`, `Audit.tsx`, `FDAAudit.tsx` : liens internes non vérifiés un par un car ces pages sont déjà cataloguées comme non routées dans `INVENTAIRE-BUGS.md` #13.
+
+### Tests réels effectués (Playwright, clics réels — pas de simulation)
+
+1. **Parcours complet du menu latéral réel** (`AuthenticatedLayout.tsx`) : Dashboard → Audits → Classification → Voies FDA → Plan d'action → Rapports → Veille → Compte, dans cet ordre, par clics réels. Chaque clic atterrit sur la bonne URL, contenu réel affiché, **zéro "Page introuvable"**, **zéro erreur JS console** sur tout le parcours.
+2. **Bouton "précédent"/"suivant" du navigateur** : navigation par clics (Audits → Rapports), puis `goBack()`/`goForward()` réels (API navigateur, pas une nouvelle requête) → retombe correctement sur `/audits` puis `/reports`, contenu réel, aucun 404 dans les deux sens.
+3. **F5 (reload) sur une route profonde à paramètre dynamique** (`/mdr/audit/6`) : rechargement complet de la page → contenu réel réaffiché (audit "Test MDR LOT1"), aucun 404.
+4. **Lien précédemment cassé, /iso/qualification** : non re-testé par clic direct dans cette passe (condition de déclenchement quasi inatteignable en pratique, voir note ci-dessus) mais route confirmée présente et montée correctement par lecture de `App.tsx` après correction.
+
+### Remarque méthodologique (transparence)
+Plusieurs tentatives de `page.goto()` répétés (navigation "dure", rechargement complet à chaque fois) dans le même script Playwright ont provoqué des fermetures intempestives du navigateur Chromium dans cet environnement sandboxé (aucune erreur JS applicative capturée, le processus navigateur se ferme brutalement) — instabilité de l'outillage de test dans ce conteneur, pas un bug de l'application. Contournée en testant la navigation via de vrais clics in-app (`.click()`) et l'API navigateur réelle (`goBack()`/`goForward()`/`reload()`), qui elles se sont montrées parfaitement stables sur l'ensemble du parcours — cohérent avec le fait qu'une vraie navigation utilisateur en SPA (wouter) ne déclenche pas de rechargement complet à chaque clic.
+
+**Statut LOT 3 : ✅ TERMINÉ** — un lien mort trouvé et corrigé (`/iso/qualification`), zéro 404 constaté sur l'ensemble du parcours réel testé (menu, retour/avance navigateur, F5 sur route profonde).
+
+---
+
+## Récapitulatif avant déploiement groupé (LOT 1 + 2 + 3)
+
+Comme convenu, LOT 1, LOT 2 et LOT 3 seront déployés ensemble pour un test en conditions réelles avant d'attaquer le LOT 4 (rapports Excel/PDF, le plus volumineux).
+
+**Commits `Backend---QARA` (branche `claude/qara-backend-test-inventaire`, issue de `qitbxl`)** :
+- LOT 1 : `0b1ddc5e` (résolution ISO par code + fix critique `iso.listAudits`)
+- LOT 2 : `8ae5db21` (recherche "Mes audits")
+- (+ commits antérieurs de la session précédente : `findings`/`actions`/`contact`/`documents` routers, export Excel/PDF, `auditType`/`conformityRate`, persistance onboarding — voir historique complet du fichier `INVENTAIRE-BUGS.md`)
+
+**Commits `Frontend---QARA` (branche `claude/qara-frontend-test-inventaire`, issue de `bo77ju`)** :
+- LOT 1 : `4e4c5c9` (résolution ISO par code, wizard + rapport)
+- LOT 3 : route `/iso/qualification` ajoutée (commit à suivre)
+
+Rien n'a été mergé ni déployé — en attente de votre feu vert.

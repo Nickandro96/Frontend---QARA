@@ -28,6 +28,7 @@ import ForgotPassword from "./pages/ForgotPassword";
 import ISOAuditDrilldown from "./pages/ISOAuditDrilldown";
 import ISOAuditReview from "./pages/ISOAuditReview";
 import ISOAuditWizard from "./pages/ISOAuditWizard";
+import ISOQualification from "./pages/ISOQualification";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import MDRAuditDrilldown from "./pages/MDRAuditDrilldown";
@@ -253,6 +254,18 @@ function Router() {
       <Route path="/iso/audit">
         <ProtectedPage>
           <ISOAuditWizard />
+        </ProtectedPage>
+      </Route>
+      {/*
+        ISOAuditWizard.tsx navigue vers "/iso/qualification" quand la
+        qualification n'est pas complétée — route absente jusqu'ici (lien
+        mort, voir CORRECTIONS.md LOT 3), alors que ISOQualification.tsx
+        existe déjà et utilise les vraies procédures iso.getQualification/
+        saveQualification.
+      */}
+      <Route path="/iso/qualification">
+        <ProtectedPage>
+          <ISOQualification />
         </ProtectedPage>
       </Route>
 
