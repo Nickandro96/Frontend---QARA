@@ -138,3 +138,62 @@ Comme convenu, LOT 1, LOT 2 et LOT 3 seront déployés ensemble pour un test en 
 - LOT 3 : route `/iso/qualification` ajoutée (commit à suivre)
 
 Rien n'a été mergé ni déployé — en attente de votre feu vert.
+
+---
+
+# PHASE 2 — LOT 5 (bugs constatés en production) + LOT 4 (rapports)
+
+Nouvelle phase (démarrée 2026-07-21), faisant suite au déploiement réel des LOT 1-3 (mergés via PR sur `main`/`claude/qara-compliance-audit-qitbxl`, confirmé). Topologie de production confirmée pour cette phase : frontend → branche `main` (Vercel `frontend-qara.vercel.app`), backend → branche `claude/qara-compliance-audit-qitbxl` (Railway `backend-qara-new-claude`).
+
+**Branches de travail** (issues des branches de production, comme demandé) :
+- `Backend---QARA` : `claude/qara-backend-lot5-bugs-production` (issue de `claude/qara-compliance-audit-qitbxl`)
+- `Frontend---QARA` : `claude/qara-frontend-lot5-bugs-production` (issue de `main`)
+
+## LOT 5 — Bugs constatés en production — ✅ TERMINÉ
+
+### BUG 1 + BUG 2 — Page détail d'audit (`/audits/:id`)
+
+**Cause racine commune** : `audit.getById` (backend) renvoyait la ligne brute de la table `audits` — aucune jointure. Trois champs lus par `AuditDetail.tsx` (`siteName`, `referentialNames`, `auditors`) n'existaient donc jamais dans la réponse, d'où "Non spécifié" systématique (BUG 2) — ce n'était ni un défaut de saisie, ni un résidu de l'ancien schéma d'ID, mais une page qui attendait des champs jamais fournis.
+
+**BUG 1** : en plus de l'absence de ces champs, `AuditDetail.tsx` comparait `audit.status === 'Completed'` (PascalCase) alors que la vraie valeur backend est `completed` (minuscule, voir l'enum `draft/planned/in_progress/completed/closed/cancelled` de `drizzle/schema.ts`) — le bouton "Générer Rapport" ne s'affichait donc **jamais**, même sur un audit réellement terminé. Aucun bouton de reprise n'existait par ailleurs sur cette page.
+
+**Corrections** :
+- Backend (`audit-router.ts`, commit `bed6d656`) : `getById` enrichi avec `siteName` (jointure `sites`), `referentialNames` (résolu par `code`, jamais par ID), `auditors` (alias de `auditorName`).
+- Frontend (`AuditDetail.tsx`, commit `e8b3042`) : bouton "Reprendre l'audit" ajouté (même résolution par code que `AuditHistory.tsx`), toutes les comparaisons de statut corrigées vers les vraies valeurs de l'enum.
+- Trouvé au passage (même fichier) : `finding.criticality` comparé à des libellés français (`Critique`/`Majeure`/...) jamais mappés depuis les vraies valeurs anglaises (`critical`/`high`/...) — compteurs "NC Critiques"/"NC Majeures" toujours à 0. Corrigé dans `findings-router.ts` (`CRITICALITY_MAP`). Le statut "Overdue" des actions n'existe pas non plus en base (enum réel : `open`/`in_progress`/`closed`) — dérivé désormais de `dueDate` côté frontend plutôt que comparé à une valeur qui n'arrive jamais.
+
+**Preuves (Playwright, chemin réel sidebar → Audits → clic "Voir")** :
+- Audit marqué `completed` (test) : "Terminé" affiché, bouton "Générer Rapport" visible, Auditeur(s)/Site/Référentiel(s) affichent les vraies valeurs ("Testeur QA" / "Site Test" / "Règlement (UE) 2017/745 (MDR)").
+- Audit ISO `in_progress` : bouton "Reprendre l'audit" visible, clic navigue réellement vers `/iso/audit/:id`.
+
+**Harmonisation** (demandée) : `AuditsList.tsx` (`/audits`, table filtrable, action "Voir" → détail) et `AuditHistory.tsx` (`/audit-history`, cartes avec actions rapides "Reprendre"/"Supprimer" inline) servent des usages différents et non redondants — la première pour parcourir/filtrer, la seconde pour agir vite sur un audit connu. Pas de fusion recommandée ; les deux pointent maintenant vers des actions toutes fonctionnelles.
+
+### BUG 3 (GRAVE) — Fausse page "Plan d'action" — ✅ CORRIGÉ
+
+`ActionDashboard.tsx` (monté sur `/action-plan`) était en réalité une ancienne page d'accueil résiduelle : clés i18n jamais définies (`home.welcome`, `home.getStarted.title`, etc. — un `home.*` existe bien dans `locales/fr.json` mais avec d'autres sous-clés, pour la Landing page) affichées littéralement car `t(cléAbsente) || "fallback"` ne fonctionne jamais avec i18next (une clé manquante renvoie la clé elle-même, une chaîne non-vide) ; données entièrement inventées présentées comme réelles (72%, "3 écarts critiques", "il y a 2 jours", activités fictives) — violation directe de la règle "aucune donnée inventée", que le code lui-même admettait en commentaire ("Données de démonstration - à remplacer par des données réelles via tRPC").
+
+**Corrigé** : nouvelle procédure `actions.listMine` (commit backend `4e298dfc`) agrégeant les actions de TOUS les audits de l'utilisateur (contrairement à `actions.list`, scopé à un seul audit). `ActionDashboard.tsx` entièrement réécrit (commit frontend `f6bc927`) : statistiques réelles (total/terminées/en retard), liste des actions réelles avec lien vers l'audit d'origine, état vide honnête ("Aucune action pour le moment — les actions issues de vos audits apparaîtront ici" + bouton vers `/audits`). Pas de réintroduction d'i18n cassé — cohérent avec le reste du dépôt (`AuditDetail.tsx`, `AuditHistory.tsx`, `AuditsList.tsx` n'utilisent pas non plus i18n pour leur contenu).
+
+**Preuves (Playwright, sidebar → "Plan d'action")** :
+- État vide (aucune action) : message honnête, zéro chiffre inventé, zéro clé i18n visible.
+- État peuplé (action de test insérée, échéance passée) : "Total des actions: 1", "En retard: 1" (calculé réellement depuis `dueDate`), badge "En retard", audit d'origine affiché, clic "Voir l'audit" navigue vers `/audits/1`.
+
+### Trouvaille annexe — `siteName` manquant sur `/audits` (liste)
+
+Même famille de cause que BUG 2, trouvée en testant `AuditsList.tsx` : `audit.list`/`listAudits` ne renvoyaient pas non plus `siteName` — "Non spécifié" pour des audits ayant un vrai site. Corrigé (commit `d65ccca7`) par une jointure batch (pas de N+1) dans `enrichWithDisplayFields`, partagée par `list` et `listAudits`.
+
+### Balayage systématique — tableau récapitulatif
+
+| Page | Anomalie | Gravité | Cause | Fichier(s) | Statut |
+|---|---|---|---|---|---|
+| `/audits/:id` | Pas de bouton reprise ; rapport jamais affiché même terminé | Bloquant | Comparaison de statut PascalCase vs vraie valeur minuscule | `AuditDetail.tsx`, `audit-router.ts` | ✅ Corrigé |
+| `/audits/:id` | "Non spécifié" (site/référentiel/auditeur) | Majeur | Champs jamais renvoyés par `getById` | `audit-router.ts` | ✅ Corrigé |
+| `/audits/:id` | Compteurs NC Critiques/Majeures toujours à 0 | Mineur | `criticality` anglais vs comparaison française jamais mappée | `findings-router.ts` | ✅ Corrigé |
+| `/audits/:id` | Badge "En retard" jamais affiché sur une action | Mineur | Statut "Overdue" inexistant en base | `AuditDetail.tsx` | ✅ Corrigé |
+| `/action-plan` | Page legacy Home avec données 100% inventées + clés i18n visibles | **Grave** | Mauvais composant monté sur la route, jamais remplacé | `ActionDashboard.tsx`, nouveau `actions.listMine` | ✅ Corrigé |
+| `/audits` (liste) | "Site : Non spécifié" | Mineur | Même cause que BUG 2, endpoint différent | `audit-router.ts` | ✅ Corrigé |
+| `/audits`, `/audit-history` | Actions différentes entre les deux pages | Dette (signalée) | Deux pages avec des usages différents (liste filtrable vs actions rapides) | — | Signalé, pas de fusion recommandée |
+| Ensemble du frontend | Recherche exhaustive d'autres clés i18n non résolues (`t(x) \|\| fallback`) | — | Recherche menée sur tous les fichiers | — | Aucune autre occurrence trouvée sur du code réellement routé (seules `ProfessionalSidebar.tsx`/`ProfessionalLayout.tsx`/`ModernSidebar.tsx`, déjà connus morts, en contiennent) |
+| `Dashboard.tsx`, autres pages sidebar (Classification, Voies FDA, Rapports, Veille, Compte) | Recherche de données inventées | — | Vérifié en direct (Playwright, contenu réel affiché) | — | Aucune donnée inventée trouvée ; `Dashboard.tsx` utilise déjà correctement `// TODO(data)` pour les 3 indicateurs non encore branchés (préexistant, conforme à la règle) |
+
+**Statut LOT 5 : ✅ TERMINÉ.**
