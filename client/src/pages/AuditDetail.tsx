@@ -22,6 +22,31 @@ export default function AuditDetail() {
     { enabled: isAuthenticated && !!auditId }
   );
 
+  // Résolution du référentiel par code (jamais par ID en dur), même
+  // mécanisme que AuditHistory.tsx (CORRECTIONS.md LOT 5, BUG 1).
+  const { data: referentialsData } = trpc.referentials.list.useQuery();
+  const codeById = new Map(
+    (Array.isArray(referentialsData) ? referentialsData : []).map((r: any) => [r.id, String(r.code).toUpperCase()])
+  );
+
+  const handleResumeAudit = () => {
+    if (!audit) return;
+    const rawIds = (audit as any).referentialIds ? JSON.parse((audit as any).referentialIds) : [];
+    const codes = (Array.isArray(rawIds) ? rawIds : [])
+      .map((id: number) => codeById.get(id))
+      .filter(Boolean) as string[];
+
+    if (codes.includes("MDR")) {
+      navigate(`/mdr/audit/${audit.id}`);
+    } else if (codes.includes("ISO9001") || codes.includes("ISO13485")) {
+      navigate(`/iso/audit/${audit.id}`);
+    } else if (codes.length === 0 && codeById.size === 0) {
+      toast.error("Chargement des référentiels en cours, réessayez dans un instant");
+    } else {
+      toast.error("Reprise non disponible pour ce type d'audit pour le moment");
+    }
+  };
+
   // Fetch findings for this audit
   const { data: findings } = trpc.findings.list.useQuery(
     { auditId: auditId! },
@@ -75,25 +100,37 @@ export default function AuditDetail() {
 
   const totalActions = actions?.length || 0;
   const completedActions = actions?.filter(a => a.status === 'Completed').length || 0;
-  const overdueActions = actions?.filter(a => a.status === 'Overdue').length || 0;
+  // Aucun statut "Overdue" n'existe réellement en base (actions.status:
+  // open/in_progress/closed uniquement, voir drizzle/schema.ts) — dérivé
+  // ici de dueDate plutôt que comparé à une valeur qui n'arrive jamais
+  // (CORRECTIONS.md LOT 5, trouvé en corrigeant BUG 1/2).
+  const overdueActions = actions?.filter(
+    (a) => a.status !== 'Completed' && a.dueDate && new Date(a.dueDate) < new Date()
+  ).length || 0;
 
-  // Status badge styling
+  // Status badge styling — vraies valeurs de l'enum backend (schema.ts /
+  // audit-router.ts), pas les libellés PascalCase inventés qui ne
+  // matchaient jamais rien (CORRECTIONS.md LOT 5, BUG 1).
   const getStatusBadge = (status: string) => {
     const styles = {
-      Draft: "bg-gray-100 text-gray-800",
-      InProgress: "bg-blue-100 text-blue-800",
-      Completed: "bg-green-100 text-green-800",
-      Cancelled: "bg-red-100 text-red-800",
+      draft: "bg-gray-100 text-gray-800",
+      planned: "bg-gray-100 text-gray-800",
+      in_progress: "bg-blue-100 text-blue-800",
+      completed: "bg-green-100 text-green-800",
+      closed: "bg-purple-100 text-purple-800",
+      cancelled: "bg-red-100 text-red-800",
     };
     return styles[status as keyof typeof styles] || "bg-gray-100 text-gray-800";
   };
 
   const getStatusLabel = (status: string) => {
     const labels = {
-      Draft: "Brouillon",
-      InProgress: "En cours",
-      Completed: "Terminé",
-      Cancelled: "Annulé",
+      draft: "Brouillon",
+      planned: "Planifié",
+      in_progress: "En cours",
+      completed: "Terminé",
+      closed: "Clôturé",
+      cancelled: "Annulé",
     };
     return labels[status as keyof typeof labels] || status;
   };
@@ -123,15 +160,25 @@ export default function AuditDetail() {
           </div>
         </div>
         
-        {/* Generate Report Button - Only show for completed audits */}
-        {audit.status === 'Completed' && (
-          <Link href={`/reports/generate?auditId=${audit.id}`}>
-            <Button size="lg" className="gap-2">
-              <FileText className="h-5 w-5" />
-              Générer Rapport
+        <div className="flex items-center gap-2">
+          {/* Resume button - shown for audits not yet completed/closed/cancelled */}
+          {!['completed', 'closed', 'cancelled'].includes(audit.status) && (
+            <Button size="lg" variant="outline" className="gap-2" onClick={handleResumeAudit}>
+              <Clock className="h-5 w-5" />
+              Reprendre l'audit
             </Button>
-          </Link>
-        )}
+          )}
+
+          {/* Generate Report Button - Only show for completed audits */}
+          {audit.status === 'completed' && (
+            <Link href={`/reports/generate?auditId=${audit.id}`}>
+              <Button size="lg" className="gap-2">
+                <FileText className="h-5 w-5" />
+                Générer Rapport
+              </Button>
+            </Link>
+          )}
+        </div>
       </div>
 
       {/* Audit Information Card */}
@@ -172,7 +219,7 @@ export default function AuditDetail() {
             <User className="h-5 w-5 text-muted-foreground mt-0.5" />
             <div>
               <p className="text-sm font-medium text-muted-foreground">Auditeur(s)</p>
-              <p className="text-base font-semibold">{audit.auditors || 'Non spécifié'}</p>
+              <p className="text-base font-semibold">{(audit as any).auditors || 'Non spécifié'}</p>
             </div>
           </div>
 
@@ -314,15 +361,17 @@ export default function AuditDetail() {
         <CardContent>
           {actions && actions.length > 0 ? (
             <div className="space-y-3">
-              {actions.map((action) => (
+              {actions.map((action) => {
+                const isOverdue = action.status !== 'Completed' && action.dueDate && new Date(action.dueDate) < new Date();
+                return (
                 <div key={action.id} className="border rounded-lg p-4 hover:bg-muted/50 transition-colors">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">
                         <Badge variant={action.status === 'Completed' ? 'default' : 'secondary'}>
                           {action.status === 'Completed' ? 'Terminée' :
-                           action.status === 'InProgress' ? 'En cours' :
-                           action.status === 'Overdue' ? 'En retard' : 'Planifiée'}
+                           isOverdue ? 'En retard' :
+                           action.status === 'InProgress' ? 'En cours' : 'Planifiée'}
                         </Badge>
                         {action.dueDate && (
                           <span className="text-sm text-muted-foreground flex items-center gap-1">
@@ -342,7 +391,8 @@ export default function AuditDetail() {
                     </div>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <div className="text-center py-8 text-muted-foreground">
@@ -354,7 +404,7 @@ export default function AuditDetail() {
       </Card>
 
       {/* Note about report generation */}
-      {audit.status !== 'Completed' && (
+      {audit.status !== 'completed' && (
         <Card className="border-blue-200 bg-blue-50">
           <CardContent className="pt-6">
             <div className="flex items-start gap-3">
