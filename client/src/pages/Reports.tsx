@@ -1,9 +1,10 @@
-import { UpgradeRequired } from "@/components/UpgradeRequired";
+import { LockedFeature } from "@/components/LockedFeature";
+import { hasCapability } from "@/lib/plans";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
-import { Shield, Loader2, FileSpreadsheet, FileText, Download } from "lucide-react";
+import { Loader2, FileSpreadsheet, FileText, Download } from "lucide-react";
 import { Link } from "wouter";
 import { getLoginUrl } from "@/const";
 import { toast } from "sonner";
@@ -13,13 +14,43 @@ import { useState } from "react";
 export default function Reports() {
   const { user, isAuthenticated, loading } = useAuth();
   const { data: profile } = trpc.profile.get.useQuery(undefined, { enabled: isAuthenticated });
-
-  // Block FREE users
-  if (isAuthenticated && profile && profile.subscriptionTier === 'free' && user?.role !== 'admin') {
-    return <UpgradeRequired feature="Rapports & Exports" />;
-  }
+  const canExport = hasCapability("canExportReports", profile, user);
   const { data: globalScore } = trpc.audit.getScore.useQuery({}, { enabled: isAuthenticated });
   const [exporting, setExporting] = useState(false);
+
+  // L'export porte sur l'audit le plus récent de l'utilisateur (audit.list
+  // est déjà trié par date de création décroissante côté serveur) —
+  // résolution du type par code de référentiel, jamais par ID en dur (voir
+  // INVENTAIRE-BUGS.md #1/#2).
+  const { data: audits } = trpc.audit.list.useQuery(undefined, { enabled: isAuthenticated });
+  const { data: referentialsData } = trpc.referentials.list.useQuery();
+  const primaryAudit = Array.isArray(audits) && audits.length > 0 ? (audits[0] as any) : null;
+  const codeById = new Map(
+    (Array.isArray(referentialsData) ? referentialsData : []).map((r: any) => [r.id, String(r.code).toUpperCase()])
+  );
+  const primaryAuditCodes = (
+    primaryAudit?.referentialIds ? JSON.parse(primaryAudit.referentialIds) : []
+  ).map((id: number) => codeById.get(id));
+  const isMdr = primaryAuditCodes.includes("MDR");
+  const isIso = primaryAuditCodes.includes("ISO9001") || primaryAuditCodes.includes("ISO13485");
+  const primaryAuditId = primaryAudit?.id ?? 0;
+
+  const mdrQuestions = trpc.mdr.getQuestionsForAudit.useQuery(
+    { auditId: primaryAuditId },
+    { enabled: isAuthenticated && isMdr && !!primaryAuditId }
+  );
+  const mdrResponses = trpc.mdr.getResponses.useQuery(
+    { auditId: primaryAuditId },
+    { enabled: isAuthenticated && isMdr && !!primaryAuditId }
+  );
+  const isoQuestions = trpc.iso.getQuestionsForAudit.useQuery(
+    { auditId: primaryAuditId },
+    { enabled: isAuthenticated && isIso && !!primaryAuditId }
+  );
+  const isoResponses = trpc.iso.getResponses.useQuery(
+    { auditId: primaryAuditId },
+    { enabled: isAuthenticated && isIso && !!primaryAuditId }
+  );
 
   if (loading) {
     return (
@@ -39,22 +70,63 @@ export default function Reports() {
       toast.error("Impossible d'exporter : données manquantes");
       return;
     }
-    
+    if (!primaryAudit) {
+      toast.error("Aucun audit trouvé à exporter");
+      return;
+    }
+    if (!isMdr && !isIso) {
+      toast.error("Export non disponible pour ce type d'audit pour le moment (IVDR/FDA/MDSAP/ISO14971)");
+      return;
+    }
+
     setExporting(true);
     try {
-      // Fetch all questions for the user's role
-      const questions = await fetch(`/api/trpc/questions.list?input=${encodeURIComponent(JSON.stringify({
-        referentialId: undefined,
-        processId: undefined,
-        economicRole: profile?.economicRole || "fabricant"
-      }))}`).then(r => r.json()).then(d => d.result?.data || []);
-      
-      // Fetch real user responses
-      const questionIds = questions.map((q: any) => q.id);
-      const responses = await fetch(`/api/trpc/audit.getResponses?input=${encodeURIComponent(JSON.stringify({
-        questionIds
-      }))}`).then(r => r.json()).then(d => d.result?.data || []);
-      
+      // Utilise le client tRPC déjà configuré (cookie de session inclus)
+      // plutôt que des fetch() bruts vers un chemin/namespace inexistants
+      // (voir INVENTAIRE-BUGS.md #2) — mdr/iso.getQuestionsForAudit et
+      // getResponses existent déjà et sont déjà chargés ci-dessus.
+      const rawQuestions = (isMdr ? mdrQuestions.data : isoQuestions.data) as any;
+      const rawResponses = (isMdr ? mdrResponses.data : isoResponses.data) as any;
+      const questionRows: any[] = Array.isArray(rawQuestions)
+        ? rawQuestions
+        : Array.isArray(rawQuestions?.questions)
+          ? rawQuestions.questions
+          : [];
+      const responseRows: any[] = Array.isArray(rawResponses) ? rawResponses : [];
+
+      if (questionRows.length === 0) {
+        toast.error("Aucune question chargée pour cet audit — réessayez dans un instant");
+        setExporting(false);
+        return;
+      }
+
+      const questions = questionRows.map((q: any) => ({
+        id: q.id,
+        question: q.questionText,
+        article: q.article || "",
+        criticality: q.criticality || "",
+      }));
+
+      const responseByKey = new Map(responseRows.map((r: any) => [r.questionKey, r]));
+      const RESPONSE_STATUS_MAP: Record<string, "conforme" | "nok" | "na"> = {
+        compliant: "conforme",
+        non_compliant: "nok",
+        partial: "nok",
+        not_applicable: "na",
+      };
+      const responses = questionRows
+        .map((q: any) => {
+          const r = responseByKey.get(q.questionKey);
+          if (!r || r.responseValue === "in_progress" || !r.responseValue) return null;
+          return {
+            questionId: q.id,
+            response: r.responseValue,
+            status: RESPONSE_STATUS_MAP[r.responseValue] ?? "na",
+            comment: r.responseComment || undefined,
+          };
+        })
+        .filter(Boolean) as any[];
+
       if (format === "excel") {
         await exportAuditToExcel(
           globalScore,
@@ -81,40 +153,7 @@ export default function Reports() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="border-b bg-white sticky top-0 z-50">
-        <div className="container flex h-16 items-center justify-between">
-          <div className="flex items-center gap-6">
-            <Link href="/">
-              <div className="flex items-center gap-2 cursor-pointer">
-                <Shield className="h-6 w-6 text-primary" />
-                <span className="font-bold">MDR Compliance</span>
-              </div>
-            </Link>
-            <nav className="flex items-center gap-4">
-              <Link href="/dashboard">
-                <Button variant="ghost">Dashboard</Button>
-              </Link>
-              <Link href="/audit">
-                <Button variant="ghost">Audit</Button>
-              </Link>
-              <Link href="/reports">
-                <Button variant="ghost" className="font-medium">Rapports</Button>
-              </Link>
-              <Link href="/regulatory-watch">
-                <Button variant="ghost">Veille</Button>
-              </Link>
-            </nav>
-          </div>
-          <div className="flex items-center gap-4">
-            <Link href="/profile">
-              <Button variant="outline">{user?.name || "Profil"}</Button>
-            </Link>
-          </div>
-        </div>
-      </header>
-
+    <div>
       <main className="container py-8">
         <h1 className="text-3xl font-bold mb-8">Rapports & Exports</h1>
 
@@ -147,39 +186,47 @@ export default function Reports() {
         </Card>
 
         {/* Export Options */}
-        <div className="grid md:grid-cols-2 gap-6">
-          <Card>
-            <CardHeader>
-              <FileSpreadsheet className="h-10 w-10 text-green-600 mb-2" />
-              <CardTitle>Export Excel</CardTitle>
-              <CardDescription>
-                Rapport détaillé avec résumé, résultats par processus, plan d'action et index des preuves
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button onClick={() => handleExport("excel")} className="w-full" disabled={exporting}>
-                {exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-                Télécharger Excel
-              </Button>
-            </CardContent>
-          </Card>
+        {canExport ? (
+          <div className="grid md:grid-cols-2 gap-6">
+            <Card>
+              <CardHeader>
+                <FileSpreadsheet className="h-10 w-10 text-green-600 mb-2" />
+                <CardTitle>Export Excel</CardTitle>
+                <CardDescription>
+                  Rapport détaillé avec résumé, résultats par processus, plan d'action et index des preuves
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button onClick={() => handleExport("excel")} className="w-full" disabled={exporting}>
+                  {exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                  Télécharger Excel
+                </Button>
+              </CardContent>
+            </Card>
 
-          <Card>
-            <CardHeader>
-              <FileText className="h-10 w-10 text-red-600 mb-2" />
-              <CardTitle>Export PDF</CardTitle>
-              <CardDescription>
-                Rapport professionnel prêt pour les audits ON et les inspections autorités
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button onClick={() => handleExport("pdf")} variant="outline" className="w-full" disabled={exporting}>
-                {exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-                Télécharger PDF
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
+            <Card>
+              <CardHeader>
+                <FileText className="h-10 w-10 text-red-600 mb-2" />
+                <CardTitle>Export PDF</CardTitle>
+                <CardDescription>
+                  Rapport professionnel prêt pour les audits ON et les inspections autorités
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button onClick={() => handleExport("pdf")} variant="outline" className="w-full" disabled={exporting}>
+                  {exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                  Télécharger PDF
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+        ) : (
+          <LockedFeature
+            feature="Export des rapports"
+            description="Le rapport reste consultable à l'écran. L'export Excel/PDF nécessite le Plan Pro."
+            variant="block"
+          />
+        )}
 
         {/* Advanced Features */}
         <div className="mt-8 space-y-6">

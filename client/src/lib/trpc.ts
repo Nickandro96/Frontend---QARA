@@ -1,6 +1,7 @@
 import { createTRPCReact } from "@trpc/react-query";
 import { httpLink } from "@trpc/client";
 import superjson from "superjson";
+import { clearClientSession, redirectToLogin } from "./session";
 
 // NOTE: This import must be type-only.
 // If Vercel build fails due to monorepo path resolution,
@@ -30,10 +31,10 @@ export const trpcClient = trpc.createClient({
   links: [
     httpLink({
       url: `${getApiBaseUrl()}/trpc`,
-      fetch(url, options) {
+      async fetch(url, options) {
         const baseHeaders = headersToObject(options?.headers);
 
-        return fetch(url, {
+        const response = await fetch(url, {
           ...options,
           credentials: "include",
           headers: {
@@ -41,6 +42,13 @@ export const trpcClient = trpc.createClient({
             "x-trpc-source": "web",
           },
         });
+
+        if (response.status === 401) {
+          clearClientSession();
+          redirectToLogin();
+        }
+
+        return response;
       },
     }),
   ],

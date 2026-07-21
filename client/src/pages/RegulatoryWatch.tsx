@@ -2,7 +2,8 @@ import { useEffect } from "react";
 import { Link } from "wouter";
 import { Loader2, Newspaper, Shield, BarChart3 } from "lucide-react";
 
-import { UpgradeRequired } from "@/components/UpgradeRequired";
+import { LockedFeature } from "@/components/LockedFeature";
+import { hasCapability } from "@/lib/plans";
 import { AlertPreferencesDialog } from "@/components/AlertPreferencesDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -55,9 +56,8 @@ export default function RegulatoryWatch() {
     return null;
   }
 
-  // Block FREE users (admin bypass)
-  if (profile?.subscriptionTier === "free" && user?.role !== "admin") {
-    return <UpgradeRequired feature="Veille Réglementaire" />;
+  if (!hasCapability("canUseVeille", profile, user)) {
+    return <LockedFeature feature="Veille reglementaire" />;
   }
 
   return (

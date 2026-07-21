@@ -1,4 +1,3 @@
-import { UpgradeRequired } from "@/components/UpgradeRequired";
 import { useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";

@@ -120,10 +120,14 @@ export default function ISOAuditWizard() {
     return (standards ?? []).find((s: any) => toIsoStandardCode(s.code) === standardCode) ?? null;
   }, [standards, standardCode]);
 
+  // Résolution dynamique de l'ID référentiel par code (jamais en dur) : le
+  // backend (trpc.iso.getStandards) résout désormais lui-même referentialId
+  // via referentiels.code, un ID de référentiel n'étant pas stable entre
+  // environnements (voir CORRECTIONS.md, LOT 1, même correctif que MDRAudit.tsx).
   const referentialIds = useMemo(() => {
-    // Mapping DB: 2=ISO9001, 3=ISO13485
-    return standardCode === "ISO9001" ? [2] : [3];
-  }, [standardCode]);
+    const id = (selectedStandard as any)?.referentialId;
+    return typeof id === "number" ? [id] : [];
+  }, [selectedStandard]);
 
   const selectedProcessIdsSafe = useMemo(() => {
     // Keep only non-empty strings
