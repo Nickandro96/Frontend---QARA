@@ -228,3 +228,51 @@ Deux systèmes non unifiés trouvés : `reports.generate` (backend, PDFKit + S3 
 - Export Excel serveur (`exceljs`, déjà installé).
 - Restructuration des sections PDF pour coller exactement à D.2 (page de garde, synthèse, résultats par processus avec visuel, registre des écarts, plan CAPA, conclusion, annexes).
 - Points d'entrée cohérents (page détail audit, liste des audits, page Rapports) + gating plan déjà en place à réutiliser.
+
+---
+
+# PHASE 3 — Audit colonnes fantômes (Tâche C) + Rapport niveau organisme notifié (D) + CAPA (E)
+
+Nouvelle phase (démarrée 2026-07-23), poursuivie sur les mêmes branches `claude/qara-backend-lot4-rapports` / `claude/qara-frontend-lot4-rapports` (continuité directe avec la correction des 9 bugs du générateur de rapport).
+
+## Tâche C — Audit systématique des colonnes/valeurs fantômes — ✅ AUDIT TERMINÉ, correctifs sûrs appliqués
+
+### Méthode
+1. Extraction programmatique de toutes les tables Drizzle (`drizzle/schema.ts`) et de leurs colonnes réelles (28 tables).
+2. Cross-référencement automatique de tout `variableDeTable.propriété` dans `server/**/*.ts` contre la liste réelle de colonnes par table (alias résolus : `auditResponses`→`audit_responses`, `evidenceFiles`→`mdr_evidence_files`, `referentials`→`referentiels`, etc.).
+3. Recherche des comparaisons de valeurs (`.status === "X"`, `.severity === "Y"`...) contre les vraies valeurs d'enum définies dans le schéma (`mysqlEnum`) et les valeurs réellement présentes en base (`INFORMATION_SCHEMA`/`SELECT DISTINCT`).
+4. Vérification systématique, pour chaque bug trouvé, si le chemin de code est réellement atteignable par un utilisateur (routé côté frontend) ou mort.
+
+### Tableau des colonnes/valeurs fantômes trouvées
+
+| Fichier | Ligne | Colonne/valeur fantôme | Colonne/valeur réelle | Impact utilisateur | Gravité | Statut |
+|---|---|---|---|---|---|---|
+| `server/routers.ts` (`reports.generate`) | ~1041 | `auditReports.reportType`/`reportTitle`/`reportVersion`/`fileKey`/`fileFormat`/`generatedBy`/`metadata` (n'existent pas) | Table réelle : `id`/`userId`/`auditId`/`reportUrl`/`createdAt` uniquement | **Réel et vérifié** : `reportUrl` (l'URL du fichier) jamais enregistré — historique des rapports irrécupérable, confirmé sur 6 rapports réels générés (`reportUrl=NULL` systématique) | **Majeur** | ✅ Corrigé (commit `968b0d3a`) |
+| `server/routers.ts` (`reports.list`) | ~1091 | `auditReports.generatedAt` (n'existe pas) | `createdAt` | Tri de l'historique cassé (aurait probablement levé une erreur SQL dès qu'un utilisateur aurait consulté `/reports/history` avec des rapports en base) | Majeur | ✅ Corrigé |
+| `server/db-dashboard-v2.ts` (`getDashboardDrilldown`) | 714, 717, 723, 799 | `findings.processId`, `findings.criticality` (réel: `severity`), `findings.findingType`, `actions.priority` — aucune n'existe | `findings`: title/description/severity/status/auditId/userId/id ; `actions`: actionCode/description/responsible/dueDate/status/findingId/id | **Aucun** — confirmé mort : `DashboardV2.tsx` (le seul appelant) n'est routé nulle part dans `App.tsx` (`/dashboard-v2` redirige vers `/dashboard`, un composant différent) | Mineur (dette, code mort) | Signalé, non corrigé (voir décision à prendre ci-dessous) |
+| `server/db-dashboard-v2.ts` (`getDashboardSummary`) | 208-222 | `actions.status === "verified"/"completed"/"cancelled"` (vraies valeurs : `open`/`in_progress`/`closed` uniquement, voir `mysqlEnum` du schéma) | — | **Aucun** — même chemin mort que ci-dessus | Mineur (dette, code mort) | Signalé, non corrigé |
+| `drizzle/schema.ts` / `server/capa/*` | — | Aucune colonne fantôme — module `capa_actions`/`capa_action_history` et `capaRouter` (`generateFromAudit`/`list`/`update`/`updateStatus`/`history`) **entièrement corrects et fonctionnels**, monté dans `appRouter` (`capa: capaRouter`) | — | **Majeur, à l'envers** : recherche exhaustive confirme **zéro appel `trpc.capa.*` dans tout le frontend** — module backend sophistiqué (root cause analysis, vérification d'efficacité, historique de traçabilité, gradation par gravité) jamais relié à aucune interface. C'est la cause du symptôme "les onglets CAPA n'affichent rien" (Tâche E) | **Majeur** | Diagnostic terminé (voir Tâche E) |
+| `server/mdr-router.ts`, `server/iso-router.ts`, `server/fda-router.ts`, `server/watch-router.ts`, `server/classification-router.ts`, `server/onboarding/onboardingRouter.ts`, `server/scoring/*.ts` | — | Recherche exhaustive (même méthode) | — | Aucune colonne/valeur fantôme trouvée | — | ✅ Modules propres (déjà assainis lors des lots précédents de cette phase) |
+
+### Décision à prendre (signalée, pas corrigée)
+`db-dashboard-v2.ts` (`getDashboardDrilldown`/`getDashboardSummary`) contient des bugs réels mais sur un chemin mort (`DashboardV2.tsx` non routé). Deux options : (a) supprimer ce code mort avec `DashboardV2.tsx` et ses composants associés (`DrilldownModal.tsx`) — dette éliminée proprement ; (b) corriger les colonnes/valeurs pour le jour où ce tableau de bord serait remis en service. Recommandation : (a), sauf si vous avez prévu de relancer `DashboardV2.tsx` prochainement — à confirmer avec vous.
+
+**Statut Tâche C : ✅ TERMINÉE.** Un seul bug à impact réel trouvé et corrigé (`audit_reports`) ; tout le reste du périmètre demandé (veille, classification, FDA, CAPA, dashboard, onboarding) est soit déjà propre, soit sur du code mort sans impact utilisateur actuel.
+
+## Tâche E — Module CAPA (« les onglets CAPA n'affichent rien ») — ✅ FRONTEND CONSTRUIT ET TESTÉ
+
+### Diagnostic
+Le backend CAPA (`server/capa/capaRouter.ts` + `capaEngine.ts` + tables `capa_actions`/`capa_action_history`) est complet, correct et déjà monté (`capa: capaRouter` dans `appRouter`) — cycle de vie ISO 13485 §8.5.2 respecté (statuts `ouverte→en_cours→a_verifier→cloturee_efficace/inefficace/sans_suite`, cause racine obligatoire avant passage en cours pour un écart majeur, preuve de réalisation obligatoire avant vérification, preuve d'efficacité obligatoire avant clôture). **Aucune page frontend n'appelait `trpc.capa.*` nulle part** (recherche exhaustive `grep -rln "trpc\.capa\." client/src` → vide). C'est la cause exacte du symptôme signalé : le module n'a jamais été construit côté interface, ce n'est ni un manque de données ni des colonnes fantômes.
+
+### Construction
+- `client/src/pages/CapaPlan.tsx` (nouveau) : page `/audits/:id/capa`. Liste les actions CAPA réelles (`trpc.capa.list`), bouton « Générer depuis les écarts » (`trpc.capa.generateFromAudit`), fiches éditables (cause racine, action retenue, responsable, échéance, preuve de réalisation, preuve d'efficacité) via `trpc.capa.update`, boutons de transition de statut (`trpc.capa.updateStatus`) avec pré-validation côté client miroir des règles serveur. État vide honnête (« Aucune action pour le moment... »), aucune donnée de démonstration. Cartes de stats (Total/Clôturées/En retard) affichées seulement si la liste n'est pas vide.
+- `client/src/App.tsx` : route `/audits/:id/capa` enregistrée avant `/audits/:id` (spécificité wouter).
+- `client/src/pages/AuditDetail.tsx` : bouton « Plan d'action CAPA complet » ajouté dans l'en-tête de la carte « Plan d'Actions », lien vers `/audits/{id}/capa`.
+
+### Preuve (contenu vérifié, pas seulement génération)
+Test Playwright réel (navigation in-app, pas de rechargement complet) sur l'audit MDR réel id=1 :
+1. Navigation sidebar → Audits → « Voir » → AuditDetail → « Plan d'action CAPA complet » → page CAPA : état vide correct au départ.
+2. Clic « Générer depuis les écarts » → **4 actions CAPA réelles créées**, avec données réelles issues du moteur de scoring : gravité « Mineure », référentiel « MDR », processus « Documentation technique », statut « Ouverte », énoncé d'écart citant la vraie réponse `non_compliant` et le texte réel du corpus, action recommandée pré-remplie dérivée de `auditVerifies`/`expectedEvidence`. Zéro erreur JS.
+3. Saisie d'une analyse de cause racine réelle (« 5 pourquoi : absence de revue périodique... ») puis clic sur la transition « → En cours » → statut « En cours » confirmé affiché après la mutation. Zéro erreur JS.
+
+**Statut Tâche E (frontend) : ✅ CONSTRUIT ET PROUVÉ.** Reste à faire (voir tâche D) : rebrancher la Section 6 du rapport (Plan d'action/CAPA) sur la vraie table `capa_actions` au lieu des tables `findings`/`actions` simplifiées, pour la cohérence totale exigée entre module CAPA et rapport.

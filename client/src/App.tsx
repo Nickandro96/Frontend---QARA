@@ -15,6 +15,7 @@ import AdminUsers from "./pages/AdminUsers";
 import AnalyticsDashboard from "./pages/AnalyticsDashboard";
 import AuditComparison from "./pages/AuditComparison";
 import AuditDetail from "./pages/AuditDetail";
+import CapaPlan from "./pages/CapaPlan";
 import AuditHistory from "./pages/AuditHistory";
 import AuditResults from "./pages/AuditResults";
 import AuditsList from "./pages/AuditsList";
@@ -109,6 +110,11 @@ function Router() {
       <Route path="/dashboard">
         <ProtectedPage>
           <Dashboard />
+        </ProtectedPage>
+      </Route>
+      <Route path="/audits/:id/capa">
+        <ProtectedPage>
+          <CapaPlan />
         </ProtectedPage>
       </Route>
       <Route path="/audits/:id">

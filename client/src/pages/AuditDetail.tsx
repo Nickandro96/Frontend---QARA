@@ -355,8 +355,15 @@ export default function AuditDetail() {
       {/* Actions List */}
       <Card>
         <CardHeader>
-          <CardTitle>Plan d'Actions ({totalActions})</CardTitle>
-          <CardDescription>Actions correctives et préventives</CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Plan d'Actions ({totalActions})</CardTitle>
+              <CardDescription>Actions correctives et préventives</CardDescription>
+            </div>
+            <Link href={`/audits/${audit.id}/capa`}>
+              <Button variant="outline" size="sm">Plan d'action CAPA complet</Button>
+            </Link>
+          </div>
         </CardHeader>
         <CardContent>
           {actions && actions.length > 0 ? (
