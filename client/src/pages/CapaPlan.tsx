@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { trpc } from "@/lib/trpc";
 import { useParams, useLocation } from "wouter";
 import { getLoginUrl } from "@/const";
@@ -53,6 +54,10 @@ function ActionCard({ action, auditId }: { action: any; auditId: number }) {
   const [dueDate, setDueDate] = useState(action.dueDate ? action.dueDate.slice(0, 10) : "");
   const [preuveRealisation, setPreuveRealisation] = useState(action.preuveRealisation || "");
   const [preuveEfficacite, setPreuveEfficacite] = useState(action.preuveEfficacite || "");
+  const [rootCauseMethod, setRootCauseMethod] = useState(action.rootCauseMethod || "");
+  const [mdsapGrade, setMdsapGrade] = useState(action.mdsapGrade != null ? String(action.mdsapGrade) : "");
+  const [mdsapEscalation, setMdsapEscalation] = useState(action.mdsapEscalation || "");
+  const isMdsap = action.referentialCode === "MDSAP";
 
   const updateMutation = trpc.capa.update.useMutation({
     onSuccess: () => {
@@ -78,6 +83,9 @@ function ActionCard({ action, auditId }: { action: any; auditId: number }) {
       responsible: responsible || undefined,
       dueDate: dueDate ? new Date(dueDate).toISOString() : undefined,
       preuveRealisation: preuveRealisation || undefined,
+      rootCauseMethod: (rootCauseMethod || undefined) as any,
+      mdsapGrade: mdsapGrade ? Number(mdsapGrade) : undefined,
+      mdsapEscalation: mdsapEscalation || undefined,
     });
   };
 
@@ -134,8 +142,40 @@ function ActionCard({ action, auditId }: { action: any; auditId: number }) {
           <label className="text-sm font-medium mb-1 block">
             Analyse de cause racine {action.gravite === "majeur" && <span className="text-red-600">*</span>}
           </label>
-          <Textarea value={analyseCauseRacine} onChange={(e) => setAnalyseCauseRacine(e.target.value)} placeholder="Méthode (5 pourquoi, Ishikawa/5M...) et conclusion" />
+          <Textarea value={analyseCauseRacine} onChange={(e) => setAnalyseCauseRacine(e.target.value)} placeholder="Conclusion de l'analyse" />
         </div>
+
+        <div>
+          <label className="text-sm font-medium mb-1 block">Méthode de cause racine</label>
+          <Select value={rootCauseMethod} onValueChange={setRootCauseMethod}>
+            <SelectTrigger><SelectValue placeholder="Non renseigné" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="5_pourquoi">5 Pourquoi</SelectItem>
+              <SelectItem value="ishikawa">Ishikawa (5M)</SelectItem>
+              <SelectItem value="autre">Autre</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {isMdsap && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 border-l-2 border-amber-300 pl-3">
+            <div>
+              <label className="text-sm font-medium mb-1 block">Gradation MDSAP (AU P0002, 1-5)</label>
+              <Select value={mdsapGrade} onValueChange={setMdsapGrade}>
+                <SelectTrigger><SelectValue placeholder="Non renseigné" /></SelectTrigger>
+                <SelectContent>
+                  {[1, 2, 3, 4, 5].map((g) => (
+                    <SelectItem key={g} value={String(g)}>Grade {g}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1 block">Escalade MDSAP</label>
+              <Input value={mdsapEscalation} onChange={(e) => setMdsapEscalation(e.target.value)} placeholder="Escalade applicable, si pertinente" />
+            </div>
+          </div>
+        )}
 
         <div>
           <label className="text-sm font-medium mb-1 block">Action retenue</label>

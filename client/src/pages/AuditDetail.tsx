@@ -2,12 +2,24 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { trpc } from "@/lib/trpc";
-import { Shield, Loader2, FileText, Calendar, User, MapPin, CheckCircle2, XCircle, AlertCircle, Clock, ArrowLeft } from "lucide-react";
+import { Shield, Loader2, FileText, Calendar, User, MapPin, CheckCircle2, XCircle, AlertCircle, Clock, ArrowLeft, Plus, Trash2 } from "lucide-react";
 import { Link, useParams, useLocation } from "wouter";
 import { getLoginUrl } from "@/const";
 import { toast } from "sonner";
 import { useTranslation } from "react-i18next";
+import { useEffect, useState } from "react";
+
+const AUDIT_NATURE_LABEL: Record<string, string> = {
+  interne: "Interne",
+  fournisseur: "Fournisseur",
+  blanc: "Audit à blanc",
+  revue_conformite: "Revue de conformité",
+};
 
 export default function AuditDetail() {
   const { t } = useTranslation();
@@ -17,7 +29,7 @@ export default function AuditDetail() {
   const auditId = params.id ? parseInt(params.id) : null;
 
   // Fetch audit details
-  const { data: audit, isLoading: auditLoading } = trpc.audit.getById.useQuery(
+  const { data: audit, isLoading: auditLoading, refetch: refetchAudit } = trpc.audit.getById.useQuery(
     { id: auditId! },
     { enabled: isAuthenticated && !!auditId }
   );
@@ -58,6 +70,53 @@ export default function AuditDetail() {
     { auditId: auditId! },
     { enabled: isAuthenticated && !!auditId }
   );
+
+  // Informations d'audit (Tâche D.7) — section éditable post-création,
+  // facultative, alimente le rapport (page de garde / section 1 / annexes).
+  const updateReportFields = trpc.audit.updateReportFields.useMutation();
+  const [auditNature, setAuditNature] = useState("");
+  const [scopeExclusions, setScopeExclusions] = useState("");
+  const [auditTeam, setAuditTeam] = useState<Array<{ name: string; role: string; email: string }>>([]);
+  const [representatives, setRepresentatives] = useState<Array<{ name: string; function: string }>>([]);
+
+  useEffect(() => {
+    if (!audit) return;
+    setAuditNature((audit as any).auditNature || "");
+    setScopeExclusions((audit as any).scopeExclusions || "");
+    try {
+      const team = (audit as any).auditTeam ? JSON.parse((audit as any).auditTeam) : [];
+      setAuditTeam(Array.isArray(team) ? team : []);
+    } catch {
+      setAuditTeam([]);
+    }
+    try {
+      const reps = (audit as any).auditeesRepresentatives ? JSON.parse((audit as any).auditeesRepresentatives) : [];
+      setRepresentatives(Array.isArray(reps) ? reps : []);
+    } catch {
+      setRepresentatives([]);
+    }
+  }, [audit]);
+
+  const handleSaveAuditInfo = async () => {
+    if (!auditId) return;
+    try {
+      await updateReportFields.mutateAsync({
+        id: auditId,
+        auditNature: (auditNature || undefined) as any,
+        scopeExclusions: scopeExclusions || undefined,
+        auditTeam: auditTeam.filter((m) => m.name.trim()).length > 0
+          ? auditTeam.filter((m) => m.name.trim())
+          : undefined,
+        auditeesRepresentatives: representatives.filter((r) => r.name.trim()).length > 0
+          ? representatives.filter((r) => r.name.trim())
+          : undefined,
+      });
+      await refetchAudit();
+      toast.success("Informations d'audit enregistrées");
+    } catch (error) {
+      toast.error("Erreur lors de l'enregistrement des informations d'audit");
+    }
+  };
 
   if (loading || auditLoading) {
     return (
@@ -407,6 +466,150 @@ export default function AuditDetail() {
               <p>Aucune action définie pour cet audit</p>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Informations d'audit (Tâche D.7) — facultatif, alimente le rapport */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Informations d'audit</CardTitle>
+          <CardDescription>
+            Facultatif — alimente la page de garde et le contexte du rapport (ISO 19011). Non renseigné
+            si laissé vide, jamais de valeur par défaut inventée.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div>
+            <Label htmlFor="auditNature">Nature de l'audit</Label>
+            <Select value={auditNature} onValueChange={setAuditNature}>
+              <SelectTrigger id="auditNature" className="mt-1">
+                <SelectValue placeholder="Non renseigné" />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(AUDIT_NATURE_LABEL).map(([value, label]) => (
+                  <SelectItem key={value} value={value}>{label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <Label htmlFor="scopeExclusions">Exclusions de périmètre (avec justification)</Label>
+            <Textarea
+              id="scopeExclusions"
+              className="mt-1"
+              placeholder="Ex. : Exclusion ISO 13485 §7.3 (conception) — non applicable, activité de distribution uniquement."
+              value={scopeExclusions}
+              onChange={(e) => setScopeExclusions(e.target.value)}
+            />
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <Label>Équipe d'audit</Label>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setAuditTeam([...auditTeam, { name: "", role: "", email: "" }])}
+              >
+                <Plus className="h-3 w-3 mr-1" /> Ajouter
+              </Button>
+            </div>
+            {auditTeam.length === 0 && (
+              <p className="text-sm text-muted-foreground">Aucun membre renseigné.</p>
+            )}
+            <div className="space-y-2">
+              {auditTeam.map((member, i) => (
+                <div key={i} className="flex gap-2 items-center">
+                  <Input
+                    placeholder="Nom"
+                    value={member.name}
+                    onChange={(e) => {
+                      const next = [...auditTeam];
+                      next[i] = { ...next[i], name: e.target.value };
+                      setAuditTeam(next);
+                    }}
+                  />
+                  <Input
+                    placeholder="Rôle (auditeur, observateur...)"
+                    value={member.role}
+                    onChange={(e) => {
+                      const next = [...auditTeam];
+                      next[i] = { ...next[i], role: e.target.value };
+                      setAuditTeam(next);
+                    }}
+                  />
+                  <Input
+                    placeholder="Email (optionnel)"
+                    value={member.email}
+                    onChange={(e) => {
+                      const next = [...auditTeam];
+                      next[i] = { ...next[i], email: e.target.value };
+                      setAuditTeam(next);
+                    }}
+                  />
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setAuditTeam(auditTeam.filter((_, j) => j !== i))}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <Label>Personnes rencontrées (représentants de l'audité)</Label>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setRepresentatives([...representatives, { name: "", function: "" }])}
+              >
+                <Plus className="h-3 w-3 mr-1" /> Ajouter
+              </Button>
+            </div>
+            {representatives.length === 0 && (
+              <p className="text-sm text-muted-foreground">Aucune personne renseignée.</p>
+            )}
+            <div className="space-y-2">
+              {representatives.map((rep, i) => (
+                <div key={i} className="flex gap-2 items-center">
+                  <Input
+                    placeholder="Nom"
+                    value={rep.name}
+                    onChange={(e) => {
+                      const next = [...representatives];
+                      next[i] = { ...next[i], name: e.target.value };
+                      setRepresentatives(next);
+                    }}
+                  />
+                  <Input
+                    placeholder="Fonction"
+                    value={rep.function}
+                    onChange={(e) => {
+                      const next = [...representatives];
+                      next[i] = { ...next[i], function: e.target.value };
+                      setRepresentatives(next);
+                    }}
+                  />
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setRepresentatives(representatives.filter((_, j) => j !== i))}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <Button onClick={handleSaveAuditInfo} disabled={updateReportFields.isPending}>
+            {updateReportFields.isPending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Enregistrement...
+              </>
+            ) : (
+              "Enregistrer les informations d'audit"
+            )}
+          </Button>
         </CardContent>
       </Card>
 

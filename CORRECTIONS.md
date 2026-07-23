@@ -288,3 +288,24 @@ Test Playwright réel (navigation in-app, pas de rechargement complet) sur l'aud
 3. Saisie d'une analyse de cause racine réelle (« 5 pourquoi : absence de revue périodique... ») puis clic sur la transition « → En cours » → statut « En cours » confirmé affiché après la mutation. Zéro erreur JS.
 
 **Statut Tâche E (frontend) : ✅ CONSTRUIT ET PROUVÉ.** Reste à faire (voir tâche D) : rebrancher la Section 6 du rapport (Plan d'action/CAPA) sur la vraie table `capa_actions` au lieu des tables `findings`/`actions` simplifiées, pour la cohérence totale exigée entre module CAPA et rapport.
+
+## Tâche D.7 — Champs manquants du wizard — ✅ VALIDÉ ET IMPLÉMENTÉ
+
+Liste proposée le 2026-07-23, validée intégralement par l'utilisateur, sans retour champ par champ. Décisions de collecte confirmées : section éditable post-création sur `AuditDetail` (pas dans le wizard de création), bloc « Profil réglementaire » sur la page Profil existante (pas de nouvelle page), migration additive (backend, commit `dc8dfb1a`, `drizzle/migrations/0027_report_spec_fields.sql`).
+
+### Implémenté
+- **Organisation** (`organisations` + nouvelle table `organisation_certificates`) : `srn`, `logoUrl`, `prrcName`, `prrcQualification`, `notifiedBodyName`, `notifiedBodyNumber`, certificats (référentiel/numéro/dates). UI : bloc « Profil réglementaire » sur `/account` (`Profile.tsx`), création d'organisation si aucune n'existe, édition + gestion des certificats.
+- **Audit** (`audits`) : `auditNature`, `auditTeam`, `auditeesRepresentatives`, `scopeExclusions`. UI : carte « Informations d'audit » sur `AuditDetail.tsx`, éditable à tout moment, endpoint dédié `audit.updateReportFields` (n'écrit que les champs fournis).
+- **CAPA** (`capa_actions`) : `rootCauseMethod` (5 pourquoi/Ishikawa/autre), `mdsapGrade` + `mdsapEscalation` (affichés uniquement quand `referentialCode === "MDSAP"`, conformément à la spec). UI : champs ajoutés dans `CapaPlan.tsx` (`ActionCard`).
+- **Rapport** (`audit_reports`) : `reference`, `version`, `status` (draft/final), `distributionList`, `language` — colonnes prêtes, alimentées au moment de la génération de rapport (voir Tâche D, restructuration à venir).
+- **Non implémenté dans cette passe** : `plannedAgenda`/`actualAgenda` (colonnes créées en base, aucune UI construite pour l'instant — pas de données fabriquées en attendant, le rapport affichera "Non renseigné").
+
+### Trouvaille annexe (signalée, non corrigée)
+En construisant `audit.updateReportFields`, la mutation existante `audits.update` (routeur `audits` au pluriel, distinct du routeur `audit` singulier utilisé par `AuditDetail.tsx`) s'est révélée accepter 11 champs qui ne correspondent à aucune colonne réelle de la table `audits` (`auditObjective`, `auditScope`, `auditCriteria`, `auditProgramRef`, `auditMethod`, `auditLanguage`, `auditeeContactName/Email/Phone`, `auditors`, `observers`, `auditType`) — `db.updateAudit()` utilise `.set(patch as any)`, qui filtre silencieusement les clés inconnues du schéma Drizzle, sans erreur. Non corrigé (périmètre plus large que la liste validée, impliquerait de revoir le wizard qui appelle cette mutation) — à traiter séparément si souhaité.
+
+### Preuve (contenu vérifié, tests Playwright réels)
+- `AuditDetail.tsx` (audit réel id=1) : sélection « Revue de conformité », saisie d'une exclusion de périmètre réelle, ajout d'un membre d'équipe (« Marie Dupont ») → enregistrement → **rechargement complet de la page** → les trois valeurs sont bien affichées après reload. Zéro erreur JS.
+- `Profile.tsx` : création d'une organisation réelle, saisie PRRC (nom + qualification réels), ajout d'un certificat réel (référentiel + numéro) → **rechargement complet** → PRRC et certificat (nouveau + existant) tous persistés. Zéro erreur JS.
+- `CapaPlan.tsx` : champ « Méthode de cause racine » visible et fonctionnel ; champs MDSAP (`mdsapGrade`/`mdsapEscalation`) correctement **absents** pour une action au référentiel MDR (comportement conditionnel vérifié) ; valeur précédemment enregistrée via l'API (`rootCauseMethod: "5_pourquoi"`) correctement pré-affichée dans le select au chargement de la page.
+
+**Statut Tâche D.7 : ✅ TERMINÉE.**
