@@ -254,10 +254,22 @@ Nouvelle phase (démarrée 2026-07-23), poursuivie sur les mêmes branches `clau
 | `drizzle/schema.ts` / `server/capa/*` | — | Aucune colonne fantôme — module `capa_actions`/`capa_action_history` et `capaRouter` (`generateFromAudit`/`list`/`update`/`updateStatus`/`history`) **entièrement corrects et fonctionnels**, monté dans `appRouter` (`capa: capaRouter`) | — | **Majeur, à l'envers** : recherche exhaustive confirme **zéro appel `trpc.capa.*` dans tout le frontend** — module backend sophistiqué (root cause analysis, vérification d'efficacité, historique de traçabilité, gradation par gravité) jamais relié à aucune interface. C'est la cause du symptôme "les onglets CAPA n'affichent rien" (Tâche E) | **Majeur** | Diagnostic terminé (voir Tâche E) |
 | `server/mdr-router.ts`, `server/iso-router.ts`, `server/fda-router.ts`, `server/watch-router.ts`, `server/classification-router.ts`, `server/onboarding/onboardingRouter.ts`, `server/scoring/*.ts` | — | Recherche exhaustive (même méthode) | — | Aucune colonne/valeur fantôme trouvée | — | ✅ Modules propres (déjà assainis lors des lots précédents de cette phase) |
 
-### Décision à prendre (signalée, pas corrigée)
-`db-dashboard-v2.ts` (`getDashboardDrilldown`/`getDashboardSummary`) contient des bugs réels mais sur un chemin mort (`DashboardV2.tsx` non routé). Deux options : (a) supprimer ce code mort avec `DashboardV2.tsx` et ses composants associés (`DrilldownModal.tsx`) — dette éliminée proprement ; (b) corriger les colonnes/valeurs pour le jour où ce tableau de bord serait remis en service. Recommandation : (a), sauf si vous avez prévu de relancer `DashboardV2.tsx` prochainement — à confirmer avec vous.
+### Décision utilisateur (tranchée) + correction supplémentaire découverte en l'appliquant
+Décision : supprimer le code mort (`DashboardV2.tsx`, `DashboardExecutive.tsx`, `DrilldownModal.tsx`, `FilterPanel.tsx`) plutôt que le corriger-et-garder.
 
-**Statut Tâche C : ✅ TERMINÉE.** Un seul bug à impact réel trouvé et corrigé (`audit_reports`) ; tout le reste du périmètre demandé (veille, classification, FDA, CAPA, dashboard, onboarding) est soit déjà propre, soit sur du code mort sans impact utilisateur actuel.
+En l'appliquant, un **second bug à impact réel** est apparu : `dashboard.getKPIs` et `dashboard.getRecentFindings` — les procédures réellement appelées par le vrai `Dashboard.tsx` (routé sur `/dashboard`) via une « compatibility layer » — passent en fait par les mêmes fonctions `db-dashboard-v2.ts` que `DashboardV2.tsx`. Elles contenaient les mêmes colonnes fantômes (`finding.criticality` réel : `severity` ; `finding.findingType` inexistant ; `finding.processId` inexistant ; `action.status === "completed"/"verified"/"cancelled"` alors que l'enum réel n'a que `open`/`in_progress`/`closed` ; `action.completedAt` inexistant). **Conséquence réelle vérifiée** : le compteur « Écarts ouverts » du tableau de bord de production affichait toujours 0, quel que soit le nombre réel de non-conformités.
+
+Corrections apportées (`server/db-dashboard-v2.ts`, commit `f6934a8b`) :
+- `finding.severity` (colonne réelle) remplace `finding.criticality`.
+- Mapping severity→type extrait dans `audit-scoring.ts` (`mapSeverityToFindingType`/`FINDING_TYPE_BY_SEVERITY`, exporté) et réutilisé à la fois par `db-dashboard-v2.ts` et `report-generator.ts` (qui avait le même mapping dupliqué en local) — une seule source de vérité, comme pour le score.
+- `action.status` comparé contre l'enum réel (`open`/`in_progress`/`closed`).
+- `averageClosureTime` approximé via `updatedAt` sur les actions closes (seule donnée réelle disponible — `completedAt` n'existe pas — jamais de valeur inventée).
+- `getDashboardDrilldown` réduit à sa seule branche `"findings"` réellement utilisée par `getRecentFindings` (les branches `"actions"`/`"audits"` n'étaient atteignables que par la procédure directe `getDrilldown`, supprimée avec `DrilldownModal.tsx`).
+- Procédures tRPC supprimées (dead, uniquement appelées par les composants supprimés) : `getStats` (directe), `getTimeseries`, `getRadar` (directe), `getDrilldown` (directe), `getScoring`, `getSuggestions`, `getScoreTrend`, `getProcessProgress`, `getSummary`, `getFunnel`, `getHeatmap`. Conservées : `getKPIs`, `getRecentFindings` (les deux réellement utilisées par `Dashboard.tsx`).
+
+**Preuve (contenu vérifié, audit réel id=1, finding réel `severity="high"`, `status="open"`)** : test Playwright réel (connexion → `/dashboard`) — avant le fix, « Écarts ouverts » affichait 0 ; après, affiche **1**. Le widget « Constats récents » affiche désormais la vraie criticité (« high ») au lieu d'un champ vide.
+
+**Statut Tâche C : ✅ TERMINÉE (avec un correctif live supplémentaire trouvé en cours de nettoyage).** Deux bugs à impact réel trouvés et corrigés : `audit_reports` (reportUrl jamais persisté) et `db-dashboard-v2.ts` (compteur d'écarts toujours à 0 sur le dashboard réel). Le reste du périmètre demandé (veille, classification, FDA, CAPA, onboarding) est propre.
 
 ## Tâche E — Module CAPA (« les onglets CAPA n'affichent rien ») — ✅ FRONTEND CONSTRUIT ET TESTÉ
 
