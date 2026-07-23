@@ -309,3 +309,34 @@ En construisant `audit.updateReportFields`, la mutation existante `audits.update
 - `CapaPlan.tsx` : champ « Méthode de cause racine » visible et fonctionnel ; champs MDSAP (`mdsapGrade`/`mdsapEscalation`) correctement **absents** pour une action au référentiel MDR (comportement conditionnel vérifié) ; valeur précédemment enregistrée via l'API (`rootCauseMethod: "5_pourquoi"`) correctement pré-affichée dans le select au chargement de la page.
 
 **Statut Tâche D.7 : ✅ TERMINÉE.**
+
+## Incident déploiement — migration 0027 bloquée par 0026 non baselinée (2026-07-23)
+
+### Symptôme
+En tentant d'appliquer la migration 0027 en production, `scripts/apply-sql-migrations.ts` a échoué sur 0026_mandatory_documents.sql : `ER_FK_DUP_NAME` (errno 1826) — `Duplicate foreign key constraint name 'user_document_status_userId_users_id_fk'`. Les tables/contraintes de 0026 existaient déjà en base (créées par un mécanisme distinct — le pipeline de déploiement Railway), mais son hash n'était pas enregistré dans `_drizzle_migrations` (le journal du script). 0023/0024/0025 étaient passées, 0027 n'avait pas tourné.
+
+### Cause racine
+**Deux mécanismes de migration concurrents, avec deux journaux distincts** :
+1. `scripts/apply-sql-migrations.ts` (`npm run release`) — rejoue les fichiers `drizzle/migrations/*.sql` un par un, suivi par une table maison `_drizzle_migrations` (hash SHA-256 du contenu du fichier).
+2. Le pipeline Railway — a créé les mêmes tables/contraintes par un autre chemin (probablement `drizzle-kit push`, exécuté manuellement ou via une étape de build/release configurée dans Railway, invisible depuis ce dépôt), sans jamais écrire dans `_drizzle_migrations`.
+
+Résultat : la base de production peut être en avance sur ce que `_drizzle_migrations` sait, et `apply-sql-migrations.ts` retente alors des `CREATE TABLE`/`ADD CONSTRAINT` déjà faits — échec si le code d'erreur retourné n'est pas dans la liste tolérée.
+
+### Corrections appliquées
+1. **`scripts/apply-sql-migrations.ts`** : `isIgnorableMigrationError` tolère désormais `ER_FK_DUP_NAME` (1826), en plus de `ER_DUP_FIELDNAME` (1060) et `ER_DUP_KEYNAME` (1061) déjà couverts — vérifiés par code symbolique ET par errno numérique (défense en profondeur si un driver ne renseigne que l'un des deux).
+2. **`drizzle/migrations/0026_mandatory_documents.sql`** rendu réellement idempotent : les 4 `ALTER TABLE ... ADD CONSTRAINT` sont désormais gardés par une vérification `information_schema.TABLE_CONSTRAINTS` (via `PREPARE`/`EXECUTE` dynamique) avant exécution — testé : MariaDB 10.11 ne supporte **pas** `ADD CONSTRAINT IF NOT EXISTS ... FOREIGN KEY` (erreur de syntaxe 1064, vérifié en local), d'où le recours au SQL dynamique plutôt qu'une syntaxe native.
+
+### Preuve (incident reproduit et résolu en local)
+1. Repro de l'incident : hash de l'ancien 0026 supprimé de `_drizzle_migrations` local (où les 4 contraintes existaient déjà, comme en prod) → confirmé que l'ancien script + l'ancien 0026 auraient échoué sur ce même type de conflit.
+2. Avec les deux corrections : `npm run release` (variante locale sans SSL, MariaDB local n'en a pas besoin) → **`✅ Applied: 0026_mandatory_documents.sql`**, puis 0027 correctement baselinée (déjà appliquée dans cette session). 30 lignes dans `_drizzle_migrations` après (28 avant + 0026 + 0027).
+
+### Proposition d'unification des deux mécanismes (à valider par l'utilisateur — configuration Railway hors de ce dépôt)
+Recommandation : **une seule source de vérité, `apply-sql-migrations.ts` + `_drizzle_migrations`**, pour les raisons suivantes : historique déjà établi (30 migrations tracées), rejoue des fichiers SQL explicites et lisibles (contrairement à `drizzle-kit push` qui diffuse un diff de schéma silencieux, sans fichier ni relecture possible), et déjà le mécanisme documenté dans le code (`docs/audit/02-audit-technique.md`).
+
+Actions concrètes proposées :
+1. **Identifier la source du second mécanisme** : vérifier dans le dashboard Railway (Service Backend → Settings → Deploy) s'il existe une « Release Command », un « Custom Build Command » ou une étape post-déploiement qui invoque `drizzle-kit push`/`drizzle-kit migrate` — je n'ai pas de visibilité sur cette configuration depuis le dépôt.
+2. **Si trouvé, le retirer** et s'assurer que le déploiement Railway déclenche `npm run release` (déjà le script combiné migrations + import corpus) — idéalement via le champ « Release Command » natif de Railway (s'exécute une fois par déploiement, avant que les nouvelles instances ne reçoivent du trafic), plutôt qu'un lancement manuel ponctuel qui peut être oublié.
+3. **`db:push` (`drizzle-kit push --force`)** : dangereux par nature (diff silencieux, `--force` sans confirmation, aucune trace dans un fichier de migration) — recommandation de le réserver strictement à un usage local de développement (jamais contre la base de production), avec un commentaire explicite dans `package.json` ou sa suppression pure si inutilisé.
+4. `drizzle/meta/` (dossier de snapshots natif de `drizzle-kit generate`/`migrate`) n'existe pas dans ce dépôt — confirme que le mécanisme natif de drizzle-kit n'a jamais été utilisé de façon journalisée ici ; pas de réconciliation de journal nécessaire de ce côté, juste s'assurer qu'aucune commande `drizzle-kit push`/`migrate` n'est déclenchée en dehors de ce dépôt sans passer par `_drizzle_migrations`.
+
+**Statut : ✅ Correctifs testés et committés localement (backend, branche `claude/qara-backend-lot4-rapports`). En attente de votre confirmation sur la sauvegarde production + la piste d'unification avant tout merge/déploiement.**
