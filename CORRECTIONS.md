@@ -197,3 +197,34 @@ Même famille de cause que BUG 2, trouvée en testant `AuditsList.tsx` : `audit.
 | `Dashboard.tsx`, autres pages sidebar (Classification, Voies FDA, Rapports, Veille, Compte) | Recherche de données inventées | — | Vérifié en direct (Playwright, contenu réel affiché) | — | Aucune donnée inventée trouvée ; `Dashboard.tsx` utilise déjà correctement `// TODO(data)` pour les 3 indicateurs non encore branchés (préexistant, conforme à la règle) |
 
 **Statut LOT 5 : ✅ TERMINÉ.**
+
+---
+
+## LOT 4 — Rapports Excel/PDF
+
+### D.0 — État des lieux (fait avant tout code, voir réponse dédiée à l'utilisateur)
+
+Deux systèmes non unifiés trouvés : `reports.generate` (backend, PDFKit + S3 + persistance DB) et `Reports.tsx`/`exportUtils.ts` (frontend, export 100% navigateur, aucune persistance). Décision validée par l'utilisateur : unifier sur le système backend, `exceljs` (déjà installé, inutilisé côté serveur) pour l'export Excel serveur, garder `Reports.tsx`/`exportUtils.ts` en repli tant que le nouveau système n'est pas déployé et validé.
+
+### Correction préalable obligatoire (demandée avant toute construction) — ✅ TERMINÉE
+
+`fetchAuditData()`/`calculateReportMetadata()` (`report-generator.ts`) contenaient une chaîne de **9 bugs empilés**, chacun masquant le suivant, qui vidait le contenu réel des rapports sans jamais faire planter la génération (d'où le faux sentiment de succès lors d'un test antérieur — 8 pages produites, jamais vérifiées). Détail complet, testé et prouvé par extraction du texte réel du PDF après chaque correctif (`pdftotext`) : voir commit `Backend---QARA` `7e2a0369`. Résumé :
+
+1. Jointure réponses↔questions sur `questionId` (jamais renseigné pour MDR/ISO) → corrigé sur `questionKey` (universel, 473/473 questions).
+2. Filtre par `userId` seul (pas `auditId`) → mélangeait les réponses de tous les audits d'un utilisateur → corrigé.
+3. `evidenceFiles.questionId` (colonne inexistante) → SQL invalide, crash → corrigé sur `questionKey`.
+4. `action.title`/`responsibleName`/`priority` (colonnes inexistantes) → crash → alias posés, priorité dérivée de la sévérité réelle du constat.
+5. `finding.findingType`/`findingCode`/`clause`/`criticality` (colonnes inexistantes) → "Criticité : undefined" littéral → alias posés.
+6. `r.response.status` (colonne inexistante, vraie colonne `responseValue`) comparé à des valeurs françaises jamais réelles → "Taux de conformité global : 0.0%" systématique → corrigé.
+7. Écart de score entre le rapport (75.8%, recalcul local) et le dashboard (80.6%, `computeGenericAuditStats`) pour le même audit → unifié sur la fonction du dashboard, plus de divergence.
+8. "Marché cible"/"Rôle(s) réglementaire(s)" en dur pour tous les audits (violation de la règle "aucune donnée inventée") → lus depuis `audit.economicRole(s)`/`markets` réels.
+9. `audit.auditType` (colonne inexistante, vraie colonne `type`) → "Type d'audit : N/A" partout → corrigé.
+
+**Preuve par le contenu, sur l'audit réel #1** (62 réponses réelles) : section "Résultats détaillés" affiche les vraies questions MDR, vrais processus, vraie criticité (high/medium/low), statut "✓ OK" sur les réponses réellement "compliant" — plus aucun "N/A". Score : "80.6%", identique au dashboard. Testé sur `reportType="complete"` et `"executive"`.
+
+### Prochaines étapes (D.1-D.5, construction après validation de ce correctif)
+- Logo QARA (en-tête) + logo client (profil organisation) en placeholders configurables, dégradation propre si absents.
+- i18n réel fr/en (actuellement tout en dur en français, `language` accepté mais jamais utilisé).
+- Export Excel serveur (`exceljs`, déjà installé).
+- Restructuration des sections PDF pour coller exactement à D.2 (page de garde, synthèse, résultats par processus avec visuel, registre des écarts, plan CAPA, conclusion, annexes).
+- Points d'entrée cohérents (page détail audit, liste des audits, page Rapports) + gating plan déjà en place à réutiliser.
