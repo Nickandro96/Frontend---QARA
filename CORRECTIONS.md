@@ -340,3 +340,52 @@ Actions concrètes proposées :
 4. `drizzle/meta/` (dossier de snapshots natif de `drizzle-kit generate`/`migrate`) n'existe pas dans ce dépôt — confirme que le mécanisme natif de drizzle-kit n'a jamais été utilisé de façon journalisée ici ; pas de réconciliation de journal nécessaire de ce côté, juste s'assurer qu'aucune commande `drizzle-kit push`/`migrate` n'est déclenchée en dehors de ce dépôt sans passer par `_drizzle_migrations`.
 
 **Statut : ✅ Correctifs testés et committés localement (backend, branche `claude/qara-backend-lot4-rapports`). En attente de votre confirmation sur la sauvegarde production + la piste d'unification avant tout merge/déploiement.**
+
+**Mise à jour : migration 0027 confirmée appliquée sur new-claude (turntable), secret DATABASE_URL corrigé, backend et frontend mergés et déployés en production (backend vérifié live avant le frontend). Feu vert donné pour enchaîner sur la Tâche D.**
+
+---
+
+# Tâche D — Rapport d'audit PDF/Word/Excel bilingue (D.1-D.6)
+
+Nouveau pipeline de rapport (backend, branche `claude/qara-backend-lot4-rapports`), **séparé de l'ancien** (`server/report-generator.ts`, conservé en repli tant que le nouveau n'est pas validé) — même logique de dépréciation progressive que Reports.tsx/exportUtils.ts (D.0).
+
+### Architecture
+Un seul assembleur de données langue/format-agnostique (`server/report/reportData.ts`), consommé par trois renderers indépendants (`pdfRenderer.ts` / `wordRenderer.ts` / `excelRenderer.ts`) — garantit des **chiffres strictement identiques entre les trois formats**, condition explicitement exigée. `reportData.ts` réutilise :
+- le moteur de scoring existant (`buildScoringResult`, déjà source unique de vérité du score, partagée avec le dashboard) ;
+- le module CAPA (`capa_actions`) — le registre des écarts (section 5) et le plan CAPA (section 6) sont assemblés en **joignant chaque écart à sa fiche `capa_actions` par `questionKey`**, ce qui garantit la cohérence CAPA ↔ rapport exigée par la Tâche E ("ce qui est saisi dans CAPA alimente le rapport") ;
+- le profil organisation (SRN/PRRC/organisme notifié/certificats, migration 0027) et les champs d'audit D.7 (nature d'audit/équipe/personnes rencontrées/exclusions de périmètre) ;
+- une comparaison automatique avec l'audit précédent (même utilisateur, référentiels qui se recoupent) quand disponible.
+
+### Structure couverte (D.2)
+Page de garde (logos en emplacement configurable, référentiels, périmètre, dates, équipe, personnes rencontrées, référence/version/statut/date d'émission, emplacement signature) · Section 1 (objectifs/méthodologie/critères/déclaration d'échantillonnage ISO 19011/clause de confidentialité/exclusions) · Section 2 (rôle économique/marchés/PRRC/organisme notifié/certificats) · Section 3 (score global + méthode de calcul explicitée/répartition des réponses/écarts par criticité/verdict/comparaison audit précédent) · Section 4 (résultats par processus, tableau) · Section 5 (registre des écarts, fiche en 3 temps : Exigence/Preuve objective/Énoncé d'écart, référence unique `NC-{année}-{séquence}`, jamais scindée entre deux pages) · Section 6 (Plan CAPA lié à chaque écart : cause racine + méthode, action corrective, responsable, échéance, vérification d'efficacité, statut) · Section 7 (conclusion) · Section 8 (annexes : détail Q/R complet, index des preuves, personnes rencontrées, glossaire, historique des versions).
+
+### Forme (D.3-D.4)
+En-tête/pied de page sur chaque page (référence, version, confidentialité, "Page X sur Y") · dates ISO 8601 · métadonnées PDF (titre/auteur/date) · palette QARA (bleu nuit `#0e1c3d`, accent `#3b6fe0`, vert/orange/rouge pour la criticité) · tableaux avec en-têtes contrastés et alternance de lignes · sections vides toujours explicitement mentionnées ("Aucun écart...", jamais un blanc).
+
+### Formats et langues (D.5-D.6)
+PDF (PDFKit, document de référence) · Word (.docx, styles natifs, table des matières automatique, en-têtes/pieds de page avec pagination réelle) · Excel (.xlsx, 5 onglets : Synthèse/Détail Q-R/Registre écarts/Plan CAPA/Index des preuves, en-têtes figés, filtres automatiques, mise en forme conditionnelle sur la criticité). Dictionnaire complet fr/en (`server/report/i18n.ts`) — aucune chaîne de rapport en dur ailleurs ; les intitulés réglementaires (MDR, ISO 13485...) restent dans leur langue d'usage.
+
+Nouvel endpoint : `reports.generateV2(auditId, format, language)` — upload S3 + persistance `audit_reports` (référence/version/statut/langue). L'ancien `reports.generate` reste disponible en repli.
+
+### Bugs trouvés et corrigés en vérifiant le contenu réel (jamais la seule génération)
+- Caractère `→` invisible/corrompu en PDF (police Helvetica par défaut de PDFKit, encodage WinAnsi sans ce glyphe, testé et confirmé) — remplacé par `->`.
+- `auditNature` (valeur brute d'enum, ex. `"revue_conformite"`) affichée telle quelle même en version anglaise au lieu d'être traduite — ajout de `translateAuditNature` (i18n.ts), corrigé dans les trois formats.
+- Placeholders `"?"` incohérents avec la règle "Non renseigné" sur les dates de certificats et la comparaison avec l'audit précédent (PDF et Word) — uniformisés.
+- Titre de question dupliqué avec sa référence d'annexe/article quand le corpus les inclut déjà tous deux (ex. "Annexe II — Annexe II — documentation..." — le corpus stocke parfois la référence en préfixe du titre) — dédupliqué à l'affichage uniquement (`dedupeRequirementTitle`), aucune donnée supprimée ni inventée.
+- **Erreur de branche de ma part** : le développement de la Tâche D a été fait par erreur directement sur `claude/qara-compliance-audit-qitbxl` (branche de production) au lieu de `claude/qara-backend-lot4-rapports`. Repéré avant tout push — commit déplacé sur la bonne branche (fast-forward), production réinitialisée sur son état réellement déployé (`git reset --hard origin/...`), aucune conséquence réelle.
+
+### Preuve exigée (D.8) — contenu vérifié, pas seulement génération
+6 fichiers générés sur l'audit MDR réel id=1 (3 formats × fr/en) via `reports.generateV2`, puis **extraits et lus** (`pdftotext` pour le PDF, dézippage + parsing XML pour le Word, `openpyxl` pour l'Excel) :
+- **Mêmes chiffres dans les trois formats** : score global 68.0 %, répartition 47 conforme / 0 partiel / 15 non conforme / 0 N/A, écarts 0 majeure / 4 mineure / 0 observation.
+- **4 écarts réels** (NC-2026-0001 à 0004) avec exigence réelle (article/annexe + intitulé du corpus), énoncé d'écart réel (dérivé des NC typiques du corpus), processus/site réels, statut réel.
+- **Plan CAPA réellement lié** : les 4 actions CAPA apparaissent sous leur référence d'écart correspondante, avec la vraie action corrective du corpus ; l'action NC-2026-0001 affiche `rootCauseMethod = "5_pourquoi"`, valeur saisie précédemment via le module CAPA (Tâche E) — preuve directe de la cohérence CAPA ↔ rapport.
+- **PRRC, organisme notifié, certificats réels** (Dr. Claire Martin, BSI Group n°2797, ISO13485/CERT-2025-9981) apparaissent correctement sur la page de garde/section 2, absents jusqu'à cette tâche.
+- Champs non renseignés (marchés visés, containment, responsable CAPA, échéances) affichent honnêtement "Non renseigné"/"Not provided" dans les deux langues — jamais de valeur par défaut inventée.
+
+### Limites connues de cette version (transparence, non bloquant)
+- `plannedAgenda`/`actualAgenda` (D.7) : colonnes créées en base, aucune interface de saisie construite dans cette passe — la section annexe correspondante affiche honnêtement "Non renseigné".
+- Section 6 : les champs "correction immédiate (containment)" et "critère de vérification" (distinct de la preuve elle-même) n'ont pas de colonne dédiée sur `capa_actions` — affichés "Non renseigné"/approximés par `preuveEfficacite` plutôt que fabriqués ; évolution possible du module CAPA si souhaité.
+- Estimation de hauteur (plutôt que mesure exacte) pour éviter de scinder une fiche d'écart entre deux pages PDF — fiable dans les cas testés, pourrait théoriquement être pris en défaut par un écart au texte exceptionnellement long.
+- Gradation MDSAP : champ et logique conditionnelle en place, non testés sur un audit utilisant réellement le référentiel MDSAP (aucun dans les données de test disponibles).
+
+**Statut Tâche D : ✅ Livrable de preuve fourni (6 fichiers, contenu vérifié). Non mergé vers la branche de production — en attente de votre revue.**
