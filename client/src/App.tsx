@@ -29,6 +29,7 @@ import ForgotPassword from "./pages/ForgotPassword";
 import ISOAuditDrilldown from "./pages/ISOAuditDrilldown";
 import ISOAuditReview from "./pages/ISOAuditReview";
 import ISOAuditWizard from "./pages/ISOAuditWizard";
+import GenericAuditWizard from "./pages/GenericAuditWizard";
 import ISOQualification from "./pages/ISOQualification";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
@@ -260,6 +261,18 @@ function Router() {
       <Route path="/iso/audit">
         <ProtectedPage>
           <ISOAuditWizard />
+        </ProtectedPage>
+      </Route>
+      {/*
+        Wizard générique (étape D, voir CORRECTIONS.md) : sert les
+        référentiels sans wizard dédié (IVDR, MDSAP) via le routeur
+        backend générique trpc.audit.* (referentialId-agnostique).
+        ?ref=IVDR ou ?ref=MDSAP résout le référentiel dynamiquement,
+        jamais d'ID en dur.
+      */}
+      <Route path="/audit/generic">
+        <ProtectedPage>
+          <GenericAuditWizard />
         </ProtectedPage>
       </Route>
       {/*

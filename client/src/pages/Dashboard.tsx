@@ -59,7 +59,7 @@ const REFERENTIAL_DEFS: Omit<ReferenceCard, "score">[] = [
     tools: ["Audit", "Classe A/B/C/D", "Rapport"],
     badgeBg: "#fdeef0",
     badgeColor: "#be123c",
-    href: "/audits",
+    href: "/audit/generic?ref=IVDR",
   },
   {
     key: "fda-qmsr",
@@ -77,7 +77,7 @@ const REFERENTIAL_DEFS: Omit<ReferenceCard, "score">[] = [
     tools: ["Audit", "Rapport"],
     badgeBg: "#eaf3ec",
     badgeColor: "#16794c",
-    href: "/audits",
+    href: "/audit/generic?ref=MDSAP",
   },
   {
     key: "iso-13485",
