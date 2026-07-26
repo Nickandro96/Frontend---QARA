@@ -556,13 +556,44 @@ Filtre de rôle par référentiel re-vérifié après le reset (IDs `referentiel
 
 **Le pipeline de release ne doit jamais pouvoir écraser une donnée de production normalisée ou corrigée manuellement.** Concrètement : tout script exécuté automatiquement à chaque déploiement doit soit (a) être strictement idempotent et produire le même résultat cible quel que soit l'état de départ (c'est le choix fait ici — la normalisation vit maintenant dans le code de l'import, pas seulement en base), soit (b) être conditionné à un changement réel de sa source (hash du corpus), jamais exécuté "parce que c'est le déploiement". Une correction appliquée manuellement en base de production (SQL direct, hors du code versionné) est fragile par construction face à un pipeline qui re-déploie du code : dès que possible, la correction doit être portée par le code lui-même (comme ici) pour survivre à n'importe quel redéploiement futur.
 
-### Suites de l'incident — préparées, non mergées (feu vert requis)
+### Suites de l'incident — mergées le 2026-07-26
 
-Branche `claude/qara-backend-mdr-upsert-questionkey`, issue de `qitbxl` à `17e078c2` (après le merge du correctif ci-dessus). Deux commits, poussés sur cette branche de travail uniquement — **aucun merge, aucun push vers `qitbxl`/`main`, aucune écriture sur new-claude** :
+Branche `claude/qara-backend-mdr-upsert-questionkey`, issue de `qitbxl` à `17e078c2`. Deux commits, **mergés dans `claude/qara-compliance-audit-qitbxl` — SHA du merge `111c64ee`**, poussés. En attente du prochain déploiement Railway (premier déploiement avec import totalement non destructif) :
 
 1. **`e456b665`** — retire le bloc §0 "remplacement MDR" (DELETE inconditionnel + réinsertion) d'`import-corpus.mjs`. MDR passe désormais par le même upsert par `questionKey` que les 6 autres référentiels — plus aucun `DELETE` dans le script hormis le nettoyage (inchangé, sans risque de récurrence) des anciens codes référentiels FDA légataires. **Preuve locale** : capture de la table complète `id`↔`questionKey` des 80 questions MDR avant/après deux exécutions consécutives du script corrigé — `diff` strictement vide (0 différence), plage d'`id` stable (474-553). Chiffrage `economicRole`/`economicRoleSource`/`situationTags` re-vérifié identique à la cible. Tests `scopeEngine` 15/15.
 2. **`13a16d8e`** — `iso-router.ts::saveResponse` et `fda-router.ts::saveResponse` n'écrivent plus `questionId` dans `audit_responses` pour les nouvelles réponses (contrat d'entrée inchangé, `questionId` toujours accepté en entrée pour la résolution de la question — aucun changement frontend requis). La réponse existante de l'audit 10 n'est pas touchée (l'`UPDATE` `onDuplicateKeyUpdate` n'a jamais inclus `questionId` dans son `SET`, avant comme après ce correctif). **Preuve locale** : simulation directe du payload d'insertion fixé sur le miroir → `questionId: null` confirmé sur la ligne insérée, ligne de test nettoyée après coup.
 
 **Point 3 (conditionnement de l'import par hash du corpus) : reporté explicitement par l'utilisateur, consigné comme dette non bloquante** — l'import est déjà idempotent et non destructif depuis les deux commits ci-dessus ; le hash reste une optimisation (éviter un travail inutile à chaque déploiement qui ne touche pas au corpus), pas une nécessité de sécurité à ce stade.
+
+**Vérification à faire par l'utilisateur au prochain déploiement** (Railway → Deployments → Success sur `111c64ee` → View logs) : la ligne `[REPLACE] Suppression de 80 anciennes questions MDR` doit avoir disparu, remplacée par un import se terminant sur 473 (import inchangé côté comptage : `0 insérées, 473 mises à jour` attendu, puisque toutes les questions existent déjà). Puis `SELECT economicRole, COUNT(*) FROM questions GROUP BY economicRole` doit rester strictement 330/137/3/2/1 — preuve d'idempotence en conditions réelles.
+
+### ✅ Incident clos — 2026-07-26
+
+Valeurs de référence production (new-claude), vérifiées par l'utilisateur après le merge `17e078c2` :
+
+| `economicRole` | Compte |
+|---|---|
+| fabricant | 330 |
+| NULL (universel) | 137 |
+| importateur | 3 |
+| distributeur | 2 |
+| mandataire | 1 |
+
+`economicRoleSource` : 473/473 non NULL. `situationTags` : `["assemblage"]` 12, `["acces_marche_us"]` 2.
+
+Répartition par référentiel (IDs production, jamais 1-7 — voir invariants ci-dessus) :
+
+| Référentiel | ID prod | Comptage |
+|---|---|---|
+| MDR | 3 | 80 |
+| IVDR | 4 | 72 |
+| FDA_QMSR | 5 | 43 |
+| MDSAP | 6 | 74 |
+| ISO13485 | 7 | 93 |
+| ISO14971 | 8 | 67 |
+| ISO9001 | 9 | 44 |
+| **Total** | | **473** |
+
+Sauvegardes prises : `qara_prod_avant_normalisation_roles_2026-07-25_111034.sql` (avant la normalisation manuelle initiale) et `qara_prod_etat_sain_post_fix_import_2026-07-26.sql` (état sain post-correctif, 1,99 Mo).
 
 ---
