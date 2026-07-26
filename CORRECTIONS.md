@@ -492,3 +492,68 @@ Doit renvoyer les 7 référentiels avec les IDs de production (MDR=3 … ISO9001
 **Vérification frontend :** ouvrir l'app en production, se connecter, cliquer sur la carte IVDR ou MDSAP — doit ouvrir le wizard générique (formulaire nom/site/rôle/processus), pas rediriger vers `/audits`.
 
 ---
+
+## Incident — le pipeline de déploiement écrasait la normalisation des rôles (2026-07-25)
+
+**⚠️ Confirmé avant tout redéploiement du backend** (chance : aucun redéploiement n'a encore eu lieu depuis la normalisation du 25/07 11:31, voir section "Déploiement Railway/Vercel : CONFIRMÉ NON DÉPLOYÉ" ci-dessus — l'incident a donc été détecté et corrigé **avant** impact réel en production, pas après).
+
+### Cause
+
+`Backend---QARA/package.json:18` — `"release": "npx tsx scripts/apply-sql-migrations.ts && npx tsx scripts/import-corpus.mjs"`. Ce script s'exécute automatiquement à **chaque** déploiement Railway (convention "release phase"), sans condition.
+
+`scripts/import-corpus.mjs` (avant correctif) écrivait `economicRole: row.economicRole || null` — la valeur **brute** du fichier corpus embarqué (`scripts/questions_import_ready.json`), jamais la valeur normalisée. Le fichier corpus lui-même n'avait jamais été mis à jour lors de la normalisation du 25/07 (qui a été appliquée directement en base via l'éditeur SQL Railway, pas au fichier source). Conséquence : le tout premier redéploiement suivant la normalisation aurait silencieusement réécrit `economicRole` sur ses 12 valeurs brutes d'origine ("organisme DM", "fabricant IVD", "assembleur"...), annulant le travail du 25/07.
+
+Aggravant trouvé dans le même diagnostic : les 80 questions MDR passent par un chemin **DELETE + INSERT** (section §0 du script, "remplacement de l'ancien contenu MDR/FDA") à **chaque** exécution qui trouve des lignes MDR existantes — pas seulement "la première fois" comme l'affirmait le commentaire du fichier (aucun marqueur ne distinguait un premier run d'un rejeu). `economicRoleSource` et `situationTags` étant absents de l'objet `values` du script, un `INSERT` neuf les fixe à `NULL` : ces 80 lignes auraient donc perdu ces deux colonnes intégralement, pas seulement vu `economicRole` redevenir périmé.
+
+### Impact
+
+Aucun impact réel constaté — l'incident a été trouvé et corrigé avant que le backend ne soit redéployé depuis la normalisation. **C'était néanmoins une bombe à retardement exacte** : la toute prochaine action de redéploiement (que l'utilisateur s'apprêtait à faire suite à la procédure de secours ci-dessus) aurait déclenché la régression.
+
+### Correctif
+
+`Backend---QARA`, branche `claude/qara-backend-fix-import-corpus` (issue de `qitbxl`, **non mergée**, commit `88e8dfba`) :
+- `scripts/economic-role-mapping.mjs` (nouveau) : table de correspondance validée, source unique — remplace la copie locale qui n'existait jusque-là que dans `normalize-economic-roles.mjs`.
+- `scripts/import-corpus.mjs` : calcule désormais `economicRole`/`economicRoleSource`/`situationTags` via cette table, pour **chaque** ligne, insert et update — plus aucune dépendance à un état de base préexistant. Avertissement loggé (pas silencieux) si une valeur brute du corpus n'a pas de correspondance connue dans la table.
+- `scripts/normalize-economic-roles.mjs` : importe désormais la même table partagée au lieu d'une copie locale (évite toute divergence future) ; devient un correctif ponctuel historique, plus nécessaire une fois ce correctif déployé.
+
+**⚠️ Ce correctif ne couvre PAS le DELETE+INSERT des 80 questions MDR** (§0 du script, non modifié — vérifié par diff, `git diff dd5d9f94 88e8dfba -- scripts/import-corpus.mjs` ne touche pas ce bloc). Conséquence démontrée : les `id` de `questions` pour MDR changent à **chaque** exécution du script (constaté après deux exécutions consécutives locales : plage d'`id` passée à 474-553, jamais 1-80 malgré un `RESET_BEFORE_IMPORT=1` entre les deux). Risque réel seulement si une table référence `questions.id` de façon durable : `audit_responses.questionId` existe (colonne nullable, en plus de `questionKey`) et **est bien utilisé par `fda-router.ts::saveResponse` et `iso-router.ts`** (payload entrant, résolution de `question.questionKey` à l'écriture) — mais ni FDA_QMSR ni ISO ne passent par un chemin destructif, leurs `id` restent stables. `mdr-router.ts::saveResponse` (seul chemin concerné par le churn) n'écrit **jamais** `questionId`, uniquement `questionKey` — vérifié par lecture du code, pas supposé. Sur le miroir local : 0/64 réponses ont un `questionId` non NULL, `audit_responses` MDR réel ("Audit MDR Test Reconciliation") inclus. Vérification en lecture seule à faire sur new-claude (fournie à l'utilisateur, non exécutée ici) :
+```sql
+SELECT COUNT(*) AS total_reponses, SUM(questionId IS NOT NULL) AS avec_questionId, SUM(questionId IS NULL) AS sans_questionId FROM audit_responses;
+SELECT ar.auditId, a.name, COUNT(*) AS n_reponses, SUM(ar.questionId IS NOT NULL) AS avec_questionId
+FROM audit_responses ar JOIN audits a ON a.id = ar.auditId
+GROUP BY ar.auditId, a.name HAVING SUM(ar.questionId IS NOT NULL) > 0;
+```
+Retrait du DELETE+INSERT proposé (voir "Proposition" ci-dessous), pas encore implémenté — en attente de validation.
+
+**Preuve locale (sorties SQL brutes, pas résumées), sur `qara_qitbxl_local`, trois scénarios :**
+
+1. **Ré-exécution sur base déjà normalisée** (= exactement ce qui se passerait au prochain déploiement réel) :
+   ```
+   economicRole | COUNT(*)
+   NULL           137
+   distributeur   2
+   fabricant      330
+   importateur    3
+   mandataire     1
+   ```
+   `SELECT COUNT(*) FROM questions WHERE economicRoleSource IS NOT NULL` → **473**. `SELECT situationTags, COUNT(*) FROM questions WHERE situationTags != '[]' GROUP BY situationTags` → `["acces_marche_us"]` **2**, `["assemblage"]` **12**. `SELECT COUNT(*) FROM questions` → **473**. Log confirmé : `[REPLACE] Suppression de 80 anciennes questions MDR (referentialId=1)...`.
+
+2. **`RESET_BEFORE_IMPORT=1`** (table `questions`/`referentiels` vidée, simulation d'un déploiement sur base neuve) : mêmes sorties, à l'identique.
+
+3. **Deuxième exécution consécutive** (test d'idempotence explicitement demandé) : mêmes sorties, à l'identique — y compris `[REPLACE] Suppression de 80 anciennes questions MDR (referentialId=1)...` à nouveau, confirmant que le contenu du correctif est stable même si les `id` MDR, eux, continuent de changer (point non couvert, ci-dessus).
+
+Filtre de rôle par référentiel re-vérifié après le reset (IDs `referentiels` recalculés par l'auto-increment, différents de la production) : MDR 74/2/1/3 (fabricant/distributeur/mandataire/importateur), IVDR 72/0/0/0, MDSAP 74/0/0/0 — inchangé par rapport aux vérifications de l'étape D. Tests `scopeEngine` : 15/15.
+
+**État Git** : branche `claude/qara-backend-fix-import-corpus` (issue de `qitbxl` à `dd5d9f94`), un seul commit `88e8dfba` (module partagé + correctif import + refactor normalize-economic-roles, pas trois commits séparés). Poussée sur cette branche de travail uniquement. Aucun merge, aucun push vers `qitbxl`/`main`, aucune écriture sur new-claude.
+
+### Proposition de sécurisation du pipeline (à valider avant implémentation — rien fait au-delà du correctif ci-dessus)
+
+1. **Retirer le `DELETE` inconditionnel des 80 questions MDR** (§0 du script) au profit du même upsert par `questionKey` que les 6 autres référentiels. Aucune raison technique restante de le garder : la décision de remplacement du 04/07/2026 concernait l'ancien contenu MDR pré-corpus-vérifié, une seule fois — pas un mécanisme à rejouer indéfiniment. Élimine au passage le churn d'`id` auto-increment sur ces 80 lignes à chaque déploiement.
+2. **Conditionner l'exécution à un changement réel du corpus**, plutôt qu'à chaque déploiement : hash SHA-256 de `questions_import_ready.json`, comparé à une valeur stockée (réutiliser `_drizzle_migrations` avec une entrée dédiée, ou une petite table `_corpus_import_state(hash, imported_at)` — même pattern déjà éprouvé par `apply-sql-migrations.ts`). Si le hash n'a pas changé, le script logue "corpus inchangé, import ignoré" et sort sans toucher à la base — un déploiement qui ne touche pas au corpus ne devient jamais une occasion de réécrire des données.
+3. Ces deux changements combinés rendent l'import réellement idempotent et sans effet de bord sur des données modifiées après coup en production (comme la normalisation manuelle du 25/07) — actuellement seul le correctif ci-dessus (table de correspondance appliquée à l'import) protège contre ce risque précis ; ces deux points le renforceraient structurellement.
+
+### Règle qui en découle
+
+**Le pipeline de release ne doit jamais pouvoir écraser une donnée de production normalisée ou corrigée manuellement.** Concrètement : tout script exécuté automatiquement à chaque déploiement doit soit (a) être strictement idempotent et produire le même résultat cible quel que soit l'état de départ (c'est le choix fait ici — la normalisation vit maintenant dans le code de l'import, pas seulement en base), soit (b) être conditionné à un changement réel de sa source (hash du corpus), jamais exécuté "parce que c'est le déploiement". Une correction appliquée manuellement en base de production (SQL direct, hors du code versionné) est fragile par construction face à un pipeline qui re-déploie du code : dès que possible, la correction doit être portée par le code lui-même (comme ici) pour survivre à n'importe quel redéploiement futur.
+
+---
