@@ -495,7 +495,7 @@ Doit renvoyer les 7 référentiels avec les IDs de production (MDR=3 … ISO9001
 
 ## Incident — le pipeline de déploiement écrasait la normalisation des rôles (2026-07-25)
 
-**⚠️ Confirmé avant tout redéploiement du backend** (chance : aucun redéploiement n'a encore eu lieu depuis la normalisation du 25/07 11:31, voir section "Déploiement Railway/Vercel : CONFIRMÉ NON DÉPLOYÉ" ci-dessus — l'incident a donc été détecté et corrigé **avant** impact réel en production, pas après).
+**✅ Corrigé et mergé avant tout redéploiement du backend** — trouvé et réparé pendant que le déploiement Railway/Vercel était encore confirmé absent (voir section ci-dessus), donc aucun impact réel constaté. Correctif (commit `88e8dfba`) mergé dans `claude/qara-compliance-audit-qitbxl` le 26/07/2026 — **SHA du merge `17e078c2`**, poussé. Vérification production faite par l'utilisateur avant merge : 14 réponses dans `audit_responses`, 1 seule avec `questionId` non NULL (audit 10, ISO13485 du 24/07), confirmée pointant vers une question valide — aucune réponse orpheline. Le prochain déploiement Railway exécutera l'import corrigé, qui renormalisera la production de lui-même (aucun SQL manuel de renormalisation nécessaire).
 
 ### Cause
 
@@ -555,5 +555,14 @@ Filtre de rôle par référentiel re-vérifié après le reset (IDs `referentiel
 ### Règle qui en découle
 
 **Le pipeline de release ne doit jamais pouvoir écraser une donnée de production normalisée ou corrigée manuellement.** Concrètement : tout script exécuté automatiquement à chaque déploiement doit soit (a) être strictement idempotent et produire le même résultat cible quel que soit l'état de départ (c'est le choix fait ici — la normalisation vit maintenant dans le code de l'import, pas seulement en base), soit (b) être conditionné à un changement réel de sa source (hash du corpus), jamais exécuté "parce que c'est le déploiement". Une correction appliquée manuellement en base de production (SQL direct, hors du code versionné) est fragile par construction face à un pipeline qui re-déploie du code : dès que possible, la correction doit être portée par le code lui-même (comme ici) pour survivre à n'importe quel redéploiement futur.
+
+### Suites de l'incident — préparées, non mergées (feu vert requis)
+
+Branche `claude/qara-backend-mdr-upsert-questionkey`, issue de `qitbxl` à `17e078c2` (après le merge du correctif ci-dessus). Deux commits, poussés sur cette branche de travail uniquement — **aucun merge, aucun push vers `qitbxl`/`main`, aucune écriture sur new-claude** :
+
+1. **`e456b665`** — retire le bloc §0 "remplacement MDR" (DELETE inconditionnel + réinsertion) d'`import-corpus.mjs`. MDR passe désormais par le même upsert par `questionKey` que les 6 autres référentiels — plus aucun `DELETE` dans le script hormis le nettoyage (inchangé, sans risque de récurrence) des anciens codes référentiels FDA légataires. **Preuve locale** : capture de la table complète `id`↔`questionKey` des 80 questions MDR avant/après deux exécutions consécutives du script corrigé — `diff` strictement vide (0 différence), plage d'`id` stable (474-553). Chiffrage `economicRole`/`economicRoleSource`/`situationTags` re-vérifié identique à la cible. Tests `scopeEngine` 15/15.
+2. **`13a16d8e`** — `iso-router.ts::saveResponse` et `fda-router.ts::saveResponse` n'écrivent plus `questionId` dans `audit_responses` pour les nouvelles réponses (contrat d'entrée inchangé, `questionId` toujours accepté en entrée pour la résolution de la question — aucun changement frontend requis). La réponse existante de l'audit 10 n'est pas touchée (l'`UPDATE` `onDuplicateKeyUpdate` n'a jamais inclus `questionId` dans son `SET`, avant comme après ce correctif). **Preuve locale** : simulation directe du payload d'insertion fixé sur le miroir → `questionId: null` confirmé sur la ligne insérée, ligne de test nettoyée après coup.
+
+**Point 3 (conditionnement de l'import par hash du corpus) : reporté explicitement par l'utilisateur, consigné comme dette non bloquante** — l'import est déjà idempotent et non destructif depuis les deux commits ci-dessus ; le hash reste une optimisation (éviter un travail inutile à chaque déploiement qui ne touche pas au corpus), pas une nécessité de sécurité à ce stade.
 
 ---
