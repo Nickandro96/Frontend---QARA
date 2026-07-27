@@ -299,10 +299,10 @@ function Router() {
         </ProtectedPage>
       </Route>
       <Route path="/audit/new">
-        <Redirect to="/mdr/audit" />
+        <Redirect to="/audit/generic" />
       </Route>
       <Route path="/audit/create">
-        <Redirect to="/mdr/audit" />
+        <Redirect to="/audit/generic" />
       </Route>
       <Route path="/audit/:id/results">
         <ProtectedPage>

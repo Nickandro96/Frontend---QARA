@@ -68,7 +68,7 @@ const REFERENTIAL_DEFS: Omit<ReferenceCard, "score">[] = [
     tools: ["Audit", "Voie 510(k)/PMA", "Rapport"],
     badgeBg: "#eaf3ec",
     badgeColor: "#16794c",
-    href: "/fda",
+    href: "/audit/generic?ref=FDA_QMSR",
   },
   {
     key: "mdsap",
@@ -98,7 +98,7 @@ const TRANSVERSE_DEFS: Omit<TransverseStandard, "score">[] = [
     description: "Gestion des risques",
     badgeBg: "#fef1e0",
     badgeColor: "#b45309",
-    href: "/iso/audit",
+    href: "/audit/generic?ref=ISO14971",
   },
   {
     key: "iso-9001",
@@ -232,7 +232,7 @@ export default function Dashboard() {
               Gérer mes référentiels
             </button>
           </Link>
-          <Link href="/mdr/audit">
+          <Link href="/audit/generic">
             <button className="inline-flex h-9 items-center gap-2 rounded-lg bg-[#3b6fe0] px-3 text-[12px] font-medium text-white shadow-sm transition hover:bg-[#2f5ec5]">
               <Plus className="h-4 w-4" />
               Nouvel audit
@@ -388,7 +388,7 @@ export default function Dashboard() {
             <EmptyState
               message="Aucun travail en cours pour le moment."
               actionLabel="Lancer votre premier audit"
-              href="/mdr/audit"
+              href="/audit/generic"
             />
           )}
         </div>

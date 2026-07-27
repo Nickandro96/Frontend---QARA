@@ -82,7 +82,7 @@ export default function AuditsList() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-xl font-bold">Mes Audits</h1>
-        <Link href="/mdr/audit">
+        <Link href="/audit/generic">
           <Button className="gap-2">
             <Plus className="h-4 w-4" />
             Nouvel Audit
@@ -170,7 +170,7 @@ export default function AuditsList() {
                     ? "Essayez de modifier vos filtres de recherche"
                     : "Commencez par créer votre premier audit"}
                 </p>
-                <Link href="/mdr/audit">
+                <Link href="/audit/generic">
                   <Button className="gap-2">
                     <Plus className="h-4 w-4" />
                     Créer un audit
