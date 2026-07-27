@@ -435,11 +435,53 @@ Cette migration de données est indépendante du déploiement du code — elle e
 - Étape D, testée en conditions réelles (Playwright, backend+frontend locaux, pas de simulation) : création d'un audit IVDR, 72 questions réelles affichées, réponse enregistrée, score 0 %→100 % recalculé en direct, persistance après rafraîchissement de page (correctif : l'auditId vit dans l'URL `?auditId=`, pas seulement en state React — sans ça, aucune route de reprise après un rafraîchissement).
 - Filtre de rôle confirmé uniforme sur les 7 référentiels après le correctif du repli : IVDR/fabricant 72, IVDR/{distributeur,mandataire,importateur} 0 ; MDSAP/fabricant 74, MDSAP/{distributeur,mandataire,importateur} 0 ; MDR inchangé (74/2/1/3) sur ses 4 rôles.
 
+## Incident — le pipeline de déploiement écrasait la normalisation des rôles (2026-07-25/26) — ✅ CLOS le 2026-07-26
+
+**Cause :** `package.json` (`"release"`) exécute `import-corpus.mjs` à chaque déploiement Railway (convention release-phase). Ce script écrivait `economicRole` depuis la valeur brute du corpus (`row.economicRole || null`), écrasant silencieusement la normalisation en production à chaque redéploiement. Le bloc MDR faisait en plus un DELETE+INSERT inconditionnel à chaque run (pas seulement au premier import comme le commentaire l'affirmait), ce qui aurait remis `economicRoleSource`/`situationTags` à NULL (absents du payload d'INSERT).
+
+**Correctif :** module partagé `scripts/economic-role-mapping.mjs` (table de correspondance validée + `resolveEconomicRole()`), consommé à la fois par `import-corpus.mjs` (écrit désormais `economicRole`/`economicRoleSource`/`situationTags` calculés à chaque import) et par `normalize-economic-roles.mjs` (refactoré pour importer la même table). Suppression du bloc DELETE+INSERT MDR (upsert par `questionKey` uniforme sur les 7 référentiels, comme les 6 autres). Retrait de `questionId` du payload d'écriture de `iso-router.ts`/`fda-router.ts::saveResponse` (jamais fiable après ré-import, `questionKey` est la seule clé stable).
+
+**Preuve :** idempotence prouvée par 2 runs consécutifs identiques (état cible 330/137/3/2/1, `economicRoleSource` 473/473, tags 12+2) ; table `id↔questionKey` des 80 questions MDR comparée par `diff` sur deux runs post-correctif — 0 ligne de différence. Production confirmée par l'utilisateur après déploiement : redéploiement backend a lui-même re-normalisé la base à l'identique de la cible (330/137/3/2/1, IDs référentiels 3-9 conformes), sans intervention SQL manuelle supplémentaire.
+
+**SHA (backend, mergés dans `qitbxl`) :** `88e8dfba` (mapping partagé), `17e078c2` (merge, + retrait `questionId`), `e456b665` (suppression DELETE+INSERT MDR), `13a16d8e` (retrait `questionId` iso/fda), `111c64ee` (merge final).
+
+**Sauvegardes prises par l'utilisateur :** `qara_prod_avant_normalisation_roles_2026-07-25_111034.sql` (avant), `qara_prod_etat_sain_post_fix_import_2026-07-26.sql` (après, état sain confirmé).
+
+**Comptage par référentiel en production (état sain, 473 questions) :** MDR 80, IVDR 72, FDA_QMSR 43, MDSAP 74, ISO13485 93, ISO14971 67, ISO9001 44.
+
+**Dette explicitement différée (non bloquante, actée par l'utilisateur) :** conditionnement de l'import par hash du corpus (éviter de ré-écrire à chaque déploiement si le fichier corpus n'a pas changé) — pattern déjà utilisé pour `_drizzle_migrations`, non implémenté à ce jour.
+
+## Point d'entrée unique "+ Nouvel audit" piloté par `referentiels` (2026-07-27)
+
+**Déclencheur :** test visuel en production par l'utilisateur après le correctif ci-dessus — le backend sert les 7 référentiels mais l'UI n'en exposait que 3 (MDR direct, ISO9001/13485 via le wizard ISO) ; IVDR/MDSAP/FDA_QMSR/ISO14971 n'apparaissaient nulle part malgré un backend fonctionnel. Cause : `iso-router.ts` (`ISO_STANDARDS` ligne ~36 + `getStandards` ligne ~196) hardcodait la liste à `["ISO9001","ISO13485"]`, doublement — pas piloté par la table `referentiels`.
+
+**Feu vert utilisateur** avec 3 précisions : migration `referentiels.enabled` explicitement signalée avant merge (ci-dessous), cartes de l'étape 0 groupées par `type`/triées par `id`/nom complet affiché, cartes mortes ISO14971 et FDA_QMSR repointées vers le générique sans toucher aux wizards dédiés MDR/ISO/FDA (plan E/F/H inchangé).
+
+### ⚠️ Migration en attente de merge — à signaler avant tout merge de `claude/qara-backend-referentiels-enabled`
+
+`drizzle/migrations/0029_referentiels_enabled.sql` : `ALTER TABLE referentiels ADD COLUMN IF NOT EXISTS enabled BOOLEAN NOT NULL DEFAULT true;` — additive, `DEFAULT true` donc aucun référentiel existant n'est masqué. **Elle s'appliquera en production au prochain déploiement une fois cette branche mergée**, via le pipeline standard (`apply-sql-migrations.ts`, même mécanisme que les migrations précédentes). `referentials.list` sans argument garde son comportement actuel (non cassant) ; le filtre `enabled=true` ne s'applique qu'à l'appel `{ enabledOnly: true }` utilisé par l'étape 0 du wizard générique. Commit backend : `bc659177`, branche `claude/qara-backend-referentiels-enabled` (poussée, **pas mergée** — en attente du feu vert).
+
+### Implémenté (frontend)
+
+- `GenericAuditWizard.tsx` : étape 0 ajoutée — affichée uniquement quand l'URL n'a pas de `?ref=`. Interroge `referentials.list({ enabledOnly: true })` (nouvel appel, distinct de l'appel non filtré déjà utilisé pour résoudre le référentiel par code — celui-ci reste non filtré pour qu'un lien `?ref=` direct continue de fonctionner même sur un référentiel désactivé du sélecteur). Cartes groupées par `type` (Règlements/Programmes/Normes, dans cet ordre), triées par `id` au sein de chaque groupe, nom complet de la table affiché (pas seulement le code). Clic sur une carte → `/audit/generic?ref=<code>`.
+- `Dashboard.tsx` : bouton "+ Nouvel audit" (header) et bouton "Lancer votre premier audit" → `/audit/generic` (au lieu de `/mdr/audit`). Carte FDA_QMSR → `/audit/generic?ref=FDA_QMSR` (au lieu de `/fda`, qui ne menait à aucun flux de création). Carte ISO14971 → `/audit/generic?ref=ISO14971` (au lieu de `/iso/audit`, qui ne supporte pas ce référentiel). Cartes MDR, ISO13485, ISO9001 inchangées (plan E/F/H).
+- `AuditsList.tsx` : bouton "+ Nouvel Audit" (les 2 occurrences, liste pleine et état vide) → `/audit/generic`.
+- `App.tsx` : redirections `/audit/new` et `/audit/create` → `/audit/generic` (au lieu de `/mdr/audit`).
+
+Commit : `d1cb309` sur `claude/qara-frontend-generic-entrypoint` (issue de `main`, poussée, **pas mergée** — en attente du feu vert).
+
+### Preuve (Playwright, backend+frontend+MariaDB locaux, aucune simulation)
+
+Inscription d'un utilisateur de test + onboarding complet (MDR/fabricant/UE) → dashboard. Puis :
+1. **Entrée sans `?ref=`** : clic sur "+ Nouvel audit" (header) → `/audit/generic` → étape 0 affichée avec 3 groupes (Règlements : MDR/IVDR/FDA_QMSR ; Programmes : MDSAP ; Normes : ISO13485/14971/9001), noms complets visibles, triés par id. Clic sur "Règlement (UE) 2017/746 (IVDR)" → `/audit/generic?ref=IVDR` → formulaire de création → audit créé → **72 questions réelles affichées** (conforme au comptage attendu fabricant/IVDR). Réponse "Conforme" enregistrée sur la 1ère question → score recalculé en direct (0 %→100 %, 1 seule question répondue).
+2. **Entrée directe `?ref=MDSAP`** (simulant la carte dashboard) : formulaire → audit créé → **74 questions réelles affichées**.
+3. **Entrée directe `?ref=ISO14971`** (ancienne impasse dashboard) : formulaire → audit créé → **67 questions réelles affichées** — confirme que l'ancienne carte morte mène désormais à un flux d'audit complet et fonctionnel.
+
 ## Reste à faire, dans l'ordre
 
 **(a) Redéploiement Railway (backend) puis Vercel (frontend), suivi du test visuel des 7 référentiels.** Confirmé le 2026-07-25 par l'utilisateur : aucun des deux services n'a redéployé depuis les commits mergés (`dd5d9f94`/`deb1fed`). **C'est le blocage actuel, avant toute chose** — les étapes A→D sont dans le code mais inactives pour l'utilisateur final tant que ce redéploiement n'a pas eu lieu. Procédure de secours ci-dessous.
 
-**(b) Bouton "+ Nouvel audit" — statut confirmé, pas une supposition : encore câblé en dur vers `/mdr/audit`.** Vérifié en lisant le code actuel (pas de mémoire) : `client/src/pages/Dashboard.tsx:235` (`<Link href="/mdr/audit">`) et `client/src/pages/AuditsList.tsx:84` (idem) mènent tous deux exclusivement au wizard MDR, quel que soit le référentiel réellement actif pour l'utilisateur. Les redirections génériques `/audit/new` et `/audit/create` (`App.tsx`) pointent également vers `/mdr/audit`. Non touché par les étapes A→D — seules les cartes IVDR/MDSAP par référentiel ont été re-câblées, pas ce bouton générique. À corriger dans une étape ultérieure (probablement en le pointant vers un sélecteur de référentiel, ou directement vers le wizard générique une fois que MDR/ISO y seront aussi branchés — étape H).
+**(b) Bouton "+ Nouvel audit" — ✅ RÉSOLU le 2026-07-27, voir section dédiée ci-dessous.** (Historique conservé : était câblé en dur vers `/mdr/audit` dans `Dashboard.tsx`, `AuditsList.tsx` et les redirections `App.tsx` `/audit/new`/`/audit/create` — corrigé par le point d'entrée générique piloté par `referentiels`.)
 
 **(c) Étapes E→H, prévues dans l'architecture cible validée par l'utilisateur, non commencées :**
 - **E** — brancher ISO13485/ISO9001/ISO14971 sur le routeur générique, retirer `ISOAuditWizard.tsx` dédié (aujourd'hui encore actif et fonctionnel — ne pas casser avant qu'E ne soit prête).
