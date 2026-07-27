@@ -394,7 +394,9 @@ Nouvel endpoint : `reports.generateV2(auditId, format, language)` — upload S3 
 
 # Tâche 1 — Corpus, rôles économiques, wizard d'audit générique (étapes A→D)
 
-**Dernière mise à jour de cette section : 2026-07-25.** Une simple reprise "continue" sur une session neuve doit pouvoir repartir de ce seul état, sans autre contexte.
+**Dernière mise à jour de cette section : 2026-07-27.** Une simple reprise "continue" sur une session neuve doit pouvoir repartir de ce seul état, sans autre contexte.
+
+**Rappel IDs référentiels en production (new-claude), à ne jamais réinférer :** MDR 3, IVDR 4, FDA_QMSR 5, MDSAP 6, ISO13485 7, ISO14971 8, ISO9001 9. Jamais 1-7 (ça, c'est la numérotation du miroir local).
 
 ## Contexte et déclencheur
 
@@ -416,7 +418,7 @@ Test utilisateur en production : lancer un audit ISO 13485 depuis le dashboard r
 **Backend** : toutes ces commits sont mergées dans `claude/qara-compliance-audit-qitbxl`, HEAD `dd5d9f94` (vérifié par `git merge-base --is-ancestor`, pas supposé).
 **Frontend** : mergées dans `main`, HEAD `deb1fed` (même vérification).
 
-**❌ Déploiement Railway/Vercel : CONFIRMÉ NON DÉPLOYÉ au 2026-07-25.** Le code est poussé et mergé sur GitHub sur les bonnes branches de production (`qitbxl` HEAD `dd5d9f94`, `main` HEAD `deb1fed`), mais l'utilisateur a vérifié directement sur Railway et Vercel : **ni le backend ni le frontend n'ont été redéployés depuis ces commits.** Les étapes A→D existent donc uniquement dans le code source à ce stade — **elles ne sont pas actives pour un utilisateur de l'application en production tant que ce redéploiement n'a pas eu lieu.** La migration de données (normalisation des rôles), elle, est bien active en base — c'est uniquement le code qui manque à l'appel. Procédure de redéploiement manuel fournie ci-dessous ; à exécuter par l'utilisateur (aucun redéploiement effectué par l'assistant, conformément à la consigne).
+**✅ Déploiement Railway/Vercel : CONFIRMÉ DÉPLOYÉ EN PRODUCTION le 2026-07-27.** Statut mis à jour : non déployé au 2026-07-25 (voir historique ci-dessus, conservé pour traçabilité), puis confirmé déployé par l'utilisateur le 2026-07-27 — le code A→D (routeur d'audit générique, IVDR/MDSAP fonctionnels de bout en bout, module partagé `resolveProcessDbIds`) tourne réellement en production, pas seulement en local. Ceci couvre également le correctif de l'incident import-corpus (section dédiée ci-dessous), confirmé auto-réparé par le redéploiement lui-même. **Ce qui reste non déployé à ce stade est exclusivement le chantier "point d'entrée unique" décrit plus bas (branches poussées, pas mergées, en attente du feu vert utilisateur).**
 
 ### Migration de données (économique role) — ✅ exécutée et vérifiée en production new-claude
 
@@ -477,17 +479,35 @@ Inscription d'un utilisateur de test + onboarding complet (MDR/fabricant/UE) →
 2. **Entrée directe `?ref=MDSAP`** (simulant la carte dashboard) : formulaire → audit créé → **74 questions réelles affichées**.
 3. **Entrée directe `?ref=ISO14971`** (ancienne impasse dashboard) : formulaire → audit créé → **67 questions réelles affichées** — confirme que l'ancienne carte morte mène désormais à un flux d'audit complet et fonctionnel.
 
-## Reste à faire, dans l'ordre
+## Reste à faire, par priorité (ordre donné par l'utilisateur le 2026-07-27)
 
-**(a) Redéploiement Railway (backend) puis Vercel (frontend), suivi du test visuel des 7 référentiels.** Confirmé le 2026-07-25 par l'utilisateur : aucun des deux services n'a redéployé depuis les commits mergés (`dd5d9f94`/`deb1fed`). **C'est le blocage actuel, avant toute chose** — les étapes A→D sont dans le code mais inactives pour l'utilisateur final tant que ce redéploiement n'a pas eu lieu. Procédure de secours ci-dessous.
+**Contexte de cette liste :** le code A→D est confirmé déployé en production (backend + frontend), pas seulement mergé sur GitHub — voir section "État exact" ci-dessus. Les trois points ci-dessous sont ce qui reste, dans l'ordre exact demandé par l'utilisateur pour reprendre le travail sur une session neuve.
 
-**(b) Bouton "+ Nouvel audit" — ✅ RÉSOLU le 2026-07-27, voir section dédiée ci-dessous.** (Historique conservé : était câblé en dur vers `/mdr/audit` dans `Dashboard.tsx`, `AuditsList.tsx` et les redirections `App.tsx` `/audit/new`/`/audit/create` — corrigé par le point d'entrée générique piloté par `referentiels`.)
+### 1. (PRIORITAIRE) Point d'entrée wizard générique — construit et testé, en attente de merge/déploiement
 
-**(c) Étapes E→H, prévues dans l'architecture cible validée par l'utilisateur, non commencées :**
+**Statut réel, pour éviter toute ambiguïté à la reprise :** ce chantier a été **entièrement construit et testé** en session (voir section "Point d'entrée unique..." ci-dessus pour le détail complet), mais **n'est pas encore mergé ni déployé** — c'est donc lui qui reste concrètement à faire pour que le bouton "+ Nouvel audit" cesse d'être câblé en dur vers MDR en production.
+
+- Branche backend `claude/qara-backend-referentiels-enabled` (commit `bc659177`) : migration additive `referentiels.enabled` + filtre optionnel `referentials.list({ enabledOnly: true })`. **Poussée, pas mergée.**
+- Branche frontend `claude/qara-frontend-generic-entrypoint` (commits `d1cb309` + `493844f`) : étape 0 du `GenericAuditWizard.tsx` (sélecteur de référentiel groupé par type/trié par id/nom complet), bouton "+ Nouvel audit" (header + AuditsList + redirections `/audit/new`/`/audit/create`) repointé vers `/audit/generic`, cartes mortes ISO14971/FDA_QMSR corrigées. **Poussée, pas mergée.**
+- Testé en local par Playwright (backend+frontend+MariaDB locaux, pas de simulation) : entrée sans `?ref=` → étape 0 → IVDR choisi → 72 questions réelles ; `?ref=MDSAP` direct → 74 questions ; `?ref=ISO14971` direct (ancienne impasse) → 67 questions ; réponse enregistrée + score recalculé en direct.
+- **Reste à faire concrètement :** feu vert utilisateur pour merger les deux branches dans `qitbxl`/`main`, puis redéploiement Railway/Vercel, puis test visuel en production (même grille que le test du 2026-07-27 mais sur `frontend-qara.vercel.app`).
+- Sans ce merge, IVDR/MDSAP/FDA_QMSR/ISO14971 restent **fonctionnels côté backend mais inatteignables d'un clic** pour un utilisateur réel — seuls les 7 URLs directes `?ref=<CODE>` marchent déjà en production aujourd'hui.
+
+### 2. Étape H — bascule de MDR sur le routeur générique (parité à prouver)
+
+Dernière étape de la migration validée par l'utilisateur (E/F/G restent avant elle dans l'architecture cible, voir liste ci-dessous, mais H est la priorité 2 explicitement demandée car c'est le seul parcours qui porte des audits réels existants) : basculer `MDRAudit.tsx`/`mdr-router.ts` sur `audit-router.ts` générique, avec vérification de parité rigoureuse sur les audits réels existants (mêmes questions servies, même score recalculé) avant toute suppression de la logique MDR dupliquée. Non commencée à ce stade.
+
+### 3. Warning React (cosmétique)
+
+Signalé par l'utilisateur, nature exacte non encore diagnostiquée par l'assistant à ce stade — probablement un warning de console observé pendant son propre test visuel en production (pas reproduit ni investigué en session). **Premier réflexe à la reprise : demander à l'utilisateur le message exact du warning (texte de la console + page/action qui le déclenche) avant toute tentative de correction**, pour éviter de corriger le mauvais warning ou d'en introduire un autre par erreur.
+
+### Étapes E/F/G restantes, hors des 3 priorités ci-dessus mais toujours dans l'architecture cible validée
+
 - **E** — brancher ISO13485/ISO9001/ISO14971 sur le routeur générique, retirer `ISOAuditWizard.tsx` dédié (aujourd'hui encore actif et fonctionnel — ne pas casser avant qu'E ne soit prête).
 - **F** — brancher FDA_QMSR sur le routeur générique ; `fda-router.ts::createAudit` existe déjà côté backend mais n'est appelé par aucune page frontend (le composant `FDAAudit.tsx` qui l'utilisait a été supprimé à l'étape B car jamais routé) — à réutiliser ou remplacer par le générique.
 - **G** — étapes conditionnelles par référentiel dans le wizard générique (classe DM MDR/IVDR, voie 510(k)/PMA FDA, gradation MDSAP), pilotées par la table `referentiels`.
-- **H** — bascule finale de MDR (`MDRAudit.tsx`/`mdr-router.ts`) sur le générique, avec vérification de parité sur les audits réels existants avant suppression de la logique dupliquée. Explicitement la dernière étape, seul parcours portant des audits réels.
+
+### Autres restes-à-faire, non priorisés par l'utilisateur (voir historique de conversation pour le détail)
 
 **(d) Les 141 groupes de questions divergentes** (Tâche 1 originale, classification en 3 types — reformulation fusionnable / angles d'audit réellement distincts / incohérence de criticité à corriger — analyse déjà livrée en conversation, traitement encore à exécuter) **et, en lien direct, un correctif du moteur de score pour éviter un double comptage par `questionKey`** si des groupes venaient à être consolidés (point signalé par l'utilisateur, à traiter ensemble — le mécanisme précis reste à concevoir).
 
