@@ -461,7 +461,9 @@ Cette migration de données est indépendante du déploiement du code — elle e
 
 ### ⚠️ Migration en attente de merge — à signaler avant tout merge de `claude/qara-backend-referentiels-enabled`
 
-`drizzle/migrations/0029_referentiels_enabled.sql` : `ALTER TABLE referentiels ADD COLUMN IF NOT EXISTS enabled BOOLEAN NOT NULL DEFAULT true;` — additive, `DEFAULT true` donc aucun référentiel existant n'est masqué. **Elle s'appliquera en production au prochain déploiement une fois cette branche mergée**, via le pipeline standard (`apply-sql-migrations.ts`, même mécanisme que les migrations précédentes). `referentials.list` sans argument garde son comportement actuel (non cassant) ; le filtre `enabled=true` ne s'applique qu'à l'appel `{ enabledOnly: true }` utilisé par l'étape 0 du wizard générique. Commit backend : `bc659177`, branche `claude/qara-backend-referentiels-enabled` (poussée, **pas mergée** — en attente du feu vert).
+`drizzle/migrations/0029_referentiels_enabled.sql` : `ALTER TABLE referentiels ADD COLUMN IF NOT EXISTS enabled BOOLEAN NOT NULL DEFAULT true;` — additive, `DEFAULT true` donc aucun référentiel existant n'est masqué. **Elle s'appliquera en production au prochain déploiement une fois cette branche mergée**, via le pipeline standard (`apply-sql-migrations.ts`, même mécanisme que les migrations précédentes). `referentials.list` sans argument garde son comportement actuel (non cassant) ; le filtre `enabled=true` ne s'applique qu'à l'appel `{ enabledOnly: true }` utilisé par l'étape 0 du wizard générique.
+
+**✅ MERGÉ le 2026-07-27** — `bc659177` mergé dans `claude/qara-compliance-audit-qitbxl` via le merge commit `ac361a50`, poussé sur GitHub. **Redéploiement Railway et vérification live restant à faire par l'utilisateur** (voir section "Suivi du déploiement du point d'entrée générique" ci-dessous — accès réseau sortant vers Railway/Vercel bloqué depuis cet environnement, politique d'egress organisationnelle, 403 confirmé).
 
 ### Implémenté (frontend)
 
@@ -470,7 +472,43 @@ Cette migration de données est indépendante du déploiement du code — elle e
 - `AuditsList.tsx` : bouton "+ Nouvel Audit" (les 2 occurrences, liste pleine et état vide) → `/audit/generic`.
 - `App.tsx` : redirections `/audit/new` et `/audit/create` → `/audit/generic` (au lieu de `/mdr/audit`).
 
-Commit : `d1cb309` sur `claude/qara-frontend-generic-entrypoint` (issue de `main`, poussée, **pas mergée** — en attente du feu vert).
+Commit : `d1cb309` sur `claude/qara-frontend-generic-entrypoint` (issue de `main`).
+
+**✅ MERGÉ le 2026-07-27** — mergé dans `main` via le merge commit `9dfd7f0`, poussé sur GitHub. **Redéploiement Vercel et vérification live restant à faire par l'utilisateur** (même limitation réseau que le backend, voir ci-dessous).
+
+### ⏳ Suivi du déploiement du point d'entrée générique — à faire par l'utilisateur (accès réseau bloqué depuis cet environnement)
+
+**Constat, pas une supposition :** j'ai tenté `curl` vers `https://backend-qara-new-claude.up.railway.app` et `https://frontend-qara.vercel.app` depuis cet environnement — les deux sont bloqués par la politique d'egress réseau de la session (403 confirmé via `$HTTPS_PROXY/__agentproxy/status`, `connect_rejected`, "policy denial"). Ce n'est pas un bug à contourner (consigne explicite du proxy : ne pas retenter, signaler l'hôte bloqué) — je ne peux donc **ni vérifier le déploiement Railway/Vercel, ni exécuter le test bout-en-bout sur les vraies URLs de production**. Les deux merges (backend `ac361a50`, frontend `9dfd7f0`) sont faits et poussés ; tout ce qui suit reste à faire par l'utilisateur.
+
+**1. Vérifier Railway (backend) :**
+```
+curl https://backend-qara-new-claude.up.railway.app/trpc/iso.getStandards
+```
+Attendu : réponse avec des `referentialId` numériques (pas de wizard ISO séparé qui hardcode encore la liste — si la réponse ne contient que ISO9001/13485 sans `referentialId` numérique, le déploiement n'a probablement pas encore propagé).
+```
+curl https://backend-qara-new-claude.up.railway.app/trpc/referentials.list
+```
+Attendu : les 7 référentiels, chacun avec un champ `enabled:true` (absence de ce champ = migration 0029 pas encore appliquée, ne pas continuer, revérifier Railway → Deployments).
+```
+curl "https://backend-qara-new-claude.up.railway.app/trpc/referentials.list?input=%7B%22enabledOnly%22%3Atrue%7D"
+```
+Attendu : les mêmes 7 (aucun désactivé actuellement).
+
+**2. Vérifier Vercel (frontend), seulement après le backend confirmé :** ouvrir `https://frontend-qara.vercel.app/dashboard`, cliquer sur "+ Nouvel audit" (header) → doit ouvrir `/audit/generic` avec l'étape 0 (3 groupes : Règlements/Programmes/Normes, 7 cartes), pas le wizard MDR.
+
+**3. Test bout-en-bout des 7 référentiels, par le bouton "+ Nouvel audit" du dashboard (pas d'URL directe), pour chacun :**
+
+| Référentiel | ID prod attendu | Étape 0 le propose ? | Rôle transmis ? | Questions affichées ? |
+|---|---|---|---|---|
+| MDR | 3 | | | |
+| IVDR | 4 | | | |
+| FDA_QMSR | 5 | | | |
+| MDSAP | 6 | | | |
+| ISO13485 | 7 | | | |
+| ISO14971 | 8 | | | |
+| ISO9001 | 9 | | | |
+
+(Tableau à remplir par l'utilisateur lors de son test visuel — comptages de questions attendus par référentiel déjà documentés plus haut dans ce fichier : MDR 74/fabricant, IVDR 72/fabricant, MDSAP 74/fabricant, ISO13485/9001/14971 selon rôle — voir section "Vérifications post-C".)
 
 ### Preuve (Playwright, backend+frontend+MariaDB locaux, aucune simulation)
 
@@ -511,15 +549,13 @@ Testé empiriquement (pas supposé) : j'ai fait tourner temporairement le backen
 
 **Contexte de cette liste :** le code A→D est confirmé déployé en production (backend + frontend), pas seulement mergé sur GitHub — voir section "État exact" ci-dessus. Les trois points ci-dessous sont ce qui reste, dans l'ordre exact demandé par l'utilisateur pour reprendre le travail sur une session neuve.
 
-### 1. (PRIORITAIRE) Point d'entrée wizard générique — construit et testé, en attente de merge/déploiement
+### 1. (PRIORITAIRE) Point d'entrée wizard générique — ✅ MERGÉ le 2026-07-27, redéploiement + test visuel restant à faire par l'utilisateur
 
-**Statut réel, pour éviter toute ambiguïté à la reprise :** ce chantier a été **entièrement construit et testé** en session (voir section "Point d'entrée unique..." ci-dessus pour le détail complet), mais **n'est pas encore mergé ni déployé** — c'est donc lui qui reste concrètement à faire pour que le bouton "+ Nouvel audit" cesse d'être câblé en dur vers MDR en production.
+**Statut réel, pour éviter toute ambiguïté à la reprise :** construit, testé en local, **et maintenant mergé** sur les deux branches de production avec feu vert explicite de l'utilisateur :
+- Backend : `bc659177` mergé dans `claude/qara-compliance-audit-qitbxl` via `ac361a50`.
+- Frontend : `d1cb309` mergé dans `main` via `9dfd7f0`.
 
-- Branche backend `claude/qara-backend-referentiels-enabled` (commit `bc659177`) : migration additive `referentiels.enabled` + filtre optionnel `referentials.list({ enabledOnly: true })`. **Poussée, pas mergée.**
-- Branche frontend `claude/qara-frontend-generic-entrypoint` (commits `d1cb309` + `493844f`) : étape 0 du `GenericAuditWizard.tsx` (sélecteur de référentiel groupé par type/trié par id/nom complet), bouton "+ Nouvel audit" (header + AuditsList + redirections `/audit/new`/`/audit/create`) repointé vers `/audit/generic`, cartes mortes ISO14971/FDA_QMSR corrigées. **Poussée, pas mergée.**
-- Testé en local par Playwright (backend+frontend+MariaDB locaux, pas de simulation) : entrée sans `?ref=` → étape 0 → IVDR choisi → 72 questions réelles ; `?ref=MDSAP` direct → 74 questions ; `?ref=ISO14971` direct (ancienne impasse) → 67 questions ; réponse enregistrée + score recalculé en direct.
-- **Reste à faire concrètement :** feu vert utilisateur pour merger les deux branches dans `qitbxl`/`main`, puis redéploiement Railway/Vercel, puis test visuel en production (même grille que le test du 2026-07-27 mais sur `frontend-qara.vercel.app`).
-- Sans ce merge, IVDR/MDSAP/FDA_QMSR/ISO14971 restent **fonctionnels côté backend mais inatteignables d'un clic** pour un utilisateur réel — seuls les 7 URLs directes `?ref=<CODE>` marchent déjà en production aujourd'hui.
+**Ce qui reste concrètement, et qui n'a PAS pu être fait par l'assistant (accès réseau sortant vers Railway/Vercel bloqué depuis cet environnement, 403 confirmé, politique d'egress organisationnelle) :** confirmer que Railway et Vercel ont bien redéployé ces commits, puis dérouler le test bout-en-bout des 7 référentiels par le bouton "+ Nouvel audit" du dashboard (pas d'URL directe). Voir la section "⏳ Suivi du déploiement..." juste au-dessus pour les commandes exactes et le tableau à remplir. **Tant que ce redéploiement n'est pas confirmé, considérer que le point d'entrée générique n'est pas encore actif pour un utilisateur réel**, même si le code est mergé sur GitHub — même règle que pour les étapes A→D en son temps.
 
 ### 2. Étape H — bascule de MDR sur le routeur générique (parité à prouver)
 
