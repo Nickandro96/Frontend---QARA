@@ -479,6 +479,32 @@ Inscription d'un utilisateur de test + onboarding complet (MDR/fabricant/UE) →
 2. **Entrée directe `?ref=MDSAP`** (simulant la carte dashboard) : formulaire → audit créé → **74 questions réelles affichées**.
 3. **Entrée directe `?ref=ISO14971`** (ancienne impasse dashboard) : formulaire → audit créé → **67 questions réelles affichées** — confirme que l'ancienne carte morte mène désormais à un flux d'audit complet et fonctionnel.
 
+### Fonctionnement exact — réponses précises pour la reprise (2026-07-27)
+
+**Q1 — Le bouton propose-t-il bien les 7 référentiels activés, piloté par `referentiels` ?**
+Oui, avec une précision sur la forme exacte du parcours (ce n'est pas un enchaînement séquentiel référentiel → rôle → processus → métadonnées en 4 écrans distincts, mais 2 écrans) :
+- **Écran 1 (étape 0, nouveau)** : sélection du référentiel — cartes générées dynamiquement depuis `referentials.list({ enabledOnly: true })`, groupées par `type` (Règlements/Programmes/Normes), triées par `id`, nom complet de la table affiché. Aujourd'hui les 7 référentiels ont `enabled=true` (valeur par défaut de la migration), donc les 7 apparaissent. Si un référentiel est désactivé un jour (`enabled=false`), il disparaît de cet écran sans qu'aucun code ne soit à retoucher.
+- **Écran 2 (formulaire de création, préexistant depuis l'étape D, inchangé par ce chantier)** : un seul formulaire réunissant nom de l'audit, site audité, **rôle économique (obligatoire)**, et processus (tous / sélection manuelle) — pas des écrans séparés. Bouton "Créer l'audit" envoie tout en un seul appel `audit.create`.
+- Donc : référentiel piloté par table ✅, mais rôle+processus+métadonnées sont un seul écran, pas 3 étapes distinctes. Si une segmentation en étapes successives est voulue (façon onboarding), c'est un chantier de plus, non fait ici — dis-le si c'est ce que tu attendais.
+
+**Q2 — Le rôle économique est-il bien transmis au filtre, sans réintroduire le défaut de l'ancien wizard ISO ?**
+Oui, vérifié à deux niveaux, pas seulement supposé :
+- **Frontend** : `GenericAuditWizard.tsx` bloque la création tant que `economicRole` n'est pas sélectionné (`isFormValid` inclut `!!economicRole` ; `handleCreate` revérifie et affiche une erreur explicite "Rôle économique requis" si vide) — contrairement à l'ancien `ISOAuditWizard.tsx` qui ne transmettait jamais `economicRole` du tout (`economicRoleSource` hardcodé à `null` côté `iso-router.ts`, defaut d'origine documenté dans la Tâche 1).
+- **Backend + preuve empirique** : `economicRole` est envoyé tel quel à `audit.create`, stocké sur l'audit, puis utilisé par `getQuestionsForAudit`/`fetchAuditScopedQuestions` pour filtrer. Preuve déjà produite cette session (étape D + ce chantier) : IVDR/fabricant → 72 questions, IVDR/{distributeur, mandataire, importateur} → 0 ; MDSAP/fabricant → 74, autres rôles → 0. Si le rôle n'était pas transmis, ces audits recevraient tous le même total (comme le faisait l'ancien wizard ISO) — ce n'est pas le cas.
+
+**Q3 — Ordre de déploiement backend/frontend, et vérifications post-merge.**
+Testé empiriquement (pas supposé) : j'ai fait tourner temporairement le backend actuellement en production (commit `111c64ee`, celui qui n'a **pas** le paramètre `enabledOnly`) et je lui ai envoyé un appel `referentials.list` avec `{ enabledOnly: true }` — la procédure `referentials.list` de cette version n'a aucun schéma `.input()` défini, donc tRPC ignore silencieusement le paramètre inconnu et renvoie la liste complète, sans erreur (HTTP 200, 7 référentiels non filtrés). **Conclusion : l'ordre de déploiement n'est pas bloquant dans un sens comme dans l'autre** :
+- Si le **frontend** (`generic-entrypoint`) est déployé avant le **backend** (`referentiels-enabled`) : l'étape 0 s'affiche quand même, simplement non filtrée (tous les référentiels visibles, y compris un éventuel désactivé — sans impact aujourd'hui puisqu'aucun n'est désactivé) — dégradation silencieuse et sans erreur, pas une panne.
+- Si le **backend** est déployé avant le **frontend** : `referentials.list` accepte le nouveau paramètre mais personne ne l'envoie encore (l'ancien bouton "+ Nouvel audit" pointe toujours vers `/mdr/audit`) — aucun effet visible, comportement 100 % inchangé jusqu'au déploiement frontend.
+- **Ordre recommandé malgré tout, par cohérence de calendrier (pas par nécessité technique) : backend `referentiels-enabled` d'abord, puis frontend `generic-entrypoint`.**
+
+**Vérifications post-merge à faire (dans l'ordre) :**
+1. `curl https://<backend-prod>/trpc/referentials.list` (sans argument) → doit renvoyer les 7 référentiels avec les IDs de production (MDR=3…ISO9001=9) et un champ `enabled:true` sur chacun (colonne absente = migration non appliquée, à vérifier avant de continuer).
+2. `curl "https://<backend-prod>/trpc/referentials.list?input=%7B%22enabledOnly%22%3Atrue%7D"` → doit renvoyer les mêmes 7 (aucun désactivé actuellement).
+3. Test visuel frontend : bouton "+ Nouvel audit" (header dashboard) → doit ouvrir `/audit/generic` avec l'étape 0 (3 groupes visibles), pas le wizard MDR.
+4. Cliquer IVDR depuis l'étape 0 (référentiel jamais atteint par ce bouton avant ce chantier) → créer un audit fabricant → confirmer que des questions réelles s'affichent (72 attendues) et que le score se met à jour après une réponse.
+5. Vérifier les cartes ISO14971 et FDA_QMSR du dashboard → doivent ouvrir un formulaire de création, plus une impasse.
+
 ## Reste à faire, par priorité (ordre donné par l'utilisateur le 2026-07-27)
 
 **Contexte de cette liste :** le code A→D est confirmé déployé en production (backend + frontend), pas seulement mergé sur GitHub — voir section "État exact" ci-dessus. Les trois points ci-dessous sont ce qui reste, dans l'ordre exact demandé par l'utilisateur pour reprendre le travail sur une session neuve.
