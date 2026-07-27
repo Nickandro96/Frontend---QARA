@@ -487,6 +487,8 @@ Oui, avec une précision sur la forme exacte du parcours (ce n'est pas un encha�
 - **Écran 2 (formulaire de création, préexistant depuis l'étape D, inchangé par ce chantier)** : un seul formulaire réunissant nom de l'audit, site audité, **rôle économique (obligatoire)**, et processus (tous / sélection manuelle) — pas des écrans séparés. Bouton "Créer l'audit" envoie tout en un seul appel `audit.create`.
 - Donc : référentiel piloté par table ✅, mais rôle+processus+métadonnées sont un seul écran, pas 3 étapes distinctes. Si une segmentation en étapes successives est voulue (façon onboarding), c'est un chantier de plus, non fait ici — dis-le si c'est ce que tu attendais.
 
+**✅ Décision utilisateur (2026-07-27) : l'écran unique (référentiel, puis site+rôle+processus+nom en un seul écran) convient par défaut, on part là-dessus.** La segmentation écran par écran n'est pas demandée à ce stade — l'utilisateur confirmera en début de session suivante si elle en veut une malgré tout, mais l'hypothèse de travail par défaut est : **pas de segmentation à construire.**
+
 **Q2 — Le rôle économique est-il bien transmis au filtre, sans réintroduire le défaut de l'ancien wizard ISO ?**
 Oui, vérifié à deux niveaux, pas seulement supposé :
 - **Frontend** : `GenericAuditWizard.tsx` bloque la création tant que `economicRole` n'est pas sélectionné (`isFormValid` inclut `!!economicRole` ; `handleCreate` revérifie et affiche une erreur explicite "Rôle économique requis" si vide) — contrairement à l'ancien `ISOAuditWizard.tsx` qui ne transmettait jamais `economicRole` du tout (`economicRoleSource` hardcodé à `null` côté `iso-router.ts`, defaut d'origine documenté dans la Tâche 1).
