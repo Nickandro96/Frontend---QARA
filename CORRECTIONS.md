@@ -481,7 +481,9 @@ Cette migration de données est indépendante du déploiement du code — elle e
 
 **✅ Redéploiement Railway confirmé réussi par l'utilisateur le 2026-07-27**, sur le commit `599618d9`. Backend en production avec la colonne `referentiels.enabled` en place. Incident clos.
 
-**Reste à faire par l'utilisateur (accès réseau bloqué depuis cet environnement, je ne peux pas les exécuter moi-même) :** les 3 commandes curl de vérification backend, puis le redéploiement/vérification Vercel (frontend, commit `9dfd7f0` sur `main`, toujours en attente de confirmation), puis le test bout-en-bout des 7 référentiels par le bouton "+ Nouvel audit" — voir section "⏳ Suivi du déploiement du point d'entrée générique" ci-dessous pour le détail exact et le tableau à remplir.
+**✅ Confirmé par l'utilisateur le 2026-07-27** (vérification faite de son côté sur new-claude, hors de cette conversation) : migration appliquée et enregistrée, idempotente, aucun décalage schéma/code. **Incident définitivement clos, production saine.**
+
+**Reste à faire par l'utilisateur (accès réseau bloqué depuis cet environnement, je ne peux pas les exécuter moi-même) :** redéploiement/vérification Vercel (frontend, commit `9dfd7f0` sur `main`), puis le test bout-en-bout des 7 référentiels par le bouton "+ Nouvel audit" — en cours au moment de cette mise à jour. Voir section "⏳ Suivi du déploiement du point d'entrée générique" ci-dessous pour le tableau à remplir.
 
 ### Implémenté (frontend)
 
@@ -599,7 +601,7 @@ Signalé par l'utilisateur, nature exacte non encore diagnostiquée par l'assist
 
 **(g) Échantillonnage intelligent** — mentionné par l'utilisateur comme reste à faire, nature exacte non détaillée à ce stade.
 
-**(h) Rangement final des branches/bases obsolètes** — inclut au minimum : la branche `claude/qara-compliance-audit-qitbxl` du dépôt frontend (vestige de l'époque qitbxl, confondue une fois avec `main` par erreur cette session — voir incident du 2026-07-24), l'environnement Railway "production" abandonné (`metro.proxy.rlwy.net:17616`, à ne jamais utiliser, distinct de new-claude), les deux wizards frontend orphelins déjà supprimés à l'étape B.
+**(h) Rangement final des branches/bases obsolètes** — inclut au minimum : la branche `claude/qara-compliance-audit-qitbxl` du dépôt frontend (vestige de l'époque qitbxl, confondue une fois avec `main` par erreur cette session — voir incident du 2026-07-24), l'environnement Railway "production" abandonné (`metro.proxy.rlwy.net:17616`, à ne jamais utiliser, distinct de new-claude), les deux wizards frontend orphelins déjà supprimés à l'étape B. **Ajout du 2026-07-27 (signalé par l'utilisateur) : un secret `DATABASE_URL` de workflow peut encore viser l'ancienne base `metro` — supprimer l'environnement production/metro lui-même pour qu'aucun workflow ne puisse plus le cibler, plutôt que de compter sur la seule discipline de ne pas l'utiliser.**
 
 ## Invariants à ne jamais réinférer — toujours relire ici avant toute requête/script
 
