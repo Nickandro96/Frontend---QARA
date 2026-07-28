@@ -465,7 +465,7 @@ Cette migration de données est indépendante du déploiement du code — elle e
 
 **✅ MERGÉ le 2026-07-27** — `bc659177` mergé dans `claude/qara-compliance-audit-qitbxl` via le merge commit `ac361a50`, poussé sur GitHub.
 
-### 🔴 Incident déploiement — migration 0029, syntaxe rejetée par le MySQL de production (2026-07-27) — ✅ CORRIGÉ
+### 🔴 Incident déploiement — migration 0029, syntaxe rejetée par le MySQL de production (2026-07-27) — ✅ CORRIGÉ ET REDÉPLOYÉ AVEC SUCCÈS
 
 **Symptôme :** premier déploiement Railway suite au merge `ac361a50` → crash du container pendant la phase de release. Logs : `ER_PARSE_ERROR` (1064) sur `0029_referentiels_enabled.sql`, `"You have an error in your SQL syntax ... near 'IF NOT EXISTS ...'"`. Container arrêté (`Stopping Container`), aucun nouveau déploiement retenté depuis (confirmé par l'utilisateur).
 
@@ -479,7 +479,9 @@ Cette migration de données est indépendante du déploiement du code — elle e
 
 **SHA :** `17ff514a` (correctif, branche `claude/qara-backend-fix-migration-0029-syntax`), mergé dans `qitbxl` via `599618d9`, poussé — feu vert utilisateur donné pour ce merge.
 
-**Redéploiement Railway et vérification live restant à faire par l'utilisateur** (voir section "Suivi du déploiement du point d'entrée générique" ci-dessous — accès réseau sortant vers Railway/Vercel bloqué depuis cet environnement, politique d'egress organisationnelle, 403 confirmé — je ne peux ni vérifier que ce nouveau déploiement passe, ni faire le test bout-en-bout moi-même).
+**✅ Redéploiement Railway confirmé réussi par l'utilisateur le 2026-07-27**, sur le commit `599618d9`. Backend en production avec la colonne `referentiels.enabled` en place. Incident clos.
+
+**Reste à faire par l'utilisateur (accès réseau bloqué depuis cet environnement, je ne peux pas les exécuter moi-même) :** les 3 commandes curl de vérification backend, puis le redéploiement/vérification Vercel (frontend, commit `9dfd7f0` sur `main`, toujours en attente de confirmation), puis le test bout-en-bout des 7 référentiels par le bouton "+ Nouvel audit" — voir section "⏳ Suivi du déploiement du point d'entrée générique" ci-dessous pour le détail exact et le tableau à remplir.
 
 ### Implémenté (frontend)
 
