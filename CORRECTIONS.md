@@ -463,7 +463,23 @@ Cette migration de données est indépendante du déploiement du code — elle e
 
 `drizzle/migrations/0029_referentiels_enabled.sql` : `ALTER TABLE referentiels ADD COLUMN IF NOT EXISTS enabled BOOLEAN NOT NULL DEFAULT true;` — additive, `DEFAULT true` donc aucun référentiel existant n'est masqué. **Elle s'appliquera en production au prochain déploiement une fois cette branche mergée**, via le pipeline standard (`apply-sql-migrations.ts`, même mécanisme que les migrations précédentes). `referentials.list` sans argument garde son comportement actuel (non cassant) ; le filtre `enabled=true` ne s'applique qu'à l'appel `{ enabledOnly: true }` utilisé par l'étape 0 du wizard générique.
 
-**✅ MERGÉ le 2026-07-27** — `bc659177` mergé dans `claude/qara-compliance-audit-qitbxl` via le merge commit `ac361a50`, poussé sur GitHub. **Redéploiement Railway et vérification live restant à faire par l'utilisateur** (voir section "Suivi du déploiement du point d'entrée générique" ci-dessous — accès réseau sortant vers Railway/Vercel bloqué depuis cet environnement, politique d'egress organisationnelle, 403 confirmé).
+**✅ MERGÉ le 2026-07-27** — `bc659177` mergé dans `claude/qara-compliance-audit-qitbxl` via le merge commit `ac361a50`, poussé sur GitHub.
+
+### 🔴 Incident déploiement — migration 0029, syntaxe rejetée par le MySQL de production (2026-07-27) — ✅ CORRIGÉ
+
+**Symptôme :** premier déploiement Railway suite au merge `ac361a50` → crash du container pendant la phase de release. Logs : `ER_PARSE_ERROR` (1064) sur `0029_referentiels_enabled.sql`, `"You have an error in your SQL syntax ... near 'IF NOT EXISTS ...'"`. Container arrêté (`Stopping Container`), aucun nouveau déploiement retenté depuis (confirmé par l'utilisateur).
+
+**Cause racine, trouvée en comparant à la migration précédente :** `0029` utilisait `ALTER TABLE referentiels ADD COLUMN IF NOT EXISTS enabled ...` — syntaxe acceptée par MariaDB (utilisée en local, d'où l'absence de détection avant déploiement) mais rejetée par le MySQL réel de production. La migration `0028` (déjà appliquée en production avec succès juste avant) n'utilise PAS `IF NOT EXISTS` — convention déjà établie dans ce dépôt, que je n'ai pas respectée en écrivant `0029`.
+
+**Impact base de données : aucun.** Erreur de syntaxe = requête rejetée avant toute exécution, transaction rollback. `referentiels.enabled` n'existe simplement pas encore en production — pas d'état partiel, rien à réparer en base.
+
+**Correctif :** retrait de `IF NOT EXISTS`, alignement sur la convention `0028`. En cas de ré-exécution future, la tolérance `ER_DUP_FIELDNAME` (1060) déjà présente dans `apply-sql-migrations.ts` absorbe silencieusement le cas "colonne déjà existante" — pas besoin de `IF NOT EXISTS` pour être idempotent, ce mécanisme le fait déjà.
+
+**Preuve (simulation locale de la logique exacte du script, transaction + hash + tolérance d'erreur) :** run 1 (colonne absente) → appliqué avec succès. Run 2 (colonne déjà présente, hash non pré-enregistré, simulant un second déploiement) → correctement absorbé par la tolérance `ER_DUP_FIELDNAME`, pas d'erreur fatale.
+
+**SHA :** `17ff514a` (correctif, branche `claude/qara-backend-fix-migration-0029-syntax`), mergé dans `qitbxl` via `599618d9`, poussé — feu vert utilisateur donné pour ce merge.
+
+**Redéploiement Railway et vérification live restant à faire par l'utilisateur** (voir section "Suivi du déploiement du point d'entrée générique" ci-dessous — accès réseau sortant vers Railway/Vercel bloqué depuis cet environnement, politique d'egress organisationnelle, 403 confirmé — je ne peux ni vérifier que ce nouveau déploiement passe, ni faire le test bout-en-bout moi-même).
 
 ### Implémenté (frontend)
 
