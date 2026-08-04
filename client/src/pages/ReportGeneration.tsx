@@ -5,42 +5,59 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { FileText, Download, Loader2, CheckCircle2, FileBarChart, FileSpreadsheet, ClipboardList, FolderArchive } from "lucide-react";
+import { Download, FileSpreadsheet, FileText, Languages, Loader2 } from "lucide-react";
+
+type ReportFormat = "pdf" | "word" | "excel";
+type ReportLanguage = "fr" | "en";
+
+const FORMAT_OPTIONS: Array<{
+  value: ReportFormat;
+  label: string;
+  description: string;
+  icon: typeof FileText;
+}> = [
+  {
+    value: "pdf",
+    label: "PDF",
+    description: "Document final, prêt à partager ou à archiver.",
+    icon: FileText,
+  },
+  {
+    value: "word",
+    label: "Word",
+    description: "Document modifiable pour compléter ou adapter le rapport.",
+    icon: FileText,
+  },
+  {
+    value: "excel",
+    label: "Excel",
+    description: "Tableaux de travail : synthèse, réponses, écarts, CAPA et preuves.",
+    icon: FileSpreadsheet,
+  },
+];
 
 export default function ReportGeneration() {
   const [location, navigate] = useLocation();
-
-
-  // Get auditId from URL query params
   const searchParams = new URLSearchParams(location.split("?")[1]);
   const auditIdParam = searchParams.get("auditId");
-  const auditId = auditIdParam ? parseInt(auditIdParam) : null;
+  const auditId = auditIdParam ? Number.parseInt(auditIdParam, 10) : null;
 
-  const [reportType, setReportType] = useState<"complete" | "executive" | "comparative" | "action_plan" | "evidence_index">("complete");
-  const [includeGraphs, setIncludeGraphs] = useState(true);
-  const [includeEvidence, setIncludeEvidence] = useState(true);
-  const [includeActionPlan, setIncludeActionPlan] = useState(true);
+  const [format, setFormat] = useState<ReportFormat>("pdf");
+  const [language, setLanguage] = useState<ReportLanguage>("fr");
 
-  const generateMutation = trpc.reports.generate.useMutation({
+  const generateMutation = trpc.reports.generateV2.useMutation({
     onSuccess: (data) => {
       toast({
-        title: "✅ Rapport généré avec succès",
-        description: `Le rapport a été généré et est disponible au téléchargement.`,
+        title: "Rapport généré",
+        description: "Le fichier est prêt et a été ajouté à votre historique.",
       });
-
-      // Download the file
-      window.open(data.fileUrl, "_blank");
-
-      // Navigate to reports history
-      setTimeout(() => {
-        navigate("/reports/history");
-      }, 1000);
+      window.open(data.fileUrl, "_blank", "noopener,noreferrer");
+      setTimeout(() => navigate("/reports/history"), 1000);
     },
     onError: (error) => {
       toast({
-        title: "❌ Erreur de génération",
+        title: "Impossible de générer le rapport",
         description: error.message,
         variant: "destructive",
       });
@@ -48,214 +65,121 @@ export default function ReportGeneration() {
   });
 
   const handleGenerate = () => {
-    if (!auditId) {
+    if (!auditId || Number.isNaN(auditId)) {
       toast({
-        title: "⚠️ Audit requis",
-        description: "Veuillez sélectionner un audit avant de générer un rapport.",
+        title: "Audit requis",
+        description: "Sélectionnez d'abord un audit.",
         variant: "destructive",
       });
       return;
     }
-
-    generateMutation.mutate({
-      auditId,
-      reportType,
-      includeGraphs,
-      includeEvidence,
-      includeActionPlan,
-    });
+    generateMutation.mutate({ auditId, format, language });
   };
 
-  const reportTypeOptions = [
-    {
-      value: "complete",
-      label: "Rapport Complet",
-      description: "Rapport d'audit complet avec toutes les sections (11 sections)",
-      icon: FileText,
-    },
-    {
-      value: "executive",
-      label: "Synthèse Direction",
-      description: "Rapport synthétique pour la direction (KPIs + constats prioritaires)",
-      icon: FileBarChart,
-    },
-    {
-      value: "action_plan",
-      label: "Plan d'Action",
-      description: "Plan d'action priorisé par criticité",
-      icon: ClipboardList,
-    },
-    {
-      value: "evidence_index",
-      label: "Index des Preuves",
-      description: "Liste complète des preuves avec liens cliquables",
-      icon: FolderArchive,
-    },
-    {
-      value: "comparative",
-      label: "Rapport Comparatif",
-      description: "Comparaison avec audits précédents (évolution temporelle)",
-      icon: FileSpreadsheet,
-    },
-  ];
-
-  const selectedOption = reportTypeOptions.find((opt) => opt.value === reportType);
+  const selectedFormat = FORMAT_OPTIONS.find((option) => option.value === format)!;
+  const FormatIcon = selectedFormat.icon;
 
   return (
-    <div className="container max-w-4xl py-8">
+    <div className="container max-w-3xl py-8">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2">Génération de Rapport d'Audit</h1>
+        <h1 className="mb-2 text-3xl font-bold">Générer le rapport d'audit</h1>
         <p className="text-muted-foreground">
-          Générez un rapport professionnel à partir de vos données d'audit (FDA/MDR/ISO 13485/ISO 9001).
+          Choisissez simplement le format du fichier et sa langue.
         </p>
       </div>
 
       <div className="grid gap-6">
-        {/* Report Type Selection */}
         <Card>
           <CardHeader>
-            <CardTitle>Type de Rapport</CardTitle>
-            <CardDescription>
-              Sélectionnez le type de rapport à générer selon vos besoins.
-            </CardDescription>
+            <CardTitle>Format du rapport</CardTitle>
+            <CardDescription>Le contenu et les résultats sont identiques dans les trois formats.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="reportType">Type</Label>
-              <Select value={reportType} onValueChange={(value: any) => setReportType(value)}>
-                <SelectTrigger id="reportType">
-                  <SelectValue placeholder="Sélectionner un type" />
+              <Label htmlFor="reportFormat">Format</Label>
+              <Select value={format} onValueChange={(value) => setFormat(value as ReportFormat)}>
+                <SelectTrigger id="reportFormat">
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {reportTypeOptions.map((option) => {
-                    const Icon = option.icon;
-                    return (
-                      <SelectItem key={option.value} value={option.value}>
-                        <div className="flex items-center gap-2">
-                          <Icon className="h-4 w-4" />
-                          <span>{option.label}</span>
-                        </div>
-                      </SelectItem>
-                    );
-                  })}
+                  {FORMAT_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
 
-            {selectedOption && (
-              <div className="p-4 bg-muted rounded-lg">
-                <div className="flex items-start gap-3">
-                  <selectedOption.icon className="h-5 w-5 mt-0.5 text-primary" />
-                  <div>
-                    <h4 className="font-medium mb-1">{selectedOption.label}</h4>
-                    <p className="text-sm text-muted-foreground">{selectedOption.description}</p>
-                  </div>
-                </div>
+            <div className="flex gap-3 rounded-lg bg-muted p-4">
+              <FormatIcon className="mt-0.5 h-5 w-5 text-primary" />
+              <div>
+                <p className="font-medium">{selectedFormat.label}</p>
+                <p className="text-sm text-muted-foreground">{selectedFormat.description}</p>
               </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Langue</CardTitle>
+            <CardDescription>Les titres, libellés et explications du rapport seront traduits.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-end gap-3">
+              <Languages className="mb-2 h-5 w-5 text-primary" />
+              <div className="w-full space-y-2">
+                <Label htmlFor="reportLanguage">Langue du rapport</Label>
+                <Select value={language} onValueChange={(value) => setLanguage(value as ReportLanguage)}>
+                  <SelectTrigger id="reportLanguage">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="fr">Français</SelectItem>
+                    <SelectItem value="en">English</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Audit sélectionné</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {auditId && !Number.isNaN(auditId) ? (
+              <p>Audit n°{auditId}</p>
+            ) : (
+              <p className="text-destructive">Aucun audit sélectionné.</p>
             )}
           </CardContent>
         </Card>
 
-        {/* Options */}
-        {reportType === "complete" && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Options Avancées</CardTitle>
-              <CardDescription>
-                Personnalisez le contenu du rapport complet.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="includeGraphs"
-                  checked={includeGraphs}
-                  onCheckedChange={(checked) => setIncludeGraphs(checked as boolean)}
-                />
-                <Label htmlFor="includeGraphs" className="cursor-pointer">
-                  Inclure les graphiques et tableaux (radar, histogrammes, heatmap)
-                </Label>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="includeEvidence"
-                  checked={includeEvidence}
-                  onCheckedChange={(checked) => setIncludeEvidence(checked as boolean)}
-                />
-                <Label htmlFor="includeEvidence" className="cursor-pointer">
-                  Inclure l'index des preuves avec liens cliquables
-                </Label>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="includeActionPlan"
-                  checked={includeActionPlan}
-                  onCheckedChange={(checked) => setIncludeActionPlan(checked as boolean)}
-                />
-                <Label htmlFor="includeActionPlan" className="cursor-pointer">
-                  Inclure le plan d'action priorisé
-                </Label>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Audit Info */}
-        {auditId && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Audit Sélectionné</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-2 text-sm">
-                <CheckCircle2 className="h-4 w-4 text-green-600" />
-                <span>Audit #{auditId}</span>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Generate Button */}
         <div className="flex justify-end gap-4">
           <Button variant="outline" onClick={() => navigate("/audits")}>
             Annuler
           </Button>
           <Button
             onClick={handleGenerate}
-            disabled={!auditId || generateMutation.isPending}
+            disabled={!auditId || Number.isNaN(auditId) || generateMutation.isPending}
             size="lg"
           >
             {generateMutation.isPending ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Génération en cours...
+                Génération en cours…
               </>
             ) : (
               <>
                 <Download className="mr-2 h-4 w-4" />
-                Générer le Rapport
+                Générer le rapport
               </>
             )}
           </Button>
         </div>
-
-        {/* Info Box */}
-        <Card className="border-blue-200 bg-blue-50">
-          <CardContent className="pt-6">
-            <div className="flex gap-3">
-              <FileText className="h-5 w-5 text-blue-600 mt-0.5" />
-              <div className="text-sm text-blue-900">
-                <p className="font-medium mb-1">📄 Format de sortie : PDF</p>
-                <p className="text-blue-700">
-                  Le rapport sera automatiquement téléchargé et sauvegardé dans votre historique. 
-                  Vous pourrez le consulter à tout moment depuis la page "Historique des Rapports".
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
       </div>
     </div>
   );
