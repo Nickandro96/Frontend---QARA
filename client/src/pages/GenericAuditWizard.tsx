@@ -20,7 +20,7 @@
  * dédié à réécrire.
  */
 import { useMemo, useState } from "react";
-import { useLocation, useSearch } from "wouter";
+import { Redirect, useLocation, useSearch } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -54,6 +54,14 @@ const RESPONSE_VALUES = [
   { value: "non_compliant", label: "Non conforme" },
   { value: "not_applicable", label: "Non applicable" },
 ];
+
+function dedicatedAuditPath(referentialCode: string): string | null {
+  const code = referentialCode.trim().toUpperCase();
+  if (code === "MDR") return "/mdr/audit";
+  if (code === "ISO9001") return "/iso/audit?standard=9001";
+  if (code === "ISO13485") return "/iso/audit?standard=13485";
+  return null;
+}
 
 export default function GenericAuditWizard() {
   const { isAuthenticated } = useAuth();
@@ -144,6 +152,8 @@ export default function GenericAuditWizard() {
 
   const isFormValid = !!siteId && auditName.trim().length > 0 && !!economicRole && !!referentiel;
 
+  const dedicatedPath = dedicatedAuditPath(referentialCode);
+
   const handleCreate = () => {
     if (!referentiel) {
       toast.error("❌ Référentiel introuvable", { description: `Code "${referentialCode}" non reconnu.` });
@@ -183,6 +193,10 @@ export default function GenericAuditWizard() {
         </Alert>
       </div>
     );
+  }
+
+  if (dedicatedPath) {
+    return <Redirect to={dedicatedPath} />;
   }
 
   // ---- Étape 0 : sélection du référentiel (point d'entrée générique) ----
@@ -226,7 +240,7 @@ export default function GenericAuditWizard() {
                     <Card
                       key={r.id}
                       className="cursor-pointer transition-colors hover:border-primary hover:shadow-md"
-                      onClick={() => setLocation(`/audit/generic?ref=${r.code}`)}
+                      onClick={() => setLocation(dedicatedAuditPath(String(r.code)) ?? `/audit/generic?ref=${r.code}`)}
                     >
                       <CardContent className="flex items-center justify-between gap-3 py-5">
                         <div>
