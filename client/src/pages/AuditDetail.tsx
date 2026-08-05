@@ -38,24 +38,49 @@ export default function AuditDetail() {
   // mécanisme que AuditHistory.tsx (CORRECTIONS.md LOT 5, BUG 1).
   const { data: referentialsData } = trpc.referentials.list.useQuery();
   const codeById = new Map(
-    (Array.isArray(referentialsData) ? referentialsData : []).map((r: any) => [r.id, String(r.code).toUpperCase()])
+    (Array.isArray(referentialsData) ? referentialsData : []).map((r: any) => [Number(r.id), String(r.code).toUpperCase()])
   );
 
-  const handleResumeAudit = () => {
+  const reopenAudit = trpc.audit.reopen.useMutation();
+
+  const handleResumeAudit = async () => {
     if (!audit) return;
-    const rawIds = (audit as any).referentialIds ? JSON.parse((audit as any).referentialIds) : [];
-    const codes = (Array.isArray(rawIds) ? rawIds : [])
-      .map((id: number) => codeById.get(id))
+    const referentialIds = (audit as any).referentialIds;
+    let rawIds: unknown[] = [];
+    if (Array.isArray(referentialIds)) {
+      rawIds = referentialIds;
+    } else if (typeof referentialIds === "string" && referentialIds.trim()) {
+      try {
+        const parsed = JSON.parse(referentialIds);
+        rawIds = Array.isArray(parsed) ? parsed : [];
+      } catch {
+        toast.error("Référentiels de l'audit illisibles");
+        return;
+      }
+    }
+    const codes = rawIds
+      .map((id) => codeById.get(Number(id)))
       .filter(Boolean) as string[];
 
-    if (codes.includes("MDR")) {
-      navigate(`/mdr/audit/${audit.id}`);
-    } else if (codes.includes("ISO9001") || codes.includes("ISO13485")) {
-      navigate(`/iso/audit/${audit.id}`);
-    } else if (codes.length === 0 && codeById.size === 0) {
+    if (codes.length === 0 && codeById.size === 0) {
       toast.error("Chargement des référentiels en cours, réessayez dans un instant");
-    } else {
-      toast.error("Reprise non disponible pour ce type d'audit pour le moment");
+      return;
+    }
+
+    try {
+      await reopenAudit.mutateAsync({ auditId: audit.id });
+
+      if (codes.includes("MDR")) {
+        navigate(`/mdr/audit/${audit.id}`);
+      } else if (codes.includes("ISO9001") || codes.includes("ISO13485")) {
+        navigate(`/iso/audit/${audit.id}`);
+      } else if (codes[0]) {
+        navigate(`/audit/generic?ref=${encodeURIComponent(codes[0])}&auditId=${audit.id}`);
+      } else {
+        toast.error("Référentiel de l'audit introuvable");
+      }
+    } catch (error: any) {
+      toast.error("Impossible de reprendre l'audit", { description: error?.message });
     }
   };
 
@@ -220,9 +245,9 @@ export default function AuditDetail() {
         </div>
         
         <div className="flex items-center gap-2">
-          {/* Resume button - shown for audits not yet completed/closed/cancelled */}
-          {!['completed', 'closed', 'cancelled'].includes(audit.status) && (
-            <Button size="lg" variant="outline" className="gap-2" onClick={handleResumeAudit}>
+          {/* closed is the only final lock; reopening restores in_progress */}
+          {audit.status !== 'closed' && (
+            <Button size="lg" variant="outline" className="gap-2" onClick={handleResumeAudit} disabled={reopenAudit.isPending}>
               <Clock className="h-5 w-5" />
               Reprendre l'audit
             </Button>
