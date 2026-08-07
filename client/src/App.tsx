@@ -1,3 +1,6 @@
+Exit code: 0
+Wall time: 1 seconds
+Output:
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactNode } from "react";
 import { Redirect, Route, Switch, useParams } from "wouter";
@@ -26,6 +29,7 @@ import Documents from "./pages/Documents";
 import FAQ from "./pages/FAQ";
 import FdaClassification from "./pages/FdaClassification";
 import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 import ISOAuditDrilldown from "./pages/ISOAuditDrilldown";
 import ISOAuditReview from "./pages/ISOAuditReview";
 import ISOAuditWizard from "./pages/ISOAuditWizard";
@@ -97,6 +101,9 @@ function Router() {
         <PublicPage>
           <ForgotPassword />
         </PublicPage>
+      </Route>
+      <Route path="/reset-password">
+        <ResetPassword />
       </Route>
 
       <Route path="/pricing" component={Pricing} />
@@ -264,10 +271,10 @@ function Router() {
         </ProtectedPage>
       </Route>
       {/*
-        Wizard générique (étape D, voir CORRECTIONS.md) : sert les
-        référentiels sans wizard dédié (IVDR, MDSAP) via le routeur
-        backend générique trpc.audit.* (referentialId-agnostique).
-        ?ref=IVDR ou ?ref=MDSAP résout le référentiel dynamiquement,
+        Wizard gÃ©nÃ©rique (Ã©tape D, voir CORRECTIONS.md) : sert les
+        rÃ©fÃ©rentiels sans wizard dÃ©diÃ© (IVDR, MDSAP) via le routeur
+        backend gÃ©nÃ©rique trpc.audit.* (referentialId-agnostique).
+        ?ref=IVDR ou ?ref=MDSAP rÃ©sout le rÃ©fÃ©rentiel dynamiquement,
         jamais d'ID en dur.
       */}
       <Route path="/audit/generic">
@@ -277,9 +284,9 @@ function Router() {
       </Route>
       {/*
         ISOAuditWizard.tsx navigue vers "/iso/qualification" quand la
-        qualification n'est pas complétée — route absente jusqu'ici (lien
+        qualification n'est pas complÃ©tÃ©e â€” route absente jusqu'ici (lien
         mort, voir CORRECTIONS.md LOT 3), alors que ISOQualification.tsx
-        existe déjà et utilise les vraies procédures iso.getQualification/
+        existe dÃ©jÃ  et utilise les vraies procÃ©dures iso.getQualification/
         saveQualification.
       */}
       <Route path="/iso/qualification">
@@ -398,3 +405,4 @@ export default function App() {
     </QueryClientProvider>
   );
 }
+
