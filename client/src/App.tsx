@@ -26,6 +26,7 @@ import Documents from "./pages/Documents";
 import FAQ from "./pages/FAQ";
 import FdaClassification from "./pages/FdaClassification";
 import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 import ISOAuditDrilldown from "./pages/ISOAuditDrilldown";
 import ISOAuditReview from "./pages/ISOAuditReview";
 import ISOAuditWizard from "./pages/ISOAuditWizard";
@@ -97,6 +98,9 @@ function Router() {
         <PublicPage>
           <ForgotPassword />
         </PublicPage>
+      </Route>
+      <Route path="/reset-password">
+        <ResetPassword />
       </Route>
 
       <Route path="/pricing" component={Pricing} />
@@ -398,3 +402,4 @@ export default function App() {
     </QueryClientProvider>
   );
 }
+
