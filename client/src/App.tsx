@@ -1,6 +1,3 @@
-Exit code: 0
-Wall time: 1.9 seconds
-Output:
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactNode } from "react";
 import { Redirect, Route, Switch, useParams } from "wouter";
