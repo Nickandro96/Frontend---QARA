@@ -1,5 +1,5 @@
 Exit code: 0
-Wall time: 1.1 seconds
+Wall time: 1.8 seconds
 Output:
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,7 +16,7 @@ export default function ForgotPassword() {
 
   const requestReset = trpc.system.requestPasswordReset.useMutation({
     onSuccess: () => setSent(true),
-    onError: () => setError("Impossible d'envoyer le lien pour le moment. RÃ©essayez plus tard."),
+    onError: () => setError("Impossible d'envoyer le lien pour le moment. Réessayez plus tard."),
   });
 
   const handleSubmit = (event: React.FormEvent) => {
