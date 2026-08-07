@@ -1,17 +1,29 @@
+Exit code: 0
+Wall time: 1.1 seconds
+Output:
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Shield } from "lucide-react";
+import { Loader2, Shield } from "lucide-react";
 import { useState } from "react";
 import { Link } from "wouter";
+import { trpc } from "@/lib/trpc";
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
+  const [error, setError] = useState("");
+
+  const requestReset = trpc.system.requestPasswordReset.useMutation({
+    onSuccess: () => setSent(true),
+    onError: () => setError("Impossible d'envoyer le lien pour le moment. RÃ©essayez plus tard."),
+  });
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
-    setSent(true);
+    setError("");
+    setSent(false);
+    requestReset.mutate({ email: email.trim() });
   };
 
   return (
@@ -46,8 +58,13 @@ export default function ForgotPassword() {
               </div>
             ) : null}
 
-            <Button type="submit" className="w-full">
-              Envoyer le lien
+            {error ? (
+              <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-600">{error}</div>
+            ) : null}
+
+            <Button type="submit" className="w-full" disabled={requestReset.isPending}>
+              {requestReset.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              {requestReset.isPending ? "Envoi..." : "Envoyer le lien"}
             </Button>
             <Link href="/login">
               <Button type="button" variant="ghost" className="w-full">
@@ -60,3 +77,4 @@ export default function ForgotPassword() {
     </main>
   );
 }
+
