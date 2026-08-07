@@ -1,5 +1,5 @@
 Exit code: 0
-Wall time: 1.3 seconds
+Wall time: 2.7 seconds
 Output:
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,14 +19,14 @@ export default function ResetPassword() {
   const resetPassword = trpc.system.resetPassword.useMutation({
     onSuccess: () => setDone(true),
     onError: (mutationError: { message?: string }) =>
-      setError(mutationError.message || "Impossible de rÃ©initialiser le mot de passe."),
+      setError(mutationError.message || "Impossible de réinitialiser le mot de passe."),
   });
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
     setError("");
-    if (!token) return setError("Le lien de rÃ©initialisation est incomplet.");
-    if (password.length < 6) return setError("Le mot de passe doit contenir au moins 6 caractÃ¨res.");
+    if (!token) return setError("Le lien de réinitialisation est incomplet.");
+    if (password.length < 6) return setError("Le mot de passe doit contenir au moins 6 caractères.");
     if (password !== confirmation) return setError("Les mots de passe ne correspondent pas.");
     resetPassword.mutate({ token, password });
   };
@@ -39,13 +39,13 @@ export default function ResetPassword() {
             <Shield className="h-6 w-6" />
           </div>
           <CardTitle>Choisir un nouveau mot de passe</CardTitle>
-          <CardDescription>Ce lien est valable 30 minutes et ne peut Ãªtre utilisÃ© qu'une fois.</CardDescription>
+          <CardDescription>Ce lien est valable 30 minutes et ne peut être utilisé qu'une fois.</CardDescription>
         </CardHeader>
         <CardContent>
           {done ? (
             <div className="space-y-4">
               <div className="rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-700">
-                Votre mot de passe a Ã©tÃ© rÃ©initialisÃ©.
+                Votre mot de passe a été réinitialisé.
               </div>
               <Link href="/login"><Button className="w-full">Se connecter</Button></Link>
             </div>
@@ -64,9 +64,9 @@ export default function ResetPassword() {
               {error ? <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-600">{error}</div> : null}
               <Button type="submit" className="w-full" disabled={!token || resetPassword.isPending}>
                 {resetPassword.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                {resetPassword.isPending ? "RÃ©initialisation..." : "RÃ©initialiser le mot de passe"}
+                {resetPassword.isPending ? "Réinitialisation..." : "Réinitialiser le mot de passe"}
               </Button>
-              {!token ? <p className="text-sm text-red-600">Ce lien ne contient aucun jeton de rÃ©initialisation.</p> : null}
+              {!token ? <p className="text-sm text-red-600">Ce lien ne contient aucun jeton de réinitialisation.</p> : null}
             </form>
           )}
         </CardContent>
