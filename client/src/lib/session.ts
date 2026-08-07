@@ -1,3 +1,6 @@
+Exit code: 0
+Wall time: 1 seconds
+Output:
 const RUNTIME_USER_INFO_KEY = "manus-runtime-user-info";
 const PUBLIC_ROUTES = new Set([
   "/",
@@ -5,6 +8,7 @@ const PUBLIC_ROUTES = new Set([
   "/signup",
   "/register",
   "/forgot-password",
+  "/reset-password",
   "/pricing",
   "/contact",
   "/faq",
@@ -38,3 +42,4 @@ export function redirectToLogin(returnTo = currentPath()) {
   if (PUBLIC_ROUTES.has(window.location.pathname)) return;
   window.location.assign(buildLoginUrl(returnTo));
 }
+
