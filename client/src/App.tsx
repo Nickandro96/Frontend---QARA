@@ -1,5 +1,5 @@
 Exit code: 0
-Wall time: 1 seconds
+Wall time: 1.9 seconds
 Output:
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactNode } from "react";
@@ -271,10 +271,10 @@ function Router() {
         </ProtectedPage>
       </Route>
       {/*
-        Wizard gÃ©nÃ©rique (Ã©tape D, voir CORRECTIONS.md) : sert les
-        rÃ©fÃ©rentiels sans wizard dÃ©diÃ© (IVDR, MDSAP) via le routeur
-        backend gÃ©nÃ©rique trpc.audit.* (referentialId-agnostique).
-        ?ref=IVDR ou ?ref=MDSAP rÃ©sout le rÃ©fÃ©rentiel dynamiquement,
+        Wizard générique (étape D, voir CORRECTIONS.md) : sert les
+        référentiels sans wizard dédié (IVDR, MDSAP) via le routeur
+        backend générique trpc.audit.* (referentialId-agnostique).
+        ?ref=IVDR ou ?ref=MDSAP résout le référentiel dynamiquement,
         jamais d'ID en dur.
       */}
       <Route path="/audit/generic">
@@ -284,9 +284,9 @@ function Router() {
       </Route>
       {/*
         ISOAuditWizard.tsx navigue vers "/iso/qualification" quand la
-        qualification n'est pas complÃ©tÃ©e â€” route absente jusqu'ici (lien
+        qualification n'est pas complétée — route absente jusqu'ici (lien
         mort, voir CORRECTIONS.md LOT 3), alors que ISOQualification.tsx
-        existe dÃ©jÃ  et utilise les vraies procÃ©dures iso.getQualification/
+        existe déjà et utilise les vraies procédures iso.getQualification/
         saveQualification.
       */}
       <Route path="/iso/qualification">
