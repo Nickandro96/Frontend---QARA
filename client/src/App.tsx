@@ -17,12 +17,14 @@ import AuditComparison from "./pages/AuditComparison";
 import AuditDetail from "./pages/AuditDetail";
 import AuditHistory from "./pages/AuditHistory";
 import AuditResults from "./pages/AuditResults";
+import AuditWizard from "./pages/AuditWizard";
 import AuditsList from "./pages/AuditsList";
 import Classification from "./pages/Classification";
 import Contact from "./pages/Contact";
 import Dashboard from "./pages/Dashboard";
 import Documents from "./pages/Documents";
 import FAQ from "./pages/FAQ";
+import FdaAudit from "./pages/FDAAudit";
 import FdaClassification from "./pages/FdaClassification";
 import ForgotPassword from "./pages/ForgotPassword";
 import ISOAuditDrilldown from "./pages/ISOAuditDrilldown";
@@ -134,7 +136,9 @@ function Router() {
         <Redirect to="/fda" />
       </Route>
       <Route path="/fda/audit">
-        <Redirect to="/audits" />
+        <ProtectedPage>
+          <FdaAudit />
+        </ProtectedPage>
       </Route>
       <Route path="/us/fda-qualification">
         <Redirect to="/fda" />
@@ -143,10 +147,10 @@ function Router() {
         <Redirect to="/fda" />
       </Route>
       <Route path="/us/fda-audit">
-        <Redirect to="/audits" />
+        <Redirect to="/fda/audit" />
       </Route>
       <Route path="/fda-audit">
-        <Redirect to="/audits" />
+        <Redirect to="/fda/audit" />
       </Route>
       <Route path="/fda-regulatory-watch">
         <Redirect to="/veille" />
@@ -267,10 +271,12 @@ function Router() {
         </ProtectedPage>
       </Route>
       <Route path="/audit/new">
-        <Redirect to="/mdr/audit" />
+        <ProtectedPage>
+          <AuditWizard />
+        </ProtectedPage>
       </Route>
       <Route path="/audit/create">
-        <Redirect to="/mdr/audit" />
+        <Redirect to="/audit/new" />
       </Route>
       <Route path="/audit/:id/results">
         <ProtectedPage>
@@ -279,7 +285,7 @@ function Router() {
       </Route>
       <Route path="/audit/:id" component={LegacyAuditRedirect} />
       <Route path="/audit">
-        <Redirect to="/audits" />
+        <Redirect to="/audit/new" />
       </Route>
 
       <Route path="/profile">
