@@ -472,6 +472,7 @@ export default function MDRAuditDrilldown() {
   };
 
   const goBackToWizard = () => setLocation("/mdr");
+  const goBackToAudits = () => setLocation("/audits");
 
   const loading = loadingContext || loadingQuestions || loadingResponses;
 
@@ -553,13 +554,13 @@ export default function MDRAuditDrilldown() {
               <div>
                 <div className="font-semibold">Aucune question</div>
                 <div className="text-sm text-muted-foreground">
-                  Aucune question n’a été trouvée pour cet audit (filtrage rôle/process/référentiel).
+                  Aucune question ne correspond à votre profil ou au périmètre sélectionné. Vérifiez que le corpus MDR est installé.
                 </div>
               </div>
             </div>
 
             <div className="mt-4 flex gap-2">
-              <Button onClick={goBackToWizard} variant="secondary">
+              <Button onClick={goBackToAudits} variant="secondary">
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 Retour
               </Button>
