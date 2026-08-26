@@ -249,7 +249,8 @@ export default function MDRAudit() {
 
       status: "draft",
 
-      referentialIds: [1],
+      // The backend resolves MDR from its stable code; SQL ids differ by environment.
+      referentialIds: [],
       processIds: selectedProcess === "all" ? [] : [selectedProcess],
 
       economicRole: selectedRole as any,
@@ -281,7 +282,7 @@ export default function MDRAudit() {
 
       status: "draft",
 
-      referentialIds: [1],
+      referentialIds: [],
       processIds: selectedProcess === "all" ? [] : [selectedProcess],
 
       economicRole: selectedRole as any,
@@ -321,7 +322,7 @@ export default function MDRAudit() {
 
         status: "in_progress",
 
-        referentialIds: [1],
+        referentialIds: [],
         processIds: selectedProcess === "all" ? [] : [selectedProcess],
 
         economicRole: selectedRole as any,
