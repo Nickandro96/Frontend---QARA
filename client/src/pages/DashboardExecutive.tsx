@@ -271,7 +271,7 @@ export default function DashboardExecutive() {
           </div>
 
           <div className="hidden md:flex items-center gap-3">
-            <Link href="/mdr/audit">
+            <Link href="/audit/new?referential=MDR">
               <Button className="bg-gradient-to-r from-blue-600 to-cyan-500 hover:opacity-95 shadow">
                 Lancer un audit MDR <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
