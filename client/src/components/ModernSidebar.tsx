@@ -55,7 +55,7 @@ export function ModernSidebar() {
       id: "audit",
       label: t("nav.auditEU") || "Audit MDR",
       icon: ClipboardCheck,
-      href: "/mdr/audit",
+      href: "/audit/new",
     },
     {
       id: "iso-qualification",
@@ -67,7 +67,7 @@ export function ModernSidebar() {
       id: "iso-audit",
       label: t("nav.auditISO") || "Audit ISO",
       icon: FileCheck,
-      href: "/iso/audit",
+      href: "/audit/new",
     },
     {
       id: "classification",
@@ -106,7 +106,7 @@ export function ModernSidebar() {
       id: "fda-audit",
       label: t("nav.auditFDA") || "FDA Audit",
       icon: ClipboardCheck,
-      href: "/fda/audit",
+      href: "/audit/new",
     },
     {
       id: "fda-dashboard",
