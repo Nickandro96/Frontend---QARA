@@ -29,8 +29,8 @@ import { Button } from "./ui/button";
 
 const menuItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
-  { icon: ClipboardCheck, label: "Audit MDR", path: "/mdr/audit" },
-  { icon: Award, label: "Audit ISO", path: "/iso/audit" },
+  { icon: ClipboardCheck, label: "Audit MDR", path: "/audit/new" },
+  { icon: Award, label: "Audit ISO", path: "/audit/new" },
   { icon: History, label: "Historique Audits", path: "/audit-history" },
   { icon: GitCompare, label: "Comparer Audits", path: "/audit/compare" },
   { icon: BarChart3, label: "Analytics", path: "/analytics" },
