@@ -50,7 +50,7 @@ const REFERENTIAL_DEFS: Omit<ReferenceCard, "score">[] = [
     tools: ["Audit", "Classe DM", "Rapport"],
     badgeBg: "#e8eefb",
     badgeColor: "#2563eb",
-    href: "/audit/generic?ref=MDR",
+    href: "/mdr/audit",
   },
   {
     key: "ivdr",
@@ -86,7 +86,7 @@ const REFERENTIAL_DEFS: Omit<ReferenceCard, "score">[] = [
     tools: ["Audit", "Rapport"],
     badgeBg: "#f0edfa",
     badgeColor: "#6d28d9",
-    href: "/audit/generic?ref=ISO13485",
+    href: "/iso/audit?standard=13485",
   },
 ];
 
@@ -107,7 +107,7 @@ const TRANSVERSE_DEFS: Omit<TransverseStandard, "score">[] = [
     description: "SMQ généraliste",
     badgeBg: "#eef1f5",
     badgeColor: "#475569",
-    href: "/audit/generic?ref=ISO9001",
+    href: "/iso/audit?standard=9001",
   },
 ];
 
