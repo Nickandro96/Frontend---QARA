@@ -45,40 +45,9 @@ export default function AuditDetail() {
 
   const handleResumeAudit = async () => {
     if (!audit) return;
-    const referentialIds = (audit as any).referentialIds;
-    let rawIds: unknown[] = [];
-    if (Array.isArray(referentialIds)) {
-      rawIds = referentialIds;
-    } else if (typeof referentialIds === "string" && referentialIds.trim()) {
-      try {
-        const parsed = JSON.parse(referentialIds);
-        rawIds = Array.isArray(parsed) ? parsed : [];
-      } catch {
-        toast.error("Référentiels de l'audit illisibles");
-        return;
-      }
-    }
-    const codes = rawIds
-      .map((id) => codeById.get(Number(id)))
-      .filter(Boolean) as string[];
-
-    if (codes.length === 0 && codeById.size === 0) {
-      toast.error("Chargement des référentiels en cours, réessayez dans un instant");
-      return;
-    }
-
     try {
       await reopenAudit.mutateAsync({ auditId: audit.id });
-
-      if (codes.includes("MDR")) {
-        navigate(`/mdr/audit/${audit.id}`);
-      } else if (codes.includes("ISO9001") || codes.includes("ISO13485")) {
-        navigate(`/iso/audit/${audit.id}`);
-      } else if (codes[0]) {
-        navigate(`/audit/generic?ref=${encodeURIComponent(codes[0])}&auditId=${audit.id}`);
-      } else {
-        toast.error("Référentiel de l'audit introuvable");
-      }
+      navigate(`/audit/${audit.id}/questionnaire`);
     } catch (error: any) {
       toast.error("Impossible de reprendre l'audit", { description: error?.message });
     }

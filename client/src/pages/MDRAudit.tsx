@@ -356,7 +356,7 @@ export default function MDRAudit() {
       return;
     }
 
-    setLocation(`/mdr/audit/${auditIdNum}`);
+    setLocation(`/audit/${auditIdNum}/questionnaire`);
   };
 
   if (!isAuthenticated) {

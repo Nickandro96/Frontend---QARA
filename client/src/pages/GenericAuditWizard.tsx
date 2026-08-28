@@ -128,7 +128,7 @@ export default function GenericAuditWizard() {
       const id = Number(res?.auditId);
       if (Number.isFinite(id) && id > 0) {
         setAuditId(id);
-        setLocation(`/audit/generic?ref=${referentialCode}&auditId=${id}`, { replace: true });
+        window.location.assign(`/audit/${id}/questionnaire`);
       }
     },
     onError: (err) => toast.error("❌ Erreur", { description: err.message }),
