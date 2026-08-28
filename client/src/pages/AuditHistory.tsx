@@ -59,32 +59,7 @@ export default function AuditHistory() {
   });
 
   const handleResumeAudit = (audit: any) => {
-    // Détermine le type d'audit par code de référentiel (jamais par ID en
-    // dur, voir codeById ci-dessus) et navigue vers la page de
-    // "drilldown" correspondante (route /mdr|iso/audit/:auditId) — c'est
-    // le mécanisme réellement fonctionnel : la page assistant/wizard
-    // (bare /mdr/audit ou /iso/audit) ne sait pas reprendre un audit
-    // existant, seule la page de drilldown (réponse aux questions) le
-    // fait, sans condition de statut (voir INVENTAIRE-BUGS.md #1).
-    const rawIds = audit.referentialIds ? JSON.parse(audit.referentialIds) : [];
-    const codes = (Array.isArray(rawIds) ? rawIds : [])
-      .map((id: number) => codeById.get(id))
-      .filter(Boolean) as string[];
-
-    if (codes.includes("MDR")) {
-      setLocation(`/mdr/audit/${audit.id}`);
-    } else if (codes.includes("ISO9001") || codes.includes("ISO13485")) {
-      setLocation(`/iso/audit/${audit.id}`);
-    } else if (codes.length === 0 && codeById.size === 0) {
-      // Liste des référentiels pas encore chargée (requête referentials.list
-      // en vol) — éviter un faux "non reconnu" pendant le chargement.
-      toast.error("Chargement des référentiels en cours, réessayez dans un instant");
-    } else {
-      // IVDR / FDA_QMSR / MDSAP / ISO14971 : aucune page de reprise dédiée
-      // n'existe actuellement dans le frontend pour ces référentiels
-      // (aucune route /ivdr/audit/:id ou équivalent) — voir INVENTAIRE-BUGS.md.
-      toast.error("Reprise non disponible pour ce type d'audit pour le moment");
-    }
+    setLocation(`/audit/${audit.id}/questionnaire`);
   };
 
   const handleViewResults = (auditId: number) => {
