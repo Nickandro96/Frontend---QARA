@@ -22,10 +22,12 @@ export default function ReportGeneration() {
   const [location, navigate] = useLocation();
   const searchParams = new URLSearchParams(location.split("?")[1]);
   const auditIdParam = searchParams.get("auditId");
-  const auditId = auditIdParam ? parseInt(auditIdParam) : null;
+  const initialAuditId = auditIdParam ? parseInt(auditIdParam) : null;
+  const [auditId, setAuditId] = useState<number | null>(initialAuditId);
 
   const [outputFormat, setOutputFormat] = useState<OutputFormat>("pdf");
   const [reportLanguage, setReportLanguage] = useState<ReportLanguage>("fr");
+  const auditsQuery = trpc.audit.list.useQuery();
 
   const downloadMutation = trpc.reports.download.useMutation({
     onSuccess: ({ url }) => window.open(url, "_blank", "noopener,noreferrer"),
@@ -67,6 +69,31 @@ export default function ReportGeneration() {
         </p>
       </div>
       <div className="grid gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Audit</CardTitle>
+            <CardDescription>{"S\u00e9lectionnez l'audit pour lequel g\u00e9n\u00e9rer le rapport."}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Select
+              value={auditId?.toString() ?? ""}
+              onValueChange={(value) => setAuditId(Number(value))}
+              disabled={auditsQuery.isLoading}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder={auditsQuery.isLoading ? "Chargement des audits..." : "S\u00e9lectionner un audit"} />
+              </SelectTrigger>
+              <SelectContent>
+                {(auditsQuery.data ?? []).map((audit) => (
+                  <SelectItem key={audit.id} value={audit.id.toString()}>
+                    {audit.name || `Audit #${audit.id}`}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader>
             <CardTitle>Format et langue</CardTitle>
