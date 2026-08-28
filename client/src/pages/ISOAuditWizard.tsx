@@ -624,7 +624,7 @@ export default function ISOAuditWizard() {
                       const id = await upsertDraft("in_progress");
 
                       toast.success("Audit lancé", { description: "Redirection vers le questionnaire…" });
-                      window.location.assign(`/iso/audit/${id}`);
+                      window.location.assign(`/audit/${id}/questionnaire`);
                     } catch (e: any) {
                       toast.error("❌ Erreur", { description: e?.message ?? "Impossible de démarrer" });
                     }
