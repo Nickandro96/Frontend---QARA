@@ -29,25 +29,25 @@ export default function ReportGeneration() {
 
   const downloadMutation = trpc.reports.download.useMutation({
     onSuccess: ({ url }) => window.open(url, "_blank", "noopener,noreferrer"),
-    onError: (error) => toast.error(`Téléchargement impossible : ${error.message}`),
+    onError: (error) => toast.error(`T\u00e9l\u00e9chargement impossible : ${error.message}`),
   });
 
   const generateMutation = trpc.reports.generateV2.useMutation({
     onSuccess: (data) => {
-      toast.success("Rapport généré avec succès", {
-        description: "Le rapport a été généré et est disponible au téléchargement.",
+      toast.success("Rapport g\u00e9n\u00e9r\u00e9 avec succ\u00e8s", {
+        description: "Le rapport a \u00e9t\u00e9 g\u00e9n\u00e9r\u00e9 et est disponible au t\u00e9l\u00e9chargement.",
       });
       downloadMutation.mutate({ reportId: data.reportId });
     },
     onError: (error) => {
-      toast.error("Erreur de génération", { description: error.message });
+      toast.error("Erreur de g\u00e9n\u00e9ration", { description: error.message });
     },
   });
 
   const handleGenerate = () => {
     if (!auditId) {
       toast.error("Audit requis", {
-        description: "Veuillez sélectionner un audit avant de générer un rapport.",
+        description: "Veuillez s\u00e9lectionner un audit avant de g\u00e9n\u00e9rer un rapport.",
       });
       return;
     }
@@ -61,22 +61,22 @@ export default function ReportGeneration() {
   return (
     <div className="container max-w-4xl py-8">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2">Génération de rapport d'audit</h1>
+        <h1 className="text-3xl font-bold mb-2">{"G\u00e9n\u00e9ration de rapport d'audit"}</h1>
         <p className="text-muted-foreground">
-          Générez un rapport professionnel à partir de vos données d'audit (FDA/MDR/ISO 13485/ISO 9001).
+          {"G\u00e9n\u00e9rez un rapport professionnel \u00e0 partir de vos donn\u00e9es d'audit (FDA/MDR/ISO 13485/ISO 9001)."}
         </p>
       </div>
       <div className="grid gap-6">
         <Card>
           <CardHeader>
             <CardTitle>Format et langue</CardTitle>
-            <CardDescription>Sélectionnez le format de sortie et la langue du rapport complet.</CardDescription>
+            <CardDescription>{"S\u00e9lectionnez le format de sortie et la langue du rapport complet."}</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="outputFormat">Format</Label>
               <Select value={outputFormat} onValueChange={(value: OutputFormat) => setOutputFormat(value)}>
-                <SelectTrigger id="outputFormat"><SelectValue placeholder="Sélectionner un format" /></SelectTrigger>
+                <SelectTrigger id="outputFormat"><SelectValue placeholder={"S\u00e9lectionner un format"} /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="pdf">PDF (.pdf)</SelectItem>
                   <SelectItem value="docx">Word (.docx)</SelectItem>
@@ -87,9 +87,9 @@ export default function ReportGeneration() {
             <div className="space-y-2">
               <Label htmlFor="reportLanguage">Langue</Label>
               <Select value={reportLanguage} onValueChange={(value: ReportLanguage) => setReportLanguage(value)}>
-                <SelectTrigger id="reportLanguage"><SelectValue placeholder="Sélectionner une langue" /></SelectTrigger>
+                <SelectTrigger id="reportLanguage"><SelectValue placeholder={"S\u00e9lectionner une langue"} /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="fr">Français</SelectItem>
+                  <SelectItem value="fr">{"Fran\u00e7ais"}</SelectItem>
                   <SelectItem value="en">English</SelectItem>
                 </SelectContent>
               </Select>
@@ -98,7 +98,7 @@ export default function ReportGeneration() {
         </Card>
         {auditId && (
           <Card>
-            <CardHeader><CardTitle>Audit sélectionné</CardTitle></CardHeader>
+            <CardHeader><CardTitle>{"Audit s\u00e9lectionn\u00e9"}</CardTitle></CardHeader>
             <CardContent>
               <div className="flex items-center gap-2 text-sm">
                 <CheckCircle2 className="h-4 w-4 text-green-600" />
@@ -111,9 +111,9 @@ export default function ReportGeneration() {
           <Button variant="outline" onClick={() => navigate("/audits")}>Annuler</Button>
           <Button onClick={handleGenerate} disabled={!auditId || generateMutation.isPending || downloadMutation.isPending} size="lg">
             {generateMutation.isPending ? (
-              <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Génération en cours...</>
+              <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{"G\u00e9n\u00e9ration en cours..."}</>
             ) : (
-              <><Download className="mr-2 h-4 w-4" />Générer le rapport {FORMAT_LABELS[outputFormat]}</>
+              <><Download className="mr-2 h-4 w-4" />{"G\u00e9n\u00e9rer le rapport "}{FORMAT_LABELS[outputFormat]}</>
             )}
           </Button>
         </div>
@@ -124,8 +124,8 @@ export default function ReportGeneration() {
               <div className="text-sm text-blue-900">
                 <p className="font-medium mb-1">Format de sortie : {FORMAT_LABELS[outputFormat]}</p>
                 <p className="text-blue-700">
-                  Le rapport sera automatiquement téléchargé et sauvegardé dans votre historique.
-                  Vous pourrez le consulter à tout moment depuis la page « Historique des rapports ».
+                  {"Le rapport sera automatiquement t\u00e9l\u00e9charg\u00e9 et sauvegard\u00e9 dans votre historique. "}
+                  {"Vous pourrez le consulter \u00e0 tout moment depuis la page Historique des rapports."}
                 </p>
               </div>
             </div>
