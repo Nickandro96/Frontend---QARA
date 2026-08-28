@@ -55,9 +55,11 @@ const RESPONSE_VALUES = [
   { value: "not_applicable", label: "Non applicable" },
 ];
 
-function dedicatedAuditPath(_referentialCode: string): string | null {
-  // Tous les référentiels utilisent le même parcours afin de garantir
-  // la création puis l'ouverture immédiate du questionnaire.
+function dedicatedAuditPath(referentialCode: string): string | null {
+  const code = referentialCode.trim().toUpperCase();
+  if (code === "MDR") return "/mdr/audit";
+  if (code === "ISO9001") return "/iso/audit?standard=9001";
+  if (code === "ISO13485") return "/iso/audit?standard=13485";
   return null;
 }
 
