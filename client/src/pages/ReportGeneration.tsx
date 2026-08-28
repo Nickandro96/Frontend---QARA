@@ -5,9 +5,23 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { FileText, Download, Loader2, CheckCircle2, FileBarChart, FileSpreadsheet, ClipboardList, FolderArchive } from "lucide-react";
+import { FileText, Download, Loader2, CheckCircle2 } from "lucide-react";
+
+type OutputFormat = "pdf" | "docx" | "xlsx";
+type ReportLanguage = "fr" | "en";
+
+const FORMAT_LABELS: Record<OutputFormat, string> = {
+  pdf: "PDF",
+  docx: "Word",
+  xlsx: "Excel",
+};
+
+const API_FORMATS: Record<OutputFormat, "pdf" | "word" | "excel"> = {
+  pdf: "pdf",
+  docx: "word",
+  xlsx: "excel",
+};
 
 export default function ReportGeneration() {
   const [location, navigate] = useLocation();
@@ -18,16 +32,14 @@ export default function ReportGeneration() {
   const auditIdParam = searchParams.get("auditId");
   const auditId = auditIdParam ? parseInt(auditIdParam) : null;
 
-  const [reportType, setReportType] = useState<"complete" | "executive" | "comparative" | "action_plan" | "evidence_index">("complete");
-  const [includeGraphs, setIncludeGraphs] = useState(true);
-  const [includeEvidence, setIncludeEvidence] = useState(true);
-  const [includeActionPlan, setIncludeActionPlan] = useState(true);
+  const [outputFormat, setOutputFormat] = useState<OutputFormat>("pdf");
+  const [reportLanguage, setReportLanguage] = useState<ReportLanguage>("fr");
 
-  const generateMutation = trpc.reports.generate.useMutation({
+  const generateMutation = trpc.reports.generateV2.useMutation({
     onSuccess: (data) => {
       toast({
-        title: "✅ Rapport généré avec succès",
-        description: `Le rapport a été généré et est disponible au téléchargement.`,
+        title: "? Rapport g�n�r� avec succ�s",
+        description: `Le rapport a �t� g�n�r� et est disponible au t�l�chargement.`,
       });
 
       // Download the file
@@ -40,7 +52,7 @@ export default function ReportGeneration() {
     },
     onError: (error) => {
       toast({
-        title: "❌ Erreur de génération",
+        title: "? Erreur de g�n�ration",
         description: error.message,
         variant: "destructive",
       });
@@ -50,8 +62,8 @@ export default function ReportGeneration() {
   const handleGenerate = () => {
     if (!auditId) {
       toast({
-        title: "⚠️ Audit requis",
-        description: "Veuillez sélectionner un audit avant de générer un rapport.",
+        title: "?? Audit requis",
+        description: "Veuillez s�lectionner un audit avant de g�n�rer un rapport.",
         variant: "destructive",
       });
       return;
@@ -59,154 +71,63 @@ export default function ReportGeneration() {
 
     generateMutation.mutate({
       auditId,
-      reportType,
-      includeGraphs,
-      includeEvidence,
-      includeActionPlan,
+      format: API_FORMATS[outputFormat],
+      language: reportLanguage,
     });
   };
-
-  const reportTypeOptions = [
-    {
-      value: "complete",
-      label: "Rapport Complet",
-      description: "Rapport d'audit complet avec toutes les sections (11 sections)",
-      icon: FileText,
-    },
-    {
-      value: "executive",
-      label: "Synthèse Direction",
-      description: "Rapport synthétique pour la direction (KPIs + constats prioritaires)",
-      icon: FileBarChart,
-    },
-    {
-      value: "action_plan",
-      label: "Plan d'Action",
-      description: "Plan d'action priorisé par criticité",
-      icon: ClipboardList,
-    },
-    {
-      value: "evidence_index",
-      label: "Index des Preuves",
-      description: "Liste complète des preuves avec liens cliquables",
-      icon: FolderArchive,
-    },
-    {
-      value: "comparative",
-      label: "Rapport Comparatif",
-      description: "Comparaison avec audits précédents (évolution temporelle)",
-      icon: FileSpreadsheet,
-    },
-  ];
-
-  const selectedOption = reportTypeOptions.find((opt) => opt.value === reportType);
 
   return (
     <div className="container max-w-4xl py-8">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2">Génération de Rapport d'Audit</h1>
+        <h1 className="text-3xl font-bold mb-2">G�n�ration de Rapport d'Audit</h1>
         <p className="text-muted-foreground">
-          Générez un rapport professionnel à partir de vos données d'audit (FDA/MDR/ISO 13485/ISO 9001).
+          G�n�rez un rapport professionnel � partir de vos donn�es d'audit (FDA/MDR/ISO 13485/ISO 9001).
         </p>
       </div>
 
       <div className="grid gap-6">
-        {/* Report Type Selection */}
+        {/* Output settings */}
         <Card>
           <CardHeader>
-            <CardTitle>Type de Rapport</CardTitle>
+            <CardTitle>Format et langue</CardTitle>
             <CardDescription>
-              Sélectionnez le type de rapport à générer selon vos besoins.
+              S�lectionnez le format de sortie et la langue du rapport complet.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="reportType">Type</Label>
-              <Select value={reportType} onValueChange={(value: any) => setReportType(value)}>
-                <SelectTrigger id="reportType">
-                  <SelectValue placeholder="Sélectionner un type" />
+              <Label htmlFor="outputFormat">Format</Label>
+              <Select value={outputFormat} onValueChange={(value: OutputFormat) => setOutputFormat(value)}>
+                <SelectTrigger id="outputFormat">
+                  <SelectValue placeholder="S�lectionner un format" />
                 </SelectTrigger>
                 <SelectContent>
-                  {reportTypeOptions.map((option) => {
-                    const Icon = option.icon;
-                    return (
-                      <SelectItem key={option.value} value={option.value}>
-                        <div className="flex items-center gap-2">
-                          <Icon className="h-4 w-4" />
-                          <span>{option.label}</span>
-                        </div>
-                      </SelectItem>
-                    );
-                  })}
+                  <SelectItem value="pdf">PDF (.pdf)</SelectItem>
+                  <SelectItem value="docx">Word (.docx)</SelectItem>
+                  <SelectItem value="xlsx">Excel (.xlsx)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-
-            {selectedOption && (
-              <div className="p-4 bg-muted rounded-lg">
-                <div className="flex items-start gap-3">
-                  <selectedOption.icon className="h-5 w-5 mt-0.5 text-primary" />
-                  <div>
-                    <h4 className="font-medium mb-1">{selectedOption.label}</h4>
-                    <p className="text-sm text-muted-foreground">{selectedOption.description}</p>
-                  </div>
-                </div>
-              </div>
-            )}
+            <div className="space-y-2">
+              <Label htmlFor="reportLanguage">Langue</Label>
+              <Select value={reportLanguage} onValueChange={(value: ReportLanguage) => setReportLanguage(value)}>
+                <SelectTrigger id="reportLanguage">
+                  <SelectValue placeholder="S�lectionner une langue" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="fr">Fran�ais</SelectItem>
+                  <SelectItem value="en">English</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </CardContent>
         </Card>
-
-        {/* Options */}
-        {reportType === "complete" && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Options Avancées</CardTitle>
-              <CardDescription>
-                Personnalisez le contenu du rapport complet.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="includeGraphs"
-                  checked={includeGraphs}
-                  onCheckedChange={(checked) => setIncludeGraphs(checked as boolean)}
-                />
-                <Label htmlFor="includeGraphs" className="cursor-pointer">
-                  Inclure les graphiques et tableaux (radar, histogrammes, heatmap)
-                </Label>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="includeEvidence"
-                  checked={includeEvidence}
-                  onCheckedChange={(checked) => setIncludeEvidence(checked as boolean)}
-                />
-                <Label htmlFor="includeEvidence" className="cursor-pointer">
-                  Inclure l'index des preuves avec liens cliquables
-                </Label>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="includeActionPlan"
-                  checked={includeActionPlan}
-                  onCheckedChange={(checked) => setIncludeActionPlan(checked as boolean)}
-                />
-                <Label htmlFor="includeActionPlan" className="cursor-pointer">
-                  Inclure le plan d'action priorisé
-                </Label>
-              </div>
-            </CardContent>
-          </Card>
-        )}
 
         {/* Audit Info */}
         {auditId && (
           <Card>
             <CardHeader>
-              <CardTitle>Audit Sélectionné</CardTitle>
+              <CardTitle>Audit S�lectionn�</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-2 text-sm">
@@ -230,12 +151,12 @@ export default function ReportGeneration() {
             {generateMutation.isPending ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Génération en cours...
+                G�n�ration en cours...
               </>
             ) : (
               <>
                 <Download className="mr-2 h-4 w-4" />
-                Générer le Rapport
+                G�n�rer le rapport {FORMAT_LABELS[outputFormat]}
               </>
             )}
           </Button>
@@ -247,10 +168,10 @@ export default function ReportGeneration() {
             <div className="flex gap-3">
               <FileText className="h-5 w-5 text-blue-600 mt-0.5" />
               <div className="text-sm text-blue-900">
-                <p className="font-medium mb-1">📄 Format de sortie : PDF</p>
+                <p className="font-medium mb-1">?? Format de sortie : {FORMAT_LABELS[outputFormat]}</p>
                 <p className="text-blue-700">
-                  Le rapport sera automatiquement téléchargé et sauvegardé dans votre historique. 
-                  Vous pourrez le consulter à tout moment depuis la page "Historique des Rapports".
+                  Le rapport sera automatiquement t�l�charg� et sauvegard� dans votre historique. 
+                  Vous pourrez le consulter � tout moment depuis la page "Historique des Rapports".
                 </p>
               </div>
             </div>
@@ -260,3 +181,4 @@ export default function ReportGeneration() {
     </div>
   );
 }
+
