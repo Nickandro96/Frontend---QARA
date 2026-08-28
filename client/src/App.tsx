@@ -27,14 +27,13 @@ import FAQ from "./pages/FAQ";
 import FdaClassification from "./pages/FdaClassification";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
-import ISOAuditDrilldown from "./pages/ISOAuditDrilldown";
 import ISOAuditReview from "./pages/ISOAuditReview";
 import ISOAuditWizard from "./pages/ISOAuditWizard";
 import GenericAuditWizard from "./pages/GenericAuditWizard";
+import GenericAuditQuestionnaire from "./pages/GenericAuditQuestionnaire";
 import ISOQualification from "./pages/ISOQualification";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
-import MDRAuditDrilldown from "./pages/MDRAuditDrilldown";
 import MDRAuditReview from "./pages/MDRAuditReview";
 import MDRAuditWizard from "./pages/MDRAudit";
 import MdrRoutesErrorBoundary from "./components/MdrRoutesErrorBoundary";
@@ -71,6 +70,11 @@ function ProtectedPage({
 function LegacyAuditRedirect() {
   const params = useParams<{ id: string }>();
   return <Redirect to={`/audits/${params.id}`} />;
+}
+
+function LegacyQuestionnaireRedirect() {
+  const params = useParams<{ auditId: string }>();
+  return <Redirect to={`/audit/${params.auditId}/questionnaire`} />;
 }
 
 function Router() {
@@ -238,9 +242,7 @@ function Router() {
         </ProtectedPage>
       </Route>
       <Route path="/mdr/audit/:auditId">
-        <ProtectedPage>
-          <MDRAuditDrilldown />
-        </ProtectedPage>
+        <LegacyQuestionnaireRedirect />
       </Route>
       <Route path="/mdr/audit">
         <ProtectedPage>
@@ -258,9 +260,7 @@ function Router() {
         </ProtectedPage>
       </Route>
       <Route path="/iso/audit/:auditId">
-        <ProtectedPage>
-          <ISOAuditDrilldown />
-        </ProtectedPage>
+        <LegacyQuestionnaireRedirect />
       </Route>
       <Route path="/iso/audit">
         <ProtectedPage>
@@ -307,6 +307,11 @@ function Router() {
       </Route>
       <Route path="/audit/create">
         <Redirect to="/audit/generic" />
+      </Route>
+      <Route path="/audit/:auditId/questionnaire">
+        <ProtectedPage>
+          <GenericAuditQuestionnaire />
+        </ProtectedPage>
       </Route>
       <Route path="/audit/:id/results">
         <ProtectedPage>
