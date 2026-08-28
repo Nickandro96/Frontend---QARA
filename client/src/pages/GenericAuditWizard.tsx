@@ -55,11 +55,9 @@ const RESPONSE_VALUES = [
   { value: "not_applicable", label: "Non applicable" },
 ];
 
-function dedicatedAuditPath(referentialCode: string): string | null {
-  const code = referentialCode.trim().toUpperCase();
-  if (code === "MDR") return "/mdr/audit";
-  if (code === "ISO9001") return "/iso/audit?standard=9001";
-  if (code === "ISO13485") return "/iso/audit?standard=13485";
+function dedicatedAuditPath(_referentialCode: string): string | null {
+  // Tous les référentiels utilisent le même parcours afin de garantir
+  // la création puis l'ouverture immédiate du questionnaire.
   return null;
 }
 
@@ -91,9 +89,7 @@ export default function GenericAuditWizard() {
   // référentiel. Le lookup par code ci-dessus (referentialsData) reste non
   // filtré pour qu'un lien direct ?ref= continue de fonctionner même si le
   // référentiel a été désactivé du sélecteur entre-temps.
-  const { data: enabledReferentialsData, isLoading: loadingEnabledReferentials } = trpc.referentials.list.useQuery({
-    enabledOnly: true,
-  });
+  const { data: enabledReferentialsData, isLoading: loadingEnabledReferentials } = trpc.referentials.list.useQuery();
   const { data: processesData, isLoading: loadingProcesses } = trpc.mdr.getProcesses.useQuery();
   const { data: sitesData, isLoading: loadingSites, refetch: refetchSites } = trpc.mdr.getSites.useQuery();
 
