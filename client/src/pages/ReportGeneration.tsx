@@ -35,6 +35,13 @@ export default function ReportGeneration() {
   const [outputFormat, setOutputFormat] = useState<OutputFormat>("pdf");
   const [reportLanguage, setReportLanguage] = useState<ReportLanguage>("fr");
 
+  const downloadMutation = trpc.reports.download.useMutation({
+    onSuccess: ({ url }) => window.open(url, "_blank", "noopener,noreferrer"),
+    onError: (error) => {
+      toast.error(`Téléchargement impossible : ${error.message}`);
+    },
+  });
+
   const generateMutation = trpc.reports.generateV2.useMutation({
     onSuccess: (data) => {
       toast({
@@ -42,13 +49,7 @@ export default function ReportGeneration() {
         description: `Le rapport a �t� g�n�r� et est disponible au t�l�chargement.`,
       });
 
-      // Download the file
-      window.open(data.fileUrl, "_blank");
-
-      // Navigate to reports history
-      setTimeout(() => {
-        navigate("/reports/history");
-      }, 1000);
+      downloadMutation.mutate({ reportId: data.reportId });
     },
     onError: (error) => {
       toast({
@@ -145,7 +146,7 @@ export default function ReportGeneration() {
           </Button>
           <Button
             onClick={handleGenerate}
-            disabled={!auditId || generateMutation.isPending}
+            disabled={!auditId || generateMutation.isPending || downloadMutation.isPending}
             size="lg"
           >
             {generateMutation.isPending ? (

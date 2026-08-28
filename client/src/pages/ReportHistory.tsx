@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { FileText, Download, Trash2, Plus, Calendar, FileBarChart, ClipboardList, FolderArchive, FileSpreadsheet, Loader2 } from "lucide-react";
+import { FileText, Download, Trash2, Plus, Calendar, FileSpreadsheet, Loader2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
 
@@ -13,6 +13,7 @@ export default function ReportHistory() {
   const [, navigate] = useLocation();
 
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [downloadingId, setDownloadingId] = useState<number | null>(null);
 
   const { data: reports, isLoading, refetch } = trpc.reports.list.useQuery({ limit: 50 });
 
@@ -35,6 +36,17 @@ export default function ReportHistory() {
     },
   });
 
+  const downloadMutation = trpc.reports.download.useMutation({
+    onSuccess: ({ url }) => {
+      window.open(url, "_blank", "noopener,noreferrer");
+      setDownloadingId(null);
+    },
+    onError: (error) => {
+      toast.error(`Téléchargement impossible : ${error.message}`);
+      setDownloadingId(null);
+    },
+  });
+
   const handleDelete = (reportId: number) => {
     if (confirm("Êtes-vous sûr de vouloir supprimer ce rapport ?")) {
       setDeletingId(reportId);
@@ -42,27 +54,18 @@ export default function ReportHistory() {
     }
   };
 
-  const getReportTypeInfo = (type: string) => {
-    switch (type) {
-      case "complete":
-        return { label: "Rapport Complet", icon: FileText, color: "bg-blue-100 text-blue-800" };
-      case "executive":
-        return { label: "Synthèse Direction", icon: FileBarChart, color: "bg-purple-100 text-purple-800" };
-      case "action_plan":
-        return { label: "Plan d'Action", icon: ClipboardList, color: "bg-green-100 text-green-800" };
-      case "evidence_index":
-        return { label: "Index des Preuves", icon: FolderArchive, color: "bg-orange-100 text-orange-800" };
-      case "comparative":
-        return { label: "Rapport Comparatif", icon: FileSpreadsheet, color: "bg-indigo-100 text-indigo-800" };
-      default:
-        return { label: type, icon: FileText, color: "bg-gray-100 text-gray-800" };
+  const getReportFormatInfo = (format: string | null) => {
+    switch (format) {
+      case "pdf": return { label: "PDF", icon: FileText, color: "bg-red-100 text-red-800" };
+      case "docx": return { label: "Word", icon: FileText, color: "bg-blue-100 text-blue-800" };
+      case "xlsx": return { label: "Excel", icon: FileSpreadsheet, color: "bg-green-100 text-green-800" };
+      default: return { label: "Rapport", icon: FileText, color: "bg-gray-100 text-gray-800" };
     }
   };
 
-  const formatFileSize = (bytes: number | null) => {
-    if (!bytes) return "N/A";
-    const mb = bytes / (1024 * 1024);
-    return `${mb.toFixed(2)} MB`;
+  const handleDownload = (reportId: number) => {
+    setDownloadingId(reportId);
+    downloadMutation.mutate({ reportId });
   };
 
   if (isLoading) {
@@ -109,8 +112,8 @@ export default function ReportHistory() {
       ) : (
         <div className="grid gap-4">
           {reports.map((report) => {
-            const typeInfo = getReportTypeInfo(report.reportType);
-            const TypeIcon = typeInfo.icon;
+            const formatInfo = getReportFormatInfo(report.fileFormat);
+            const FormatIcon = formatInfo.icon;
 
             return (
               <Card key={report.id} className="hover:shadow-md transition-shadow">
@@ -118,17 +121,17 @@ export default function ReportHistory() {
                   <div className="flex items-start justify-between">
                     <div className="flex items-start gap-4">
                       <div className="p-3 bg-muted rounded-lg">
-                        <TypeIcon className="h-6 w-6" />
+                        <FormatIcon className="h-6 w-6" />
                       </div>
                       <div>
-                        <CardTitle className="text-lg mb-1">{report.reportTitle}</CardTitle>
+                        <CardTitle className="text-lg mb-1">{report.reference ?? `Rapport audit #${report.auditId}`}</CardTitle>
                         <CardDescription className="flex items-center gap-2">
                           <Calendar className="h-3 w-3" />
-                          Généré {formatDistanceToNow(new Date(report.generatedAt), { addSuffix: true, locale: fr })}
+                          Généré {formatDistanceToNow(new Date(report.createdAt), { addSuffix: true, locale: fr })}
                         </CardDescription>
                       </div>
                     </div>
-                    <Badge className={typeInfo.color}>{typeInfo.label}</Badge>
+                    <Badge className={formatInfo.color}>{formatInfo.label}</Badge>
                   </div>
                 </CardHeader>
                 <CardContent>
@@ -138,23 +141,25 @@ export default function ReportHistory() {
                         <span className="font-medium">Audit :</span> #{report.auditId}
                       </div>
                       <div>
-                        <span className="font-medium">Version :</span> {report.reportVersion}
+                        <span className="font-medium">Version :</span> {report.version}
                       </div>
                       <div>
-                        <span className="font-medium">Taille :</span> {formatFileSize(report.fileSize)}
-                      </div>
-                      <div>
-                        <span className="font-medium">Format :</span> {report.fileFormat?.toUpperCase()}
+                        <span className="font-medium">Langue :</span> {report.language?.toUpperCase()}
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => window.open(report.fileUrl, "_blank")}
+                        onClick={() => handleDownload(report.id)}
+                        disabled={downloadingId === report.id}
                       >
-                        <Download className="mr-2 h-4 w-4" />
-                        Télécharger
+                        {downloadingId === report.id ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Download className="mr-2 h-4 w-4" />
+                        )}
+                        Télécharger {formatInfo.label}
                       </Button>
                       <Button
                         variant="ghost"
