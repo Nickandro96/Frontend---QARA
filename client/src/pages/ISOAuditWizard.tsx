@@ -145,11 +145,6 @@ export default function ISOAuditWizard() {
     },
   });
 
-  const setAuditInProgress = trpc.iso.createOrUpdateAuditDraft.useMutation({
-    onError: (err) => {
-      toast.error("❌ Erreur", { description: err.message });
-    },
-  });
 
   const questionsForAudit = trpc.iso.getQuestionsForAudit.useQuery(
     { auditId: auditId ?? 0 },
@@ -626,21 +621,17 @@ export default function ISOAuditWizard() {
                 <Button
                   onClick={async () => {
                     try {
-                      const id = auditId ?? (await upsertDraft("draft"));
-
-                      // ✅ FIX 2: do NOT overwrite process selection with a minimal payload.
-                      // We just upsert as in_progress with the full payload (incl. processMode/processIds).
-                      await upsertDraft("in_progress");
+                      const id = await upsertDraft("in_progress");
 
                       toast.success("Audit lancé", { description: "Redirection vers le questionnaire…" });
-                      setTimeout(() => setLocation(`/iso/audit/${id}`), 400);
+                      window.location.assign(`/iso/audit/${id}`);
                     } catch (e: any) {
                       toast.error("❌ Erreur", { description: e?.message ?? "Impossible de démarrer" });
                     }
                   }}
-                  disabled={setAuditInProgress.isPending}
+                  disabled={createOrUpdateAuditDraft.isPending}
                 >
-                  {setAuditInProgress.isPending ? (
+                  {createOrUpdateAuditDraft.isPending ? (
                     <>
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Démarrage…
                     </>
