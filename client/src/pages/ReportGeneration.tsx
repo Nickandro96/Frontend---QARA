@@ -154,12 +154,12 @@ export default function ReportGeneration() {
           <Card>
             <CardHeader>
               <CardTitle>{"Contr\u00f4le de compl\u00e9tude"}</CardTitle>
-              <CardDescription>QARA v\u00e9rifie les donn\u00e9es indispensables avant de produire le rapport.</CardDescription>
+              <CardDescription>{"QARA v\u00e9rifie les donn\u00e9es indispensables avant de produire le rapport."}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center gap-2 text-sm">
                 <CheckCircle2 className="h-4 w-4 text-green-600" />
-                <span>Audit #{auditId} \u2014 {preparationQuery.data?.answeredQuestions ?? 0}/{preparationQuery.data?.totalQuestions ?? 0} questions renseign\u00e9es</span>
+                <span>Audit #{auditId} {"\u2014"} {preparationQuery.data?.answeredQuestions ?? 0}/{preparationQuery.data?.totalQuestions ?? 0} {"questions renseign\u00e9es"}</span>
               </div>
               {preparationQuery.isLoading && <p className="text-sm text-muted-foreground">Analyse en cours...</p>}
               {preparationQuery.data?.blocking.map((item) => (
@@ -171,12 +171,12 @@ export default function ReportGeneration() {
                   <p>{preparationQuery.data?.missingCritical.join(", ")}</p>
                   <label className="mt-3 flex items-center gap-2">
                     <input type="checkbox" checked={allowIncomplete} onChange={(e) => setAllowIncomplete(e.target.checked)} />
-                    G\u00e9n\u00e9rer malgr\u00e9 tout un brouillon incomplet
+                    {"G\u00e9n\u00e9rer malgr\u00e9 tout un brouillon incomplet"}
                   </label>
                 </div>
               )}
               {Boolean(preparationQuery.data?.warnings.length) && (
-                <p className="text-sm text-amber-800">Points \u00e0 compl\u00e9ter : {preparationQuery.data?.warnings.join(" ; ")}</p>
+                <p className="text-sm text-amber-800">{"Points \u00e0 compl\u00e9ter : "}{preparationQuery.data?.warnings.join(" ; ")}</p>
               )}
             </CardContent>
           </Card>
@@ -186,7 +186,7 @@ export default function ReportGeneration() {
           <Card>
             <CardHeader>
               <CardTitle>Conclusion et validation humaine</CardTitle>
-              <CardDescription>La conclusion est pr\u00e9remplie, reste enti\u00e8rement modifiable et doit \u00eatre valid\u00e9e par l'auditeur.</CardDescription>
+              <CardDescription>{"La conclusion est pr\u00e9remplie, reste enti\u00e8rement modifiable et doit \u00eatre valid\u00e9e par l'auditeur."}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
@@ -198,10 +198,10 @@ export default function ReportGeneration() {
                   </Button>
                 </div>
                 <textarea id="conclusion" className="min-h-40 w-full rounded-md border bg-background p-3 text-sm" value={conclusion} onChange={(e) => setConclusion(e.target.value)} />
-                <p className="text-xs text-muted-foreground">L'IA est une aide \u00e0 la r\u00e9daction : elle ne remplace ni les preuves ni la validation de l'auditeur.</p>
+                <p className="text-xs text-muted-foreground">{"L'IA est une aide \u00e0 la r\u00e9daction : elle ne remplace ni les preuves ni la validation de l'auditeur."}</p>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="nextSteps">Prochaines \u00e9ch\u00e9ances</Label>
+                <Label htmlFor="nextSteps">{"Prochaines \u00e9ch\u00e9ances"}</Label>
                 <textarea id="nextSteps" className="min-h-24 w-full rounded-md border bg-background p-3 text-sm" value={nextSteps} onChange={(e) => setNextSteps(e.target.value)} />
               </div>
               <div className="space-y-2">
