@@ -30,7 +30,7 @@ export default function ReportGeneration() {
   const auditsQuery = trpc.audit.list.useQuery();
 
   const downloadMutation = trpc.reports.download.useMutation({
-    onSuccess: ({ url }) => window.open(url, "_blank", "noopener,noreferrer"),
+    onSuccess: ({ url }) => window.location.assign(url),
     onError: (error) => toast.error(`T\u00e9l\u00e9chargement impossible : ${error.message}`),
   });
 

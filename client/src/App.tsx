@@ -3,6 +3,7 @@ import { ReactNode } from "react";
 import { Redirect, Route, Switch, useParams } from "wouter";
 import { trpc, trpcClient } from "./lib/trpc";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { Toaster } from "@/components/ui/sonner";
 import { AuthenticatedLayout } from "./components/AuthenticatedLayout";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { HreflangTags } from "./components/HreflangTags";
@@ -400,6 +401,7 @@ export default function App() {
             <TooltipProvider>
               <HreflangTags />
               <Router />
+              <Toaster richColors position="top-right" />
             </TooltipProvider>
           </ThemeProvider>
         </ErrorBoundary>
