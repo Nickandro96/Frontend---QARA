@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { FileText, Download, Loader2, CheckCircle2 } from "lucide-react";
+import { FileText, Download, Loader2, CheckCircle2, AlertTriangle, Sparkles } from "lucide-react";
 
 type OutputFormat = "pdf" | "docx" | "xlsx";
 type ReportLanguage = "fr" | "en";
@@ -27,7 +27,30 @@ export default function ReportGeneration() {
 
   const [outputFormat, setOutputFormat] = useState<OutputFormat>("pdf");
   const [reportLanguage, setReportLanguage] = useState<ReportLanguage>("fr");
+  const [conclusion, setConclusion] = useState("");
+  const [nextSteps, setNextSteps] = useState("");
+  const [distributionList, setDistributionList] = useState("");
+  const [allowIncomplete, setAllowIncomplete] = useState(false);
   const auditsQuery = trpc.audit.list.useQuery();
+  const preparationQuery = trpc.reports.prepare.useQuery(
+    { auditId: auditId ?? 0, language: reportLanguage },
+    { enabled: Boolean(auditId) }
+  );
+
+  useEffect(() => {
+    if (!preparationQuery.data) return;
+    setConclusion(preparationQuery.data.defaultConclusion);
+    setNextSteps(preparationQuery.data.defaultNextSteps);
+    setAllowIncomplete(false);
+  }, [preparationQuery.data]);
+
+  const aiMutation = trpc.reports.suggestConclusion.useMutation({
+    onSuccess: ({ suggestion }) => {
+      setConclusion(suggestion);
+      toast.success("Proposition IA ajout\u00e9e", { description: "Relisez et validez le texte avant g\u00e9n\u00e9ration." });
+    },
+    onError: (error) => toast.error("Aide IA indisponible", { description: error.message }),
+  });
 
   const downloadMutation = trpc.reports.download.useMutation({
     onSuccess: ({ url }) => window.location.assign(url),
@@ -57,6 +80,10 @@ export default function ReportGeneration() {
       auditId,
       format: API_FORMATS[outputFormat],
       language: reportLanguage,
+      conclusion,
+      nextSteps,
+      distributionList: distributionList || undefined,
+      allowIncomplete,
     });
   };
 
@@ -125,18 +152,68 @@ export default function ReportGeneration() {
         </Card>
         {auditId && (
           <Card>
-            <CardHeader><CardTitle>{"Audit s\u00e9lectionn\u00e9"}</CardTitle></CardHeader>
-            <CardContent>
+            <CardHeader>
+              <CardTitle>{"Contr\u00f4le de compl\u00e9tude"}</CardTitle>
+              <CardDescription>QARA v\u00e9rifie les donn\u00e9es indispensables avant de produire le rapport.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
               <div className="flex items-center gap-2 text-sm">
                 <CheckCircle2 className="h-4 w-4 text-green-600" />
-                <span>Audit #{auditId}</span>
+                <span>Audit #{auditId} \u2014 {preparationQuery.data?.answeredQuestions ?? 0}/{preparationQuery.data?.totalQuestions ?? 0} questions renseign\u00e9es</span>
+              </div>
+              {preparationQuery.isLoading && <p className="text-sm text-muted-foreground">Analyse en cours...</p>}
+              {preparationQuery.data?.blocking.map((item) => (
+                <p key={item} className="flex gap-2 text-sm text-red-700"><AlertTriangle className="h-4 w-4" />{item}</p>
+              ))}
+              {Boolean(preparationQuery.data?.missingCritical.length) && (
+                <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+                  <p className="font-medium">Champs indispensables encore manquants :</p>
+                  <p>{preparationQuery.data?.missingCritical.join(", ")}</p>
+                  <label className="mt-3 flex items-center gap-2">
+                    <input type="checkbox" checked={allowIncomplete} onChange={(e) => setAllowIncomplete(e.target.checked)} />
+                    G\u00e9n\u00e9rer malgr\u00e9 tout un brouillon incomplet
+                  </label>
+                </div>
+              )}
+              {Boolean(preparationQuery.data?.warnings.length) && (
+                <p className="text-sm text-amber-800">Points \u00e0 compl\u00e9ter : {preparationQuery.data?.warnings.join(" ; ")}</p>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {auditId && preparationQuery.data && preparationQuery.data.blocking.length === 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Conclusion et validation humaine</CardTitle>
+              <CardDescription>La conclusion est pr\u00e9remplie, reste enti\u00e8rement modifiable et doit \u00eatre valid\u00e9e par l'auditeur.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <Label htmlFor="conclusion">Conclusion</Label>
+                  <Button type="button" variant="outline" size="sm" disabled={aiMutation.isPending} onClick={() => aiMutation.mutate({ auditId, language: reportLanguage })}>
+                    {aiMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+                    Proposer avec l'IA
+                  </Button>
+                </div>
+                <textarea id="conclusion" className="min-h-40 w-full rounded-md border bg-background p-3 text-sm" value={conclusion} onChange={(e) => setConclusion(e.target.value)} />
+                <p className="text-xs text-muted-foreground">L'IA est une aide \u00e0 la r\u00e9daction : elle ne remplace ni les preuves ni la validation de l'auditeur.</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="nextSteps">Prochaines \u00e9ch\u00e9ances</Label>
+                <textarea id="nextSteps" className="min-h-24 w-full rounded-md border bg-background p-3 text-sm" value={nextSteps} onChange={(e) => setNextSteps(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="distributionList">Liste de diffusion</Label>
+                <input id="distributionList" className="h-10 w-full rounded-md border bg-background px-3 text-sm" placeholder="Ex. Direction, Responsable Qualit\u00e9, auditeur principal" value={distributionList} onChange={(e) => setDistributionList(e.target.value)} />
               </div>
             </CardContent>
           </Card>
         )}
         <div className="flex justify-end gap-4">
           <Button variant="outline" onClick={() => navigate("/audits")}>Annuler</Button>
-          <Button onClick={handleGenerate} disabled={!auditId || generateMutation.isPending || downloadMutation.isPending} size="lg">
+          <Button onClick={handleGenerate} disabled={!auditId || preparationQuery.isLoading || Boolean(preparationQuery.data?.blocking.length) || (Boolean(preparationQuery.data?.missingCritical.length) && !allowIncomplete) || conclusion.trim().length < 20 || generateMutation.isPending || downloadMutation.isPending} size="lg">
             {generateMutation.isPending ? (
               <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{"G\u00e9n\u00e9ration en cours..."}</>
             ) : (
