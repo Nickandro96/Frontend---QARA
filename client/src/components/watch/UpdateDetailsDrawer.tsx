@@ -19,6 +19,7 @@ export function UpdateDetailsDrawer(props: {
       <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-xl">
         <SheetHeader className="space-y-2">
           <SheetTitle className="text-base leading-snug">{u?.title ?? "Détails"}</SheetTitle>
+          {u?.aiAnalyzed ? <span className="w-fit rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-medium text-violet-700">Analysé par IA</span> : null}
           {u ? (
             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
               <span>{u.sourceName}</span>
@@ -33,6 +34,25 @@ export function UpdateDetailsDrawer(props: {
         {u ? (
           <div className="mt-4 space-y-4">
             <div className="rounded-lg border bg-card p-4 text-sm whitespace-pre-wrap">{u.summaryLong}</div>
+            {u.aiAnalyzed ? (
+              <div className="rounded-lg border border-violet-200 bg-violet-50 p-3 text-xs text-violet-950">
+                Ce résumé a été généré par analyse IA du document officiel publié le {u.publishedAt ? new Date(u.publishedAt).toLocaleDateString("fr-FR") : "date non renseignée"} par {u.sourceName}. Il ne remplace pas la lecture du document original.{" "}
+                <a className="font-medium underline" href={u.sourceUrl} target="_blank" rel="noreferrer">Consulter le document original ↗</a>
+              </div>
+            ) : null}
+            <div className="rounded-lg border bg-card p-4 text-sm">
+              <div className="font-medium">Provenance</div>
+              <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+                <dt>Source officielle</dt><dd><a className="underline" href={u.sourceUrl} target="_blank" rel="noreferrer">{u.sourceName}</a></dd>
+                <dt>Identifiant officiel</dt><dd>{u.officialId ?? "Non renseigné"}</dd>
+                <dt>Date officielle</dt><dd>{u.publishedAt ? new Date(u.publishedAt).toLocaleDateString("fr-FR") : "Non disponible"}</dd>
+                <dt>Collecte QARA</dt><dd>{u.retrievedAt ? new Date(u.retrievedAt).toLocaleString("fr-FR") : "Non disponible"}</dd>
+                <dt>Langue source</dt><dd>{u.languageSource ?? "Non renseignée"}</dd>
+                <dt>Licence commerciale</dt><dd>{u.licenceVerified ? "Confirmée" : "Non vérifiée"}</dd>
+              </dl>
+            </div>
+            {u.aiAnalyzed ? <div className="rounded-lg border bg-card p-4 text-xs"><div className="font-medium">Analyse IA</div><div>Modèle : {u.aiModelVersion ?? "Non renseigné"}</div><div>Date : {u.aiAnalysisDate ? new Date(u.aiAnalysisDate).toLocaleString("fr-FR") : "Non renseignée"}</div></div> : null}
+            <div className="rounded-lg border bg-card p-4 text-xs"><div className="font-medium">Impact réglementaire</div><div className="mt-2 flex flex-wrap gap-1">{[...(u.referentialsImpacted??[]),...(u.marketsImpacted??[]),...(u.rolesImpacted??[])].map((v)=><span key={v} className="rounded bg-muted px-2 py-1">{v}</span>)}</div>{u.dueDate ? <div className="mt-2">Échéance : {new Date(u.dueDate).toLocaleDateString("fr-FR")}</div> : null}</div>
             <ImpactPanel update={u} />
 
             <Separator />

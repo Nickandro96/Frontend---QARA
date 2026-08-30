@@ -8,12 +8,14 @@ export type WatchFiltersValue = {
   type: "ALL" | "REGULATION" | "GUIDANCE" | "STANDARD" | "QUALITY";
   impact: "ALL" | "Low" | "Medium" | "High" | "Critical";
   status: "ALL" | "NEW" | "UPDATED" | "REPEALED" | "CORRIGENDUM";
+  market: string; role: string; sourceId: string; readStatus: "all"|"read"|"unread"; sortBy: "date"|"criticality"|"relevance";
 };
 
 export function WatchFilters(props: {
   value: WatchFiltersValue;
   onChange: (v: WatchFiltersValue) => void;
   onReset: () => void;
+  sources?: {id:string;name:string}[];
 }) {
   const v = props.value;
 
@@ -56,6 +58,11 @@ export function WatchFilters(props: {
       </div>
 
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <Select value={v.market} onValueChange={(market)=>props.onChange({...v,market})}><SelectTrigger><SelectValue placeholder="Marché"/></SelectTrigger><SelectContent>{[["ALL","Tous marchés"],["EU","UE"],["USA","USA"],["UK","UK"],["CA","Canada"],["AU","Australie"],["BR","Brésil"],["JP","Japon"],["CH","Suisse"]].map(([x,l])=><SelectItem key={x} value={x}>{l}</SelectItem>)}</SelectContent></Select>
+        <Select value={v.role} onValueChange={(role)=>props.onChange({...v,role})}><SelectTrigger><SelectValue placeholder="Rôle"/></SelectTrigger><SelectContent>{[["ALL","Tous rôles"],["fabricant","Fabricant"],["importateur","Importateur"],["distributeur","Distributeur"],["mandataire","Mandataire"]].map(([x,l])=><SelectItem key={x} value={x}>{l}</SelectItem>)}</SelectContent></Select>
+        <Select value={v.sourceId} onValueChange={(sourceId)=>props.onChange({...v,sourceId})}><SelectTrigger><SelectValue placeholder="Source"/></SelectTrigger><SelectContent><SelectItem value="ALL">Toutes sources</SelectItem>{props.sources?.map(s=><SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent></Select>
+        <Select value={v.readStatus} onValueChange={(readStatus)=>props.onChange({...v,readStatus:readStatus as any})}><SelectTrigger><SelectValue placeholder="Lecture"/></SelectTrigger><SelectContent><SelectItem value="all">Tous</SelectItem><SelectItem value="unread">Non lus</SelectItem><SelectItem value="read">Lus</SelectItem></SelectContent></Select>
+        <Select value={v.sortBy} onValueChange={(sortBy)=>props.onChange({...v,sortBy:sortBy as any})}><SelectTrigger><SelectValue placeholder="Tri"/></SelectTrigger><SelectContent><SelectItem value="date">Plus récent</SelectItem><SelectItem value="criticality">Criticité</SelectItem><SelectItem value="relevance">Pertinence</SelectItem></SelectContent></Select>
         <Select value={v.status} onValueChange={(status) => props.onChange({ ...v, status: status as any })}>
           <SelectTrigger className="md:w-[260px]">
             <SelectValue placeholder="Statut" />

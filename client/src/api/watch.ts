@@ -7,6 +7,7 @@ export function useWatchUpdates(params: {
   impactLevel?: "Low" | "Medium" | "High" | "Critical";
   status?: "NEW" | "UPDATED" | "REPEALED" | "CORRIGENDUM";
   search?: string;
+  marketsImpacted?: string[]; rolesImpacted?: string[]; sourceIds?: string[]; readStatus?: "all"|"read"|"unread"; sortBy?: "date"|"criticality"|"relevance";
 }) {
   return trpc.watch.updates.useQuery(
     {
@@ -17,6 +18,7 @@ export function useWatchUpdates(params: {
       status: params.status,
       search: params.search,
       includeDetails: true,
+      marketsImpacted: params.marketsImpacted, rolesImpacted: params.rolesImpacted, sourceIds: params.sourceIds, readStatus: params.readStatus, sortBy: params.sortBy,
     },
     {
       staleTime: 5_000,
@@ -24,6 +26,10 @@ export function useWatchUpdates(params: {
     }
   );
 }
+
+export function useWatchSources(){return trpc.watch.getSources.useQuery();}
+export function useUnreadCount(){return trpc.watch.getUnreadCount.useQuery();}
+export function useMarkAsRead(){return trpc.watch.markAsRead.useMutation();}
 
 export function useWatchRefreshMutation() {
   return trpc.watch.refresh.useMutation();

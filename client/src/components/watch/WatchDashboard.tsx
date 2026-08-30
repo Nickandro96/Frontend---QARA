@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, RefreshCw } from "lucide-react";
 
-import { useWatchUpdates, useWatchRefreshMutation } from "@/api/watch";
+import { useWatchUpdates, useWatchRefreshMutation, useWatchSources, useUnreadCount, useMarkAsRead } from "@/api/watch";
 import { WatchFilters, type WatchFiltersValue } from "./WatchFilters";
 import { WatchFeed } from "./WatchFeed";
 import { UpdateDetailsDrawer } from "./UpdateDetailsDrawer";
@@ -35,6 +35,7 @@ export function WatchDashboard() {
     type: "ALL",
     impact: "ALL",
     status: "ALL",
+    market:"ALL", role:"ALL", sourceId:"ALL", readStatus:"all", sortBy:"date",
   });
 
   const query = useWatchUpdates({
@@ -44,7 +45,9 @@ export function WatchDashboard() {
     type: filters.type === "ALL" ? undefined : (filters.type as any),
     impactLevel: filters.impact === "ALL" ? undefined : (filters.impact as any),
     status: filters.status === "ALL" ? undefined : (filters.status as any),
+    marketsImpacted: filters.market === "ALL" ? undefined : [filters.market], rolesImpacted: filters.role === "ALL" ? undefined : [filters.role], sourceIds: filters.sourceId === "ALL" ? undefined : [filters.sourceId], readStatus: filters.readStatus, sortBy: filters.sortBy,
   });
+  const sourcesQuery=useWatchSources(); const unreadQuery=useUnreadCount(); const markRead=useMarkAsRead();
 
   const refresh = useWatchRefreshMutation();
   const [selected, setSelected] = React.useState<WatchUpdate | null>(null);
@@ -58,11 +61,12 @@ export function WatchDashboard() {
   const kpis = React.useMemo(() => computeKpis(items), [items]);
 
   const openDetails = (u: WatchUpdate) => {
+    if(u.isRead===false) markRead.mutate({itemId:u.id},{onSuccess:()=>{query.refetch();unreadQuery.refetch();}});
     setSelected(u);
     setDrawerOpen(true);
   };
 
-  const onReset = () => setFilters({ search: "", type: "ALL", impact: "ALL", status: "ALL" });
+  const onReset = () => setFilters({ search: "", type: "ALL", impact: "ALL", status: "ALL", market:"ALL",role:"ALL",sourceId:"ALL",readStatus:"all",sortBy:"date" });
 
   return (
     <div className="space-y-6">
@@ -111,6 +115,8 @@ export function WatchDashboard() {
           ))}
         </div>
       ) : null}
+      <div className="grid gap-2 md:grid-cols-3">{((sourcesQuery.data as any)?.sources??[]).map((s:any)=>{const age=s.lastSuccessAt?Date.now()-new Date(s.lastSuccessAt).getTime():Infinity;const state=s.lastError?"Erreur":age>86400000?"Données de plus de 24h":"À jour";return <div key={s.id} className="rounded border bg-card p-3 text-xs"><div className="font-medium">{s.name}</div><div>last_success_at : {formatDateTime(s.lastSuccessAt)}</div><Badge variant={s.lastError?"destructive":"outline"}>{state}</Badge>{s.lastError?<div className="mt-1 text-destructive">Erreur : {String(s.lastError).slice(0,100)}</div>:null}</div>})}</div>
+      <div className="text-sm">Éléments non lus : <Badge variant="destructive">{(unreadQuery.data as any)?.count??0}</Badge></div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
         <Card>
@@ -141,7 +147,7 @@ export function WatchDashboard() {
 
       {profile ? <CompanyProfilePanel profile={profile} /> : null}
 
-      <WatchFilters value={filters} onChange={setFilters} onReset={onReset} />
+      <WatchFilters value={filters} onChange={setFilters} onReset={onReset} sources={(sourcesQuery.data as any)?.sources??[]} />
 
       {query.isLoading ? (
         <div className="rounded-lg border bg-card p-6 text-sm text-muted-foreground">
