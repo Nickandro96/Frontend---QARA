@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import type { CompanyProfile } from "./types";
 import { useUpsertCompanyProfile } from "@/api/watch";
 
@@ -106,6 +107,7 @@ export function CompanyProfilePanel(props: { profile: CompanyProfile; onSaved?: 
             Sauvegarder
           </Button>
         </div>
+        <div className="rounded-md border p-3"><div className="mb-2 text-sm font-medium">Préférences de notification</div><div className="flex flex-wrap items-center gap-3"><label className="flex items-center gap-2 text-sm"><Switch checked={Boolean(draft.notificationEnabled)} onCheckedChange={(notificationEnabled)=>setDraft(s=>({...s,notificationEnabled}))}/><span>Activer les alertes</span></label><Select value={draft.notificationFrequency??"weekly"} onValueChange={(notificationFrequency)=>setDraft(s=>({...s,notificationFrequency:notificationFrequency as any}))}><SelectTrigger className="w-48"><SelectValue/></SelectTrigger><SelectContent><SelectItem value="never">Jamais</SelectItem><SelectItem value="weekly">Hebdomadaire</SelectItem><SelectItem value="daily">Quotidien</SelectItem><SelectItem value="realtime">Temps réel</SelectItem></SelectContent></Select></div></div>
       </CardContent>
     </Card>
   );

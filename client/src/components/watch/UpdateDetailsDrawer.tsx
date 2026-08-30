@@ -54,6 +54,7 @@ export function UpdateDetailsDrawer(props: {
             </div>
             {u.aiAnalyzed ? <div className="rounded-lg border bg-card p-4 text-xs"><div className="font-medium">Analyse IA</div><div>Modèle : {u.aiModelVersion ?? "Non renseigné"}</div><div>Date : {u.aiAnalysisDate ? new Date(u.aiAnalysisDate).toLocaleString("fr-FR") : "Non renseignée"}</div></div> : null}
             <div className="rounded-lg border bg-card p-4 text-xs"><div className="font-medium">Impact réglementaire</div><div className="mt-2 flex flex-wrap gap-1">{[...(u.referentialsImpacted??[]),...(u.marketsImpacted??[]),...(u.rolesImpacted??[])].map((v)=><span key={v} className="rounded bg-muted px-2 py-1">{v}</span>)}</div>{u.dueDate ? <div className="mt-2">Échéance : {new Date(u.dueDate).toLocaleDateString("fr-FR")}</div> : null}</div>
+            {u.sourceRegistryId==="iso-norms"?<div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950">Le contenu des normes ISO/CEN/IEC est protégé par copyright. QARA n’affiche que les métadonnées de publication. <a href={u.sourceUrl} className="underline" target="_blank" rel="noreferrer">Accéder au texte complet via l’éditeur</a>.</div>:null}
             <ImpactPanel update={u} />
 
             <Separator />

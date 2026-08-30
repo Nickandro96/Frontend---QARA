@@ -71,4 +71,5 @@ export type CompanyProfile = {
   deviceClass: "I" | "IIa" | "IIb" | "III";
   deviceFamilies: ("active" | "non_active" | "implantable" | "sterile" | "software" | "in_vitro")[];
   markets: ("EU" | "UK" | "CH" | "US")[];
+  preferredReferentials?: string[];preferredSources?:string[];notificationEnabled?:boolean;notificationFrequency?:"realtime"|"daily"|"weekly"|"never";
 };

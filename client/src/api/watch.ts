@@ -42,3 +42,11 @@ export function useCompanyProfile() {
 export function useUpsertCompanyProfile() {
   return trpc.watch.companyProfile.upsert.useMutation();
 }
+export function useWatchExport(){return trpc.watch.exportPdf.useMutation();}
+export function useWatchExports(){return trpc.watch.listExports.useQuery();}
+export function useWatchNotifications(){return trpc.watch.getNotifications.useQuery(undefined,{refetchInterval:60000});}
+export function useMarkNotificationRead(){return trpc.watch.markNotificationRead.useMutation();}
+export function useWatchWebhooks(){return trpc.watch.listWebhooks.useQuery(undefined,{retry:false});}
+export function useCreateWatchWebhook(){return trpc.watch.createWebhook.useMutation();}
+export function useDeleteWatchWebhook(){return trpc.watch.deleteWebhook.useMutation();}
+export function useTestWatchWebhook(){return trpc.watch.testWebhook.useMutation();}
