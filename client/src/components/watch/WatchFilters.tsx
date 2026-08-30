@@ -2,13 +2,14 @@ import * as React from "react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 
 export type WatchFiltersValue = {
   search: string;
   type: "ALL" | "REGULATION" | "GUIDANCE" | "STANDARD" | "QUALITY";
   impact: "ALL" | "Low" | "Medium" | "High" | "Critical";
   status: "ALL" | "NEW" | "UPDATED" | "REPEALED" | "CORRIGENDUM";
-  market: string; role: string; sourceId: string; readStatus: "all"|"read"|"unread"; sortBy: "date"|"criticality"|"relevance";
+  market: string; role: string; sourceId: string; readStatus: "all"|"read"|"unread"; sortBy: "date"|"criticality"|"relevance"; showAll: boolean;
 };
 
 export function WatchFilters(props: {
@@ -75,6 +76,7 @@ export function WatchFilters(props: {
             <SelectItem value="REPEALED">Abrogé</SelectItem>
           </SelectContent>
         </Select>
+        <label className="flex items-center gap-2 whitespace-nowrap text-sm"><Switch checked={v.showAll} onCheckedChange={(showAll)=>props.onChange({...v,showAll})}/><span>Afficher tous les items</span></label>
 
         <Button variant="secondary" onClick={props.onReset}>
           Réinitialiser

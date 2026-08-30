@@ -52,6 +52,10 @@ export type WatchUpdate = {
   recommendedActions: WatchActionItem[];
   expectedEvidence: string[];
   personalizedImpact?: PersonalizedImpact;
+  relevanceScore?: number;
+  isCriticalOverride?: boolean;
+  scoreExplanation?: string[];
+  scoreBreakdown?: { version: string; total: number; explanation: string[] };
 };
 
 export type WatchMeta = {

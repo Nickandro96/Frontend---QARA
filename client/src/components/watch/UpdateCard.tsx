@@ -19,6 +19,7 @@ function impactVariant(impact: WatchUpdate["impactLevel"]): "default" | "seconda
 export function UpdateCard(props: { update: WatchUpdate; onOpen: () => void }) {
   const u = props.update;
   const personalized = u.personalizedImpact;
+  const relevance = u.relevanceScore == null ? null : u.relevanceScore >= 19 ? {label:"Élevée",color:"bg-emerald-600"} : u.relevanceScore >= 9 ? {label:"Moyenne",color:"bg-blue-600"} : {label:"Faible",color:"bg-slate-400"};
 
   return (
     <Card className="relative transition hover:shadow-sm">
@@ -30,6 +31,7 @@ export function UpdateCard(props: { update: WatchUpdate; onOpen: () => void }) {
             <Badge variant="outline">{u.type}</Badge>
             <Badge variant="outline">{u.status}</Badge>
             {u.aiAnalyzed ? <Badge variant="outline">IA</Badge> : null}
+            {u.isCriticalOverride ? <Badge variant="destructive">Critique</Badge> : null}
           </div>
           <div className="text-xs text-muted-foreground">{formatDate(u.publishedAt)}</div>
         </div>
@@ -39,6 +41,7 @@ export function UpdateCard(props: { update: WatchUpdate; onOpen: () => void }) {
 
       <CardContent className="space-y-3">
         <p className="text-sm text-muted-foreground">{u.summaryShort}</p>
+        {relevance ? <div aria-label={`Pertinence ${relevance.label}`} className="space-y-1"><div className="flex justify-between text-[11px] text-muted-foreground"><span>Pertinence pour votre profil</span><span>{relevance.label}</span></div><div className="h-1.5 overflow-hidden rounded-full bg-muted"><div className={`h-full ${relevance.color}`} style={{width:`${Math.max(12,Math.min(100,(u.relevanceScore!/27)*100))}%`}} /></div></div> : null}
         {/^https:\/\//i.test(u.sourceUrl ?? "") ? <a className="text-xs font-medium text-blue-700 underline" href={u.sourceUrl} target="_blank" rel="noreferrer" onClick={(e)=>e.stopPropagation()}>Document officiel ↗</a> : null}
 
         {personalized ? (

@@ -30,12 +30,13 @@ function computeKpis(items: WatchUpdate[]) {
 }
 
 export function WatchDashboard() {
+  const initialShowAll = React.useMemo(() => localStorage.getItem("qara-watch-show-all") === "true", []);
   const [filters, setFilters] = React.useState<WatchFiltersValue>({
     search: "",
     type: "ALL",
     impact: "ALL",
     status: "ALL",
-    market:"ALL", role:"ALL", sourceId:"ALL", readStatus:"all", sortBy:"date",
+    market:"ALL", role:"ALL", sourceId:"ALL", readStatus:"all", sortBy:"relevance", showAll:initialShowAll,
   });
 
   const query = useWatchUpdates({
@@ -45,7 +46,7 @@ export function WatchDashboard() {
     type: filters.type === "ALL" ? undefined : (filters.type as any),
     impactLevel: filters.impact === "ALL" ? undefined : (filters.impact as any),
     status: filters.status === "ALL" ? undefined : (filters.status as any),
-    marketsImpacted: filters.market === "ALL" ? undefined : [filters.market], rolesImpacted: filters.role === "ALL" ? undefined : [filters.role], sourceIds: filters.sourceId === "ALL" ? undefined : [filters.sourceId], readStatus: filters.readStatus, sortBy: filters.sortBy,
+    marketsImpacted: filters.market === "ALL" ? undefined : [filters.market], rolesImpacted: filters.role === "ALL" ? undefined : [filters.role], sourceIds: filters.sourceId === "ALL" ? undefined : [filters.sourceId], readStatus: filters.readStatus, sortBy: filters.sortBy, showAll:filters.showAll,
   });
   const sourcesQuery=useWatchSources(); const unreadQuery=useUnreadCount(); const markRead=useMarkAsRead();
 
@@ -59,6 +60,7 @@ export function WatchDashboard() {
   const profile: CompanyProfile | undefined = data?.companyProfile as CompanyProfile | undefined;
 
   const kpis = React.useMemo(() => computeKpis(items), [items]);
+  React.useEffect(()=>{localStorage.setItem("qara-watch-show-all",String(filters.showAll));},[filters.showAll]);
 
   const openDetails = (u: WatchUpdate) => {
     if(u.isRead===false) markRead.mutate({itemId:u.id},{onSuccess:()=>{query.refetch();unreadQuery.refetch();}});
@@ -66,7 +68,7 @@ export function WatchDashboard() {
     setDrawerOpen(true);
   };
 
-  const onReset = () => setFilters({ search: "", type: "ALL", impact: "ALL", status: "ALL", market:"ALL",role:"ALL",sourceId:"ALL",readStatus:"all",sortBy:"date" });
+  const onReset = () => setFilters({ search: "", type: "ALL", impact: "ALL", status: "ALL", market:"ALL",role:"ALL",sourceId:"ALL",readStatus:"all",sortBy:"relevance",showAll:false });
 
   return (
     <div className="space-y-6">
@@ -146,6 +148,7 @@ export function WatchDashboard() {
       </div>
 
       {profile ? <CompanyProfilePanel profile={profile} /> : null}
+      {data?.scoringApplied ? <div className="rounded-lg border bg-muted/30 p-3 text-sm"><span className="font-medium">Votre veille est personnalisée pour :</span> {(data.profileUsed?.referentials??[]).join(", ")||"tous référentiels"} | Marché {(data.profileUsed?.markets??[]).join(", ")||"tous"} | {(data.profileUsed?.roles??[]).join(", ")||"tous rôles"} | {data.hiddenBelowThreshold??0} item(s) masqué(s) sous le seuil de pertinence</div> : <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">Aucun profil de veille enregistré : tous les items sont affichés.</div>}
 
       <WatchFilters value={filters} onChange={setFilters} onReset={onReset} sources={(sourcesQuery.data as any)?.sources??[]} />
 

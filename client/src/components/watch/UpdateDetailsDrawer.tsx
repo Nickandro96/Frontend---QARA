@@ -34,6 +34,7 @@ export function UpdateDetailsDrawer(props: {
         {u ? (
           <div className="mt-4 space-y-4">
             <div className="rounded-lg border bg-card p-4 text-sm whitespace-pre-wrap">{u.summaryLong}</div>
+            {u.relevanceScore != null ? <div className="rounded-lg border bg-card p-4 text-sm"><div className="font-medium">Pertinence pour votre profil</div><div className="mt-1 text-2xl font-semibold">{u.relevanceScore}/27</div><div className="text-xs text-muted-foreground">Version de la formule : v{u.scoreBreakdown?.version ?? "1.0"}</div><ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-muted-foreground">{(u.scoreExplanation??u.scoreBreakdown?.explanation??[]).map((line,i)=><li key={i}>{line}</li>)}</ul><p className="mt-3 text-xs text-muted-foreground">Ce score est calculé automatiquement selon votre profil. Les alertes critiques sont toujours affichées.</p></div> : null}
             {u.aiAnalyzed ? (
               <div className="rounded-lg border border-violet-200 bg-violet-50 p-3 text-xs text-violet-950">
                 Ce résumé a été généré par analyse IA du document officiel publié le {u.publishedAt ? new Date(u.publishedAt).toLocaleDateString("fr-FR") : "date non renseignée"} par {u.sourceName}. Il ne remplace pas la lecture du document original.{" "}
