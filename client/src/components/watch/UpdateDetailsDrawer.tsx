@@ -36,7 +36,7 @@ export function UpdateDetailsDrawer(props: {
             <div className="rounded-lg border bg-card p-4 text-sm whitespace-pre-wrap">{u.summaryLong}</div>
             {u.aiAnalyzed ? (
               <div className="rounded-lg border border-violet-200 bg-violet-50 p-3 text-xs text-violet-950">
-                Ce résumé a été généré par analyse IA du document officiel publié le {u.publishedAt ? new Date(u.publishedAt).toLocaleDateString("fr-FR") : "date non renseignée"} par {u.sourceName}. Il ne remplace pas la lecture du document original.{" "}
+                <strong>Résumé généré par analyse IA.</strong> Document officiel publié le {u.publishedAt ? new Date(u.publishedAt).toLocaleDateString("fr-FR") : "date non renseignée"} par {u.sourceName}. Cette analyse ne remplace pas la lecture du document original.{" "}
                 <a className="font-medium underline" href={u.sourceUrl} target="_blank" rel="noreferrer">Consulter le document original ↗</a>
               </div>
             ) : null}
@@ -54,6 +54,8 @@ export function UpdateDetailsDrawer(props: {
             {u.aiAnalyzed ? <div className="rounded-lg border bg-card p-4 text-xs"><div className="font-medium">Analyse IA</div><div>Modèle : {u.aiModelVersion ?? "Non renseigné"}</div><div>Date : {u.aiAnalysisDate ? new Date(u.aiAnalysisDate).toLocaleString("fr-FR") : "Non renseignée"}</div></div> : null}
             <div className="rounded-lg border bg-card p-4 text-xs"><div className="font-medium">Impact réglementaire</div><div className="mt-2 flex flex-wrap gap-1">{[...(u.referentialsImpacted??[]),...(u.marketsImpacted??[]),...(u.rolesImpacted??[])].map((v)=><span key={v} className="rounded bg-muted px-2 py-1">{v}</span>)}</div>{u.dueDate ? <div className="mt-2">Échéance : {new Date(u.dueDate).toLocaleDateString("fr-FR")}</div> : null}</div>
             <ImpactPanel update={u} />
+            {u.keyChanges?.length ? <div className="rounded-lg border bg-card p-4"><div className="text-sm font-medium">Changements clés</div><ul className="mt-2 list-disc pl-5 text-sm">{u.keyChanges.map((change)=><li key={change}>{change}</li>)}</ul></div> : null}
+            {u.actionRequired ? <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm"><div className="font-medium text-red-800">Action requise</div><p className="mt-1">{u.actionRequired}</p><Button className="mt-3" asChild><a href={`/action-plan?watchItemId=${u.id}`}>Créer une action CAPA depuis cette alerte</a></Button></div> : null}
 
             <Separator />
 

@@ -28,6 +28,9 @@ export type WatchUpdate = {
   summaryFr?: string | null;
   summaryEn?: string | null;
   aiAnalyzed?: boolean;
+  criticality?: "informational" | "watch" | "action_required" | null;
+  keyChanges?: string[];
+  actionRequired?: string | null;
   aiModelVersion?: string | null;
   publishedAt: string | Date | null;
   status: "NEW" | "UPDATED" | "REPEALED" | "CORRIGENDUM";
@@ -60,6 +63,8 @@ export type WatchMeta = {
   refreshInProgress: boolean;
   degraded: boolean;
   sourceHealth: { name: string; ok: boolean; message?: string; durationMs?: number; items?: number }[];
+  totalAvailable?: number;
+  totalFiltered?: number;
 };
 
 export type CompanyProfile = {
