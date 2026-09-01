@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { trpc } from "@/lib/trpc";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const AUTH_REFRESH_TIMEOUT_MS = 1500;
 
@@ -19,6 +20,8 @@ export default function Register() {
     company: "",
     role: "",
     phone: "",
+    cguAccepted: false,
+    marketingConsent: false,
   });
   const [error, setError] = useState("");
   const { refresh } = useAuth();
@@ -74,6 +77,8 @@ export default function Register() {
       company: formData.company,
       role: formData.role,
       phone: formData.phone,
+      cguAccepted: formData.cguAccepted as true,
+      marketingConsent: formData.marketingConsent,
     });
   };
 
@@ -173,6 +178,22 @@ export default function Register() {
               <Input id="phone" name="phone" type="tel" placeholder="+33 6 12 34 56 78" value={formData.phone} onChange={handleChange} />
             </div>
 
+            <label className="flex items-start gap-3 text-sm leading-5">
+              <Checkbox
+                checked={formData.cguAccepted}
+                onCheckedChange={(checked) => setFormData((previous) => ({ ...previous, cguAccepted: checked === true }))}
+                aria-required="true"
+              />
+              <span>J'accepte les <Link href="/cgu" className="text-[#2558c7] underline">Conditions Générales d'Utilisation</Link> et la <Link href="/politique-confidentialite" className="text-[#2558c7] underline">Politique de confidentialité</Link> de QARA. *</span>
+            </label>
+            <label className="flex items-start gap-3 text-sm leading-5">
+              <Checkbox
+                checked={formData.marketingConsent}
+                onCheckedChange={(checked) => setFormData((previous) => ({ ...previous, marketingConsent: checked === true }))}
+              />
+              <span>J'accepte de recevoir des communications commerciales de QARA (optionnel).</span>
+            </label>
+
             {error ? (
               <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-600">{error}</div>
             ) : null}
@@ -183,7 +204,7 @@ export default function Register() {
               </div>
             ) : null}
 
-            <Button type="submit" className="w-full py-6 text-lg font-semibold" disabled={registerMutation.isPending}>
+            <Button type="submit" className="w-full py-6 text-lg font-semibold" disabled={registerMutation.isPending || !formData.cguAccepted}>
               {registerMutation.isPending ? (
                 <>
                   <Loader2 className="mr-2 h-5 w-5 animate-spin" />
