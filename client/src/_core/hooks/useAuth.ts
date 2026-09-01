@@ -46,12 +46,9 @@ export function useAuth(options?: UseAuthOptions) {
 
   const state = useMemo(() => {
     if (typeof window !== "undefined") {
-      if (meQuery.data) {
-        window.localStorage.setItem(
-          "manus-runtime-user-info",
-          JSON.stringify(meQuery.data)
-        );
-      } else if (!meQuery.isLoading) {
+      // L'identité et la session restent en mémoire React et dans le cookie
+      // httpOnly côté serveur. Supprime aussi l'ancien cache local éventuel.
+      if (meQuery.data || !meQuery.isLoading) {
         clearClientSession();
       }
     }

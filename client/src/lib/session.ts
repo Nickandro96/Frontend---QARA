@@ -9,6 +9,9 @@ const PUBLIC_ROUTES = new Set([
   "/pricing",
   "/contact",
   "/faq",
+  "/cgu",
+  "/politique-confidentialite",
+  "/mentions-legales",
   "/404",
 ]);
 
