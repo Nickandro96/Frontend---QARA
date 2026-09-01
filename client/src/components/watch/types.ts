@@ -28,7 +28,7 @@ export type WatchUpdate = {
   summaryFr?: string | null;
   summaryEn?: string | null;
   aiAnalyzed?: boolean;
-  criticality?: "informational" | "watch" | "action_required" | null;
+  analysisCriticality?: "informational" | "watch" | "action_required" | null;
   keyChanges?: string[];
   actionRequired?: string | null;
   aiModelVersion?: string | null;

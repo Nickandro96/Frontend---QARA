@@ -637,6 +637,7 @@ export default function MDRAuditDrilldown() {
 
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant={crit.variant as any}>{crit.label}</Badge>
+              {(valueNow === "partial" || valueNow === "non_compliant") && <Button type="button" size="sm" variant="outline" onClick={() => setLocation(`/audits/${auditId}/capa?questionKey=${encodeURIComponent(currentQuestion!.questionKey)}`)}>Ouvrir la CAPA</Button>}
               <Button
                 type="button"
                 variant={expertMode ? "default" : "outline"}

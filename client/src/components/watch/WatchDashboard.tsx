@@ -3,7 +3,9 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, RefreshCw } from "lucide-react";
+import { Download, Loader2, RefreshCw } from "lucide-react";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { toast } from "sonner";
 
 import { useWatchUpdates, useWatchRefreshMutation, useWatchSources, useUnreadCount, useMarkAsRead } from "@/api/watch";
 import { WatchFilters, type WatchFiltersValue } from "./WatchFilters";
@@ -11,6 +13,7 @@ import { WatchFeed } from "./WatchFeed";
 import { UpdateDetailsDrawer } from "./UpdateDetailsDrawer";
 import { CompanyProfilePanel } from "./CompanyProfilePanel";
 import type { WatchUpdate, WatchMeta, CompanyProfile } from "./types";
+import { trpc } from "@/lib/trpc";
 
 function formatDateTime(d: string | Date | null | undefined): string {
   if (!d) return "—";
@@ -30,6 +33,7 @@ function computeKpis(items: WatchUpdate[]) {
 }
 
 export function WatchDashboard() {
+  const { user } = useAuth();
   const [filters, setFilters] = React.useState<WatchFiltersValue>({
     search: "",
     type: "ALL",
@@ -51,6 +55,15 @@ export function WatchDashboard() {
   const sourcesQuery=useWatchSources(); const unreadQuery=useUnreadCount(); const markRead=useMarkAsRead();
 
   const refresh = useWatchRefreshMutation();
+  const exportReport = trpc.watch.exportReport.useMutation({
+    onSuccess: (result) => {
+      const bytes = Uint8Array.from(atob(result.base64), (char) => char.charCodeAt(0));
+      const url = URL.createObjectURL(new Blob([bytes], { type: result.mimeType }));
+      const link = document.createElement("a"); link.href = url; link.download = result.filename; link.click(); URL.revokeObjectURL(url);
+      toast.success("Rapport de veille généré");
+    },
+    onError: (error) => toast.error(error.message),
+  });
   const [selected, setSelected] = React.useState<WatchUpdate | null>(null);
   const [drawerOpen, setDrawerOpen] = React.useState(false);
 
@@ -87,6 +100,9 @@ export function WatchDashboard() {
         </div>
 
         <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => exportReport.mutate({ organisation: user?.name || user?.email || "Organisation", period: "12 derniers mois" })} disabled={exportReport.isPending}>
+            <Download className="mr-2 h-4 w-4" />Exporter le rapport PDF
+          </Button>
           <Button
             variant="secondary"
             onClick={() => refresh.mutate({ trigger: "manual" })}

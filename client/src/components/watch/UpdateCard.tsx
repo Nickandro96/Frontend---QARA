@@ -30,6 +30,7 @@ export function UpdateCard(props: { update: WatchUpdate; onOpen: () => void }) {
             <Badge variant="outline">{u.type}</Badge>
             <Badge variant="outline">{u.status}</Badge>
             {u.aiAnalyzed ? <Badge variant="outline">IA</Badge> : null}
+            {u.analysisCriticality === "action_required" ? <Badge variant="destructive">Action requise</Badge> : u.analysisCriticality === "watch" ? <Badge className="bg-amber-100 text-amber-800">À surveiller</Badge> : null}
           </div>
           <div className="text-xs text-muted-foreground">{formatDate(u.publishedAt)}</div>
         </div>
