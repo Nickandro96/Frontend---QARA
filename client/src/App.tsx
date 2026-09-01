@@ -203,12 +203,28 @@ function Router() {
           <FdaClassification />
         </ProtectedPage>
       </Route>
-      <Route path="/action-plan">
+      <Route path="/improvement/non-conformities">
         <ProtectedPage>
           <ActionDashboard />
         </ProtectedPage>
       </Route>
-      <Route path="/plan-action"><Redirect to="/action-plan" /></Route>
+      <Route path="/improvement/capa">
+        <ProtectedPage>
+          <ActionDashboard />
+        </ProtectedPage>
+      </Route>
+      <Route path="/improvement/actions">
+        <ProtectedPage>
+          <ActionDashboard />
+        </ProtectedPage>
+      </Route>
+      <Route path="/improvement">
+        <ProtectedPage>
+          <ActionDashboard />
+        </ProtectedPage>
+      </Route>
+      <Route path="/action-plan"><Redirect to="/improvement" /></Route>
+      <Route path="/plan-action"><Redirect to="/improvement" /></Route>
       <Route path="/reports/comparative">
         <ProtectedPage>
           <ReportComparative />
@@ -351,7 +367,7 @@ function Router() {
         <Redirect to="/veille" />
       </Route>
       <Route path="/action-dashboard">
-        <Redirect to="/action-plan" />
+        <Redirect to="/improvement" />
       </Route>
       <Route path="/dashboard-v2">
         <Redirect to="/dashboard" />

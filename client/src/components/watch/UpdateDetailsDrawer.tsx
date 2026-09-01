@@ -55,7 +55,7 @@ export function UpdateDetailsDrawer(props: {
             <div className="rounded-lg border bg-card p-4 text-xs"><div className="font-medium">Impact réglementaire</div><div className="mt-2 flex flex-wrap gap-1">{[...(u.referentialsImpacted??[]),...(u.marketsImpacted??[]),...(u.rolesImpacted??[])].map((v)=><span key={v} className="rounded bg-muted px-2 py-1">{v}</span>)}</div>{u.dueDate ? <div className="mt-2">Échéance : {new Date(u.dueDate).toLocaleDateString("fr-FR")}</div> : null}</div>
             <ImpactPanel update={u} />
             {u.keyChanges?.length ? <div className="rounded-lg border bg-card p-4"><div className="text-sm font-medium">Changements clés</div><ul className="mt-2 list-disc pl-5 text-sm">{u.keyChanges.map((change)=><li key={change}>{change}</li>)}</ul></div> : null}
-            {u.actionRequired ? <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm"><div className="font-medium text-red-800">Action requise</div><p className="mt-1">{u.actionRequired}</p><Button className="mt-3" asChild><a href={`/action-plan?watchItemId=${u.id}`}>Créer une action CAPA depuis cette alerte</a></Button></div> : null}
+            {u.actionRequired ? <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm"><div className="font-medium text-red-800">Action requise</div><p className="mt-1">{u.actionRequired}</p><Button className="mt-3" asChild><a href={`/improvement/capa?watchItemId=${u.id}`}>Créer une CAPA depuis cette alerte</a></Button></div> : null}
 
             <Separator />
 
