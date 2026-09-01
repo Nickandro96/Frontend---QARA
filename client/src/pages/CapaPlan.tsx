@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { trpc } from "@/lib/trpc";
 import { useParams, useLocation } from "wouter";
 import { getLoginUrl } from "@/const";
@@ -58,6 +59,21 @@ function ActionCard({ action, auditId }: { action: any; auditId: number }) {
   const [mdsapGrade, setMdsapGrade] = useState(action.mdsapGrade != null ? String(action.mdsapGrade) : "");
   const [mdsapEscalation, setMdsapEscalation] = useState(action.mdsapEscalation || "");
   const isMdsap = action.referentialCode === "MDSAP";
+  const [aiAnalysis, setAiAnalysis] = useState<any>(null);
+  const [aiContext, setAiContext] = useState<any>(null);
+  const [selectedActionIds, setSelectedActionIds] = useState<string[]>([]);
+
+  const generateAI = trpc.capa.generateAnalysis.useMutation({
+    onSuccess: (data: any) => {
+      setAiAnalysis(data.analysis); setAiContext(data.context);
+      setSelectedActionIds(data.analysis.actionsCorrectivesProposees.map((item: any) => item.id));
+    },
+    onError: (e) => toast.error(`Analyse impossible : ${e.message}`),
+  });
+  const saveAI = trpc.capa.saveAnalysis.useMutation({
+    onSuccess: () => { toast.success("Plan CAPA validé et enregistré"); utils.capa.list.invalidate({ auditId }); },
+    onError: (e) => toast.error(`Enregistrement impossible : ${e.message}`),
+  });
 
   const updateMutation = trpc.capa.update.useMutation({
     onSuccess: () => {
@@ -133,6 +149,25 @@ function ActionCard({ action, auditId }: { action: any; auditId: number }) {
         <CardDescription className="mt-2">{action.ecartIdentifie}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        <div className="rounded-lg border border-violet-200 bg-violet-50/50 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div><div className="font-semibold">Analyse CAPA assistée par IA</div><p className="text-xs text-muted-foreground">L'analyse reste une proposition : vérifiez et modifiez chaque élément avant enregistrement.</p></div>
+            <Button type="button" size="sm" onClick={() => generateAI.mutate({ auditId, questionKey: action.questionKey })} disabled={generateAI.isPending}>
+              {generateAI.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Analyser avec l'IA
+            </Button>
+          </div>
+          {aiAnalysis && (
+            <div className="mt-4 space-y-4">
+              <div className="rounded bg-white p-3 text-xs"><strong>Question :</strong> {aiContext?.questionText}<br/><strong>Référence :</strong> {aiContext?.articleReference ?? "Non renseignée"}<br/><strong>Constat :</strong> {aiContext?.responseComment ?? "Non fourni"}<br/><strong>Preuves :</strong> {aiContext?.objectiveEvidence ?? "Non fournies"}</div>
+              <div><label className="text-sm font-medium">Contexte de la situation</label><Textarea value={aiAnalysis.contexteSituation} onChange={(e)=>setAiAnalysis({...aiAnalysis,contexteSituation:e.target.value})}/></div>
+              <div><label className="text-sm font-medium">Non-conformité identifiée</label><Textarea value={aiAnalysis.nonConformiteIdentifiee} onChange={(e)=>setAiAnalysis({...aiAnalysis,nonConformiteIdentifiee:e.target.value})}/></div>
+              <div className="space-y-2"><div className="text-sm font-medium">Analyse 5 Pourquoi</div>{[1,2,3,4,5].map((n)=>{const key=`pourquoi${n}`; const p=aiAnalysis.analyse5Pourquoi[key]; return <div key={key} className="ml-[calc((var(--n)-1)*0.5rem)] rounded border bg-white p-2 text-xs" style={{ marginLeft: `${(n-1)*12}px` }}><strong>{n}. {p.question}</strong><div>{p.reponse}</div></div>})}<div><label className="text-sm font-medium">Cause racine identifiée</label><Textarea value={aiAnalysis.analyse5Pourquoi.causeRacineIdentifiee} onChange={(e)=>setAiAnalysis({...aiAnalysis,analyse5Pourquoi:{...aiAnalysis.analyse5Pourquoi,causeRacineIdentifiee:e.target.value}})}/></div></div>
+              <div><label className="text-sm font-medium">Correction immédiate</label><Textarea value={aiAnalysis.correctionImmediate} onChange={(e)=>setAiAnalysis({...aiAnalysis,correctionImmediate:e.target.value})}/></div>
+              <div className="space-y-3"><div className="text-sm font-medium">Actions correctives proposées</div>{aiAnalysis.actionsCorrectivesProposees.map((item:any)=><div key={item.id} className="rounded border bg-white p-3"><label className="flex gap-2"><Checkbox checked={selectedActionIds.includes(item.id)} onCheckedChange={(checked)=>setSelectedActionIds((ids)=>checked===true?[...new Set([...ids,item.id])]:ids.filter((id)=>id!==item.id))}/><span className="font-medium">{item.titre}</span></label><p className="mt-1 text-sm">{item.description}</p><div className="mt-2 flex flex-wrap gap-2 text-xs"><Badge>{item.priorite}</Badge><Badge variant="outline">{item.complexite}</Badge><span>{item.delaiSuggeree}</span><span>{item.exigenceReglementaire}</span></div><p className="mt-2 text-xs text-muted-foreground">Efficacité : {item.indicateurEfficacite}</p></div>)}</div>
+              <div className="flex items-center justify-between"><Badge variant="outline">Confiance : {aiAnalysis.niveauConfiance}</Badge><Button type="button" onClick={()=>saveAI.mutate({auditId,questionKey:action.questionKey,analysis:aiAnalysis,selectedActions:aiAnalysis.actionsCorrectivesProposees.filter((item:any)=>selectedActionIds.includes(item.id)),responsible:responsible||undefined,dueDate:dueDate?new Date(dueDate).toISOString():undefined})} disabled={saveAI.isPending||selectedActionIds.length===0}>Enregistrer le plan CAPA</Button></div>
+            </div>
+          )}
+        </div>
         <div>
           <label className="text-sm font-medium mb-1 block">Action recommandée (pré-remplie)</label>
           <p className="text-sm text-muted-foreground bg-muted/40 rounded p-2">{action.actionRecommandee}</p>
