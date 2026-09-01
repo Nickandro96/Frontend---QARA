@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { trpc } from "@/lib/trpc";
-import { Loader2, CheckCircle2, Plus, Trash2 } from "lucide-react";
+import { Loader2, CheckCircle2, Download, Plus, Trash2 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { getLoginUrl } from "@/const";
 import { toast } from "sonner";
@@ -219,6 +219,8 @@ export default function Profile() {
   const { user, isAuthenticated, loading, logout } = useAuth();
   const { data: profile, refetch } = trpc.profile.get.useQuery(undefined, { enabled: isAuthenticated });
   const updateProfile = trpc.profile.update.useMutation();
+  const exportData = trpc.users.exportMyData.useQuery(undefined, { enabled: false });
+  const deleteAccount = trpc.users.deleteMyAccount.useMutation();
 
   const [economicRole, setEconomicRole] = useState<string>("");
   const [companyName, setCompanyName] = useState("");
@@ -254,6 +256,29 @@ export default function Profile() {
     } catch (error) {
       toast.error("Erreur lors de la mise à jour du profil");
     }
+  };
+
+  const handleExport = async () => {
+    try {
+      const result = await exportData.refetch();
+      if (!result.data) throw new Error("Export vide");
+      const url = URL.createObjectURL(new Blob([JSON.stringify(result.data, null, 2)], { type: "application/json" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `qara-export-${new Date().toISOString().slice(0, 10)}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch { toast.error("Impossible de générer l'export"); }
+  };
+
+  const handleDelete = async () => {
+    const confirmation = window.prompt('Pour confirmer, saisissez exactement "SUPPRIMER". Cette action anonymise votre compte.');
+    if (confirmation !== "SUPPRIMER") return;
+    try {
+      await deleteAccount.mutateAsync({ confirmation: "SUPPRIMER" });
+      toast.success("Votre compte a été anonymisé");
+      window.location.assign("/");
+    } catch { toast.error("La suppression du compte a échoué"); }
   };
 
   return (
@@ -363,6 +388,23 @@ export default function Profile() {
             <Button variant="outline" className="w-full" disabled>
               Gérer l'abonnement (Prochainement)
             </Button>
+          </CardContent>
+        </Card>
+
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Mes données et confidentialité</CardTitle>
+            <CardDescription>Exercez vos droits à la portabilité et à l'effacement.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Button variant="outline" onClick={handleExport} disabled={exportData.isFetching} className="w-full">
+              {exportData.isFetching ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+              Télécharger mes données
+            </Button>
+            <Button variant="destructive" onClick={handleDelete} disabled={deleteAccount.isPending} className="w-full">
+              <Trash2 className="mr-2 h-4 w-4" /> Supprimer mon compte
+            </Button>
+            <p className="text-xs text-muted-foreground">La suppression anonymise vos données personnelles. Les audits nécessaires à la traçabilité réglementaire sont conservés.</p>
           </CardContent>
         </Card>
 
