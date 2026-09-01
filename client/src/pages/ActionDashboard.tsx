@@ -12,10 +12,26 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { trpc } from "@/lib/trpc";
+import { useState } from "react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { toast } from "sonner";
 
 export default function ActionDashboard() {
   const { user } = useAuth();
   const { data: dashboard, isLoading } = trpc.capa.dashboard.useQuery();
+  const utils = trpc.useUtils();
+  const watchItemId = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("watchItemId") : null;
+  const { data: audits } = trpc.audit.list.useQuery(undefined, { enabled: Boolean(watchItemId) });
+  const [watchAuditId, setWatchAuditId] = useState("");
+  const createFromWatch = trpc.capa.createFromWatchItem.useMutation({
+    onSuccess: (action) => {
+      toast.success("Action CAPA créée depuis la veille");
+      utils.capa.dashboard.invalidate();
+      window.history.replaceState({}, "", "/action-plan");
+      if (action?.auditId) window.location.href = `/audits/${action.auditId}/capa`;
+    },
+    onError: (error) => toast.error(error.message),
+  });
 
   const actions = dashboard?.actions ?? [];
   const totalActions = actions.length;
@@ -41,6 +57,8 @@ export default function ActionDashboard() {
             Actions correctives et préventives issues de vos audits
           </p>
         </div>
+
+        {watchItemId && <Card className="border-red-200 bg-red-50 p-5"><h2 className="font-semibold">Créer une CAPA depuis l’alerte réglementaire</h2><p className="mt-1 text-sm text-muted-foreground">Choisissez l’audit auquel rattacher cette action. La source et le lien vers l’alerte seront conservés.</p><div className="mt-4 flex flex-col gap-3 sm:flex-row"><Select value={watchAuditId} onValueChange={setWatchAuditId}><SelectTrigger className="sm:w-96"><SelectValue placeholder="Sélectionner un audit"/></SelectTrigger><SelectContent>{(audits ?? []).map((audit:any)=><SelectItem key={audit.id} value={String(audit.id)}>{audit.name ?? `Audit ${audit.id}`}</SelectItem>)}</SelectContent></Select><Button disabled={!watchAuditId || createFromWatch.isPending} onClick={()=>createFromWatch.mutate({auditId:Number(watchAuditId),watchItemId})}>Créer l’action CAPA</Button></div></Card>}
 
         {isLoading ? (
           <Card className="p-8 text-center text-muted-foreground">Chargement…</Card>
@@ -87,6 +105,7 @@ export default function ActionDashboard() {
             {(dashboard?.unplanned.length ?? 0) > 0 && <section><h2 className="mb-3 text-xl font-semibold">NC sans CAPA — à traiter</h2><div className="space-y-3">{dashboard!.unplanned.map((nc:any)=><Card key={`${nc.auditId}:${nc.questionKey}`} className="border-l-4 border-l-orange-500 p-4"><div className="flex items-start justify-between gap-4"><div><div className="flex gap-2"><Badge variant="destructive">{nc.criticality}</Badge><Badge variant="outline">{nc.articleReference ?? "Référence non renseignée"}</Badge></div><h3 className="mt-2 font-medium">{String(nc.questionText).slice(0,100)}{String(nc.questionText).length>100?"…":""}</h3><p className="text-sm text-muted-foreground">{nc.auditName}{nc.processName?` — ${nc.processName}`:""}</p></div><Link href={`/audits/${nc.auditId}/capa`}><Button size="sm">Créer et analyser la CAPA</Button></Link></div></Card>)}</div></section>}
 
             <div className="space-y-3">
+              {actions.some((action:any)=>action.source === "veille_reglementaire") && <h2 className="text-xl font-semibold">Issues de la veille réglementaire</h2>}
               {actions.map((action: any) => (
                 <Card key={action.id} className="p-5">
                   <div className="flex items-start justify-between gap-4">
@@ -114,6 +133,7 @@ export default function ActionDashboard() {
                           Issu de l'audit : {action.auditName}
                         </p>
                       )}
+                      {action.source === "veille_reglementaire" && <div className="mt-2"><Badge variant="outline">Veille réglementaire</Badge>{action.watchItem?.sourceUrl && <a className="ml-2 text-sm text-blue-700 underline" href={action.watchItem.sourceUrl} target="_blank" rel="noreferrer">Retour à la source officielle ↗</a>}</div>}
                     </div>
                     {action.auditId && (
                       <Link href={`/audits/${action.auditId}/capa`}>
