@@ -21,7 +21,7 @@ const navItems = [
   { label: "Audits", path: "/audits", icon: ClipboardCheck },
   { label: "Classification", path: "/classification", icon: BarChart3 },
   { label: "Voies FDA", path: "/fda", icon: RouteIcon },
-  { label: "Plan d'action", path: "/action-plan", icon: FileText },
+  { label: "Amélioration", path: "/improvement", icon: Shield },
   { label: "Rapports", path: "/reports", icon: FileText },
   { label: "Veille", path: "/veille", icon: Bell },
 ];

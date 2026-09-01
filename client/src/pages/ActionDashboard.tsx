@@ -1,155 +1,82 @@
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Link } from "wouter";
-import {
-  ClipboardCheck,
-  AlertCircle,
-  Clock,
-  ArrowRight,
-  Calendar,
-  User,
-} from "lucide-react";
-import { useAuth } from "@/_core/hooks/useAuth";
-import { trpc } from "@/lib/trpc";
-import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { trpc } from "@/lib/trpc";
+import { exportActionPlanExcel, exportActionPlanPdf, exportNonConformitiesExcel, exportNonConformitiesPdf } from "@/lib/improvementExports";
+import { AlertCircle, ArrowRight, BarChart3, CheckCircle2, ClipboardCheck, Clock3, FileSpreadsheet, FileText, FileWarning, LayoutList, Search, ShieldCheck, User } from "lucide-react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
+import { Link, useLocation } from "wouter";
+
+const tabs = [
+  { path: "/improvement", label: "Cockpit qualité", icon: BarChart3 },
+  { path: "/improvement/non-conformities", label: "NC & Écarts", icon: FileWarning },
+  { path: "/improvement/capa", label: "CAPA", icon: ShieldCheck },
+  { path: "/improvement/actions", label: "Plan d’actions", icon: LayoutList },
+];
+const statusLabels: Record<string, string> = { ouverte: "À faire", en_cours: "En cours", a_verifier: "À vérifier", cloturee_efficace: "Clôturée efficace", cloturee_inefficace: "Inefficace", cloturee_sans_suite: "Sans suite" };
+const phaseLabels: Record<string, string> = { qualification: "Qualification", cause_racine: "Cause racine", mise_en_oeuvre: "Mise en œuvre", verification: "Vérification", cloture: "Clôture" };
+
+function StatusBadge({ action }: { action: any }) {
+  const overdue = !String(action.statut).startsWith("cloturee") && action.dueDate && new Date(action.dueDate) < new Date();
+  if (overdue) return <Badge className="bg-red-100 text-red-800">En retard</Badge>;
+  if (action.statut === "cloturee_efficace") return <Badge className="bg-emerald-100 text-emerald-800">Clôturée efficace</Badge>;
+  if (action.statut === "cloturee_inefficace") return <Badge className="bg-amber-100 text-amber-900">Inefficace</Badge>;
+  if (action.statut === "a_verifier") return <Badge className="bg-violet-100 text-violet-800">À vérifier</Badge>;
+  if (action.statut === "en_cours") return <Badge className="bg-blue-100 text-blue-800">En cours</Badge>;
+  return <Badge variant="secondary">À faire</Badge>;
+}
+
+function Metric({ label, value, icon: Icon, tone = "blue", help }: { label: string; value: string | number; icon: any; tone?: string; help?: string }) {
+  const colors: Record<string, string> = { blue: "bg-blue-50 text-blue-700", red: "bg-red-50 text-red-700", amber: "bg-amber-50 text-amber-700", green: "bg-emerald-50 text-emerald-700" };
+  return <Card className="p-5"><div className="flex items-start justify-between gap-3"><div><p className="text-sm text-muted-foreground">{label}</p><p className="mt-2 text-3xl font-bold tracking-tight">{value}</p>{help && <p className="mt-1 text-xs text-muted-foreground">{help}</p>}</div><div className={`rounded-xl p-2.5 ${colors[tone]}`}><Icon className="h-5 w-5" /></div></div></Card>;
+}
+
+function EmptyState({ title, description }: { title: string; description: string }) {
+  return <Card className="p-10 text-center"><ClipboardCheck className="mx-auto h-10 w-10 text-muted-foreground"/><h3 className="mt-3 font-semibold">{title}</h3><p className="mt-1 text-sm text-muted-foreground">{description}</p><Link href="/audits"><Button className="mt-4" variant="outline">Voir les audits</Button></Link></Card>;
+}
+
+function Cockpit({ dashboard }: { dashboard: any }) {
+  const stats = dashboard.stats;
+  const maxTrend = Math.max(1, ...dashboard.trends.flatMap((item: any) => [item.opened, item.closed]));
+  return <div className="space-y-6">
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><Metric label="NC ouvertes" value={stats.ncOuvertes} icon={FileWarning} tone="amber" help={`${stats.ncSansCapa} à qualifier`} /><Metric label="CAPA ouvertes" value={stats.capaOuvertes} icon={ShieldCheck} /><Metric label="Actions en retard" value={stats.enRetard} icon={AlertCircle} tone="red" /><Metric label="Efficacité vérifiée" value={stats.tauxEfficacite == null ? "—" : `${stats.tauxEfficacite}%`} icon={CheckCircle2} tone="green" help="Sur les contrôles terminés" /></div>
+    <div className="grid gap-6 xl:grid-cols-[1.35fr_1fr]">
+      <Card className="p-5"><h2 className="font-semibold">Évolution sur six mois</h2><p className="text-sm text-muted-foreground">NC détectées et actions clôturées, calculées sur les données réelles.</p><div className="mt-5 space-y-4">{dashboard.trends.map((item:any)=><div key={item.month} className="grid grid-cols-[70px_1fr_40px] items-center gap-3 text-sm"><span>{new Date(`${item.month}-01T00:00:00Z`).toLocaleDateString("fr-FR",{month:"short",year:"2-digit"})}</span><div className="space-y-1"><div className="h-2 rounded bg-amber-100"><div className="h-2 rounded bg-amber-500" style={{width:`${item.opened/maxTrend*100}%`}}/></div><div className="h-2 rounded bg-emerald-100"><div className="h-2 rounded bg-emerald-500" style={{width:`${item.closed/maxTrend*100}%`}}/></div></div><span className="text-xs text-muted-foreground">{item.opened}/{item.closed}</span></div>)}</div><div className="mt-4 flex gap-4 text-xs text-muted-foreground"><span>● NC détectées</span><span className="text-emerald-700">● Clôtures</span></div></Card>
+      <Card className="p-5"><h2 className="font-semibold">Pilotage du processus</h2><div className="mt-4 divide-y">{[["Clôture dans les délais",stats.tauxClotureDansLesDelais==null?"Non calculable":`${stats.tauxClotureDansLesDelais}%`],["Délai moyen de résolution",stats.delaiMoyenResolutionJours==null?"Non calculable":`${stats.delaiMoyenResolutionJours} jours`],["Actions à vérifier",stats.aVerifier],["NC récurrentes",stats.ncRecurrentes]].map(([label,value])=><div key={String(label)} className="flex justify-between py-3 text-sm"><span className="text-muted-foreground">{label}</span><strong>{value}</strong></div>)}</div></Card>
+    </div>
+    <div className="grid gap-6 xl:grid-cols-2"><Card className="p-5"><h2 className="font-semibold">Échéances prioritaires</h2><div className="mt-3 space-y-2">{dashboard.upcomingDeadlines.length ? dashboard.upcomingDeadlines.map((action:any)=><Link key={action.id} href={`/audits/${action.auditId}/capa`} className="flex items-center justify-between rounded-lg border p-3 hover:bg-muted/40"><div className="min-w-0"><p className="truncate text-sm font-medium">{action.actionRetenue||action.actionRecommandee}</p><p className="text-xs text-muted-foreground">{action.responsible||"Responsable non attribué"}</p></div><span className="ml-3 whitespace-nowrap text-xs">{new Date(action.dueDate).toLocaleDateString("fr-FR")}</span></Link>) : <p className="py-6 text-center text-sm text-muted-foreground">Aucune échéance renseignée.</p>}</div></Card><Card className="p-5"><h2 className="font-semibold">Processus les plus concernés</h2><div className="mt-4 space-y-3">{dashboard.processBreakdown.slice(0,6).map((item:any)=><div key={item.process}><div className="mb-1 flex justify-between text-sm"><span>{item.process}</span><strong>{item.count}</strong></div><div className="h-2 rounded bg-slate-100"><div className="h-2 rounded bg-blue-500" style={{width:`${Math.min(100,item.count/Math.max(1,dashboard.processBreakdown[0]?.count)*100)}%`}}/></div></div>)}</div></Card></div>
+  </div>;
+}
+
+function NonConformities({ items, search, setSearch, criticality, setCriticality }: any) {
+  const filtered = items.filter((item:any) => `${item.questionText} ${item.auditName} ${item.processName}`.toLowerCase().includes(search.toLowerCase()) && (criticality === "all" || item.criticality === criticality));
+  return <div className="space-y-4"><div className="flex flex-col gap-3 rounded-xl border bg-white p-4 sm:flex-row"><SearchBox value={search} onChange={setSearch} placeholder="Rechercher un constat, un audit ou un processus…"/><Select value={criticality} onValueChange={setCriticality}><SelectTrigger className="sm:w-52"><SelectValue/></SelectTrigger><SelectContent><SelectItem value="all">Toutes les criticités</SelectItem><SelectItem value="high">Haute</SelectItem><SelectItem value="medium">Moyenne</SelectItem><SelectItem value="low">Faible</SelectItem></SelectContent></Select></div>{filtered.length ? <Card className="overflow-hidden"><div className="overflow-x-auto"><table className="w-full min-w-[980px] text-left text-sm"><thead className="border-b bg-slate-50 text-xs uppercase text-muted-foreground"><tr>{["Identifiant","Constat","Origine","Criticité","Processus","Récurrence","Décision"].map(h=><th key={h} className="px-4 py-3">{h}</th>)}</tr></thead><tbody className="divide-y">{filtered.map((nc:any)=><tr key={nc.id} className="hover:bg-slate-50"><td className="px-4 py-4 font-mono text-xs">{nc.id}</td><td className="max-w-md px-4 py-4"><p className="line-clamp-2 font-medium">{nc.questionText}</p><p className="mt-1 text-xs text-muted-foreground">{nc.articleReference||"Référence non renseignée"}</p></td><td className="px-4 py-4">{nc.auditName}</td><td className="px-4 py-4"><Badge variant={nc.criticality==="high"?"destructive":"secondary"}>{nc.criticality}</Badge></td><td className="px-4 py-4">{nc.processName||"—"}</td><td className="px-4 py-4">{nc.recurrenceCount>1?<Badge className="bg-amber-100 text-amber-900">{nc.recurrenceCount} occurrences</Badge>:"Non détectée"}</td><td className="px-4 py-4"><Link href={`/audits/${nc.auditId}/capa?questionKey=${encodeURIComponent(nc.questionKey)}`}><Button size="sm">Qualifier / ouvrir CAPA</Button></Link></td></tr>)}</tbody></table></div></Card> : <EmptyState title="Aucune NC correspondant aux filtres" description="Modifiez les filtres ou consultez vos audits."/>}</div>;
+}
+
+function SearchBox({value,onChange,placeholder}:{value:string;onChange:(value:string)=>void;placeholder:string}) { return <div className="relative flex-1"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground"/><Input className="pl-9" value={value} onChange={(e)=>onChange(e.target.value)} placeholder={placeholder}/></div>; }
+
+function CapaRegistry({ actions, search }: { actions: any[]; search: string }) {
+  const rows=actions.filter((item:any)=>`${item.capaIdentifier} ${item.ecartIdentifie} ${item.auditName}`.toLowerCase().includes(search.toLowerCase()));
+  return rows.length?<div className="grid gap-4 lg:grid-cols-2">{rows.map((action:any)=><Card key={action.id} className="p-5"><div className="flex items-start justify-between gap-3"><div><p className="font-mono text-xs text-muted-foreground">{action.capaIdentifier}</p><h3 className="mt-1 line-clamp-2 font-semibold">{action.ecartIdentifie}</h3></div><StatusBadge action={action}/></div><div className="mt-4 grid grid-cols-2 gap-3 rounded-lg bg-slate-50 p-3 text-sm"><Info label="Phase" value={phaseLabels[action.phase]||action.phase}/><Info label="Pilote" value={action.responsible||"Non attribué"}/><Info label="Audit" value={action.auditName}/><Info label="Complétude" value={`${action.progress}%`}/></div><div className="mt-3 h-2 rounded bg-slate-100"><div className="h-2 rounded bg-blue-600" style={{width:`${action.progress}%`}}/></div><div className="mt-4 flex items-center justify-between"><div className="flex gap-2"><Badge variant="outline">{action.referentialCode}</Badge>{action.hasAIAnalysis&&<Badge className="bg-violet-100 text-violet-800">Analyse IA</Badge>}</div><Link href={`/audits/${action.auditId}/capa?questionKey=${encodeURIComponent(action.questionKey)}`}><Button variant="outline" size="sm">Ouvrir <ArrowRight className="ml-1 h-4 w-4"/></Button></Link></div></Card>)}</div>:<EmptyState title="Aucun dossier CAPA" description="Qualifiez une non-conformité pour ouvrir son dossier CAPA."/>;
+}
+function Info({label,value}:{label:string;value:string}) { return <div><p className="text-xs text-muted-foreground">{label}</p><p className="font-medium">{value}</p></div>; }
+
+function ActionPlan({actions,search,status}:{actions:any[];search:string;status:string}) {
+  const rows=actions.filter((item:any)=>Boolean(item.actionRetenue)&&`${item.actionIdentifier} ${item.actionRetenue} ${item.responsible||""}`.toLowerCase().includes(search.toLowerCase())&&(status==="all"||item.statut===status));
+  return rows.length?<Card className="overflow-hidden"><div className="overflow-x-auto"><table className="w-full min-w-[1080px] text-left text-sm"><thead className="border-b bg-slate-50 text-xs uppercase text-muted-foreground"><tr>{["Action","Origine","Priorité","Responsable","Échéance","Statut","Efficacité"].map(h=><th key={h} className="px-4 py-3">{h}</th>)}</tr></thead><tbody className="divide-y">{rows.map((action:any)=><tr key={action.id} className="hover:bg-slate-50"><td className="max-w-lg px-4 py-4"><p className="font-mono text-xs text-muted-foreground">{action.actionIdentifier}</p><p className="mt-1 line-clamp-2 font-medium">{action.actionRetenue||action.actionRecommandee}</p><Link href={`/audits/${action.auditId}/capa`} className="mt-1 inline-block text-xs text-blue-700 hover:underline">{action.capaIdentifier}</Link></td><td className="px-4 py-4">{action.source==="veille_reglementaire"?"Veille":action.auditName}</td><td className="px-4 py-4"><Badge variant={action.gravite==="majeur"?"destructive":"secondary"}>{action.gravite}</Badge></td><td className="px-4 py-4">{action.responsible?<span className="flex items-center gap-1"><User className="h-3 w-3"/>{action.responsible}</span>:<span className="text-amber-700">À attribuer</span>}</td><td className="px-4 py-4">{action.dueDate?new Date(action.dueDate).toLocaleDateString("fr-FR"):<span className="text-amber-700">À définir</span>}</td><td className="px-4 py-4"><StatusBadge action={action}/></td><td className="px-4 py-4">{action.resultatEfficacite==="efficace"?<span className="text-emerald-700">Efficace</span>:action.resultatEfficacite==="inefficace"?<span className="text-red-700">Inefficace</span>:"Non vérifiée"}</td></tr>)}</tbody></table></div></Card>:<EmptyState title="Aucune action correspondant aux filtres" description="Les actions validées dans les dossiers CAPA apparaîtront ici."/>;
+}
 
 export default function ActionDashboard() {
-  const { user } = useAuth();
-  const { data: dashboard, isLoading } = trpc.capa.dashboard.useQuery();
-  const utils = trpc.useUtils();
-  const watchItemId = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("watchItemId") : null;
-  const { data: audits } = trpc.audit.list.useQuery(undefined, { enabled: Boolean(watchItemId) });
-  const [watchAuditId, setWatchAuditId] = useState("");
-  const createFromWatch = trpc.capa.createFromWatchItem.useMutation({
-    onSuccess: (action) => {
-      toast.success("Action CAPA créée depuis la veille");
-      utils.capa.dashboard.invalidate();
-      window.history.replaceState({}, "", "/action-plan");
-      if (action?.auditId) window.location.href = `/audits/${action.auditId}/capa`;
-    },
-    onError: (error) => toast.error(error.message),
-  });
-
-  const actions = dashboard?.actions ?? [];
-  const totalActions = actions.length;
-  const completedActions = dashboard?.stats.clotureesCeMois ?? 0;
-  const overdueActions = dashboard?.stats.enRetard ?? 0;
-
-  const getStatusBadge = (action: any) => {
-    const isOverdue = !String(action.statut).startsWith("cloturee") && action.dueDate && new Date(action.dueDate) < new Date();
-    if (String(action.statut).startsWith("cloturee")) return <Badge className="bg-green-100 text-green-800">Terminée</Badge>;
-    if (isOverdue) return <Badge className="bg-red-100 text-red-800">En retard</Badge>;
-    if (action.statut === "en_cours" || action.statut === "a_verifier") return <Badge className="bg-blue-100 text-blue-800">En cours</Badge>;
-    return <Badge className="bg-gray-100 text-gray-800">Planifiée</Badge>;
-  };
-
-  return (
-    <div>
-      <div className="p-8 max-w-7xl mx-auto space-y-8">
-        <div>
-          <h1 className="text-3xl font-bold text-text-primary mb-2">
-            Plan d'action, {user?.name || user?.email}
-          </h1>
-          <p className="text-text-secondary text-lg">
-            Actions correctives et préventives issues de vos audits
-          </p>
-        </div>
-
-        {watchItemId && <Card className="border-red-200 bg-red-50 p-5"><h2 className="font-semibold">Créer une CAPA depuis l’alerte réglementaire</h2><p className="mt-1 text-sm text-muted-foreground">Choisissez l’audit auquel rattacher cette action. La source et le lien vers l’alerte seront conservés.</p><div className="mt-4 flex flex-col gap-3 sm:flex-row"><Select value={watchAuditId} onValueChange={setWatchAuditId}><SelectTrigger className="sm:w-96"><SelectValue placeholder="Sélectionner un audit"/></SelectTrigger><SelectContent>{(audits ?? []).map((audit:any)=><SelectItem key={audit.id} value={String(audit.id)}>{audit.name ?? `Audit ${audit.id}`}</SelectItem>)}</SelectContent></Select><Button disabled={!watchAuditId || createFromWatch.isPending} onClick={()=>createFromWatch.mutate({auditId:Number(watchAuditId),watchItemId})}>Créer l’action CAPA</Button></div></Card>}
-
-        {isLoading ? (
-          <Card className="p-8 text-center text-muted-foreground">Chargement…</Card>
-        ) : totalActions === 0 && (dashboard?.unplanned.length ?? 0) === 0 ? (
-          <Card className="p-8 text-center space-y-4">
-            <ClipboardCheck className="w-12 h-12 mx-auto text-muted-foreground" />
-            <p className="text-muted-foreground">
-              Aucune action pour le moment — les actions issues de vos audits apparaîtront ici.
-            </p>
-            <Link href="/audits">
-              <Button className="gap-2">
-                Voir mes audits
-                <ArrowRight className="w-4 h-4" />
-              </Button>
-            </Link>
-          </Card>
-        ) : (
-          <>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-              <Card className="p-6">
-                <div className="flex items-center justify-between mb-2">
-                  <ClipboardCheck className="w-6 h-6 text-blue-500" />
-                  <span className="text-3xl font-bold">{totalActions}</span>
-                </div>
-                <p className="text-sm text-muted-foreground">Actions CAPA</p>
-              </Card>
-              <Card className="p-6">
-                <div className="flex items-center justify-between mb-2">
-                  <ClipboardCheck className="w-6 h-6 text-green-500" />
-                  <span className="text-3xl font-bold">{completedActions}</span>
-                </div>
-                <p className="text-sm text-muted-foreground">Clôturées ce mois</p>
-              </Card>
-              <Card className="p-6">
-                <div className="flex items-center justify-between mb-2">
-                  <AlertCircle className="w-6 h-6 text-red-500" />
-                  <span className="text-3xl font-bold">{overdueActions}</span>
-                </div>
-                <p className="text-sm text-muted-foreground">En retard</p>
-              </Card>
-              <Card className="p-6"><div className="flex items-center justify-between mb-2"><AlertCircle className="w-6 h-6 text-orange-500"/><span className="text-3xl font-bold">{dashboard?.stats.ncOuvertes ?? 0}</span></div><p className="text-sm text-muted-foreground">NC sans CAPA</p></Card>
-            </div>
-
-            {(dashboard?.unplanned.length ?? 0) > 0 && <section><h2 className="mb-3 text-xl font-semibold">NC sans CAPA — à traiter</h2><div className="space-y-3">{dashboard!.unplanned.map((nc:any)=><Card key={`${nc.auditId}:${nc.questionKey}`} className="border-l-4 border-l-orange-500 p-4"><div className="flex items-start justify-between gap-4"><div><div className="flex gap-2"><Badge variant="destructive">{nc.criticality}</Badge><Badge variant="outline">{nc.articleReference ?? "Référence non renseignée"}</Badge></div><h3 className="mt-2 font-medium">{String(nc.questionText).slice(0,100)}{String(nc.questionText).length>100?"…":""}</h3><p className="text-sm text-muted-foreground">{nc.auditName}{nc.processName?` — ${nc.processName}`:""}</p></div><Link href={`/audits/${nc.auditId}/capa`}><Button size="sm">Créer et analyser la CAPA</Button></Link></div></Card>)}</div></section>}
-
-            <div className="space-y-3">
-              {actions.some((action:any)=>action.source === "veille_reglementaire") && <h2 className="text-xl font-semibold">Issues de la veille réglementaire</h2>}
-              {actions.map((action: any) => (
-                <Card key={action.id} className="p-5">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        {getStatusBadge(action)}
-                        {action.dueDate && (
-                          <span className="text-sm text-muted-foreground flex items-center gap-1">
-                            <Calendar className="h-3 w-3" />
-                            {new Date(action.dueDate).toLocaleDateString("fr-FR")}
-                          </span>
-                        )}
-                      </div>
-                      <h4 className="font-semibold mb-1">{action.actionRetenue || action.actionRecommandee}</h4>
-                      <p className="text-sm text-muted-foreground">{action.ecartIdentifie}</p>
-                      {action.responsible && (
-                        <p className="text-sm text-muted-foreground mt-2 flex items-center gap-1">
-                          <User className="h-3 w-3" />
-                          Responsable: {action.responsible}
-                        </p>
-                      )}
-                      {action.auditName && (
-                        <p className="text-sm text-muted-foreground mt-1 flex items-center gap-1">
-                          <Clock className="h-3 w-3" />
-                          Issu de l'audit : {action.auditName}
-                        </p>
-                      )}
-                      {action.source === "veille_reglementaire" && <div className="mt-2"><Badge variant="outline">Veille réglementaire</Badge>{action.watchItem?.sourceUrl && <a className="ml-2 text-sm text-blue-700 underline" href={action.watchItem.sourceUrl} target="_blank" rel="noreferrer">Retour à la source officielle ↗</a>}</div>}
-                    </div>
-                    {action.auditId && (
-                      <Link href={`/audits/${action.auditId}/capa`}>
-                        <Button variant="ghost" size="sm" className="gap-2">
-                          Voir l'audit
-                          <ArrowRight className="w-4 h-4" />
-                        </Button>
-                      </Link>
-                    )}
-                  </div>
-                </Card>
-              ))}
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  );
+  const [location]=useLocation(); const {data:dashboard,isLoading,error}=trpc.capa.dashboard.useQuery(); const [search,setSearch]=useState(""); const [criticality,setCriticality]=useState("all"); const [status,setStatus]=useState("all");
+  const utils=trpc.useUtils(); const watchItemId=typeof window!=="undefined"?new URLSearchParams(window.location.search).get("watchItemId"):null; const {data:audits}=trpc.audit.list.useQuery(undefined,{enabled:Boolean(watchItemId)}); const [watchAuditId,setWatchAuditId]=useState("");
+  const createFromWatch=trpc.capa.createFromWatchItem.useMutation({onSuccess:(action)=>{toast.success("Action CAPA créée depuis la veille");utils.capa.dashboard.invalidate();window.history.replaceState({},"","/improvement/capa");if(action?.auditId)window.location.href=`/audits/${action.auditId}/capa`;},onError:(e)=>toast.error(e.message)});
+  const activeView=useMemo(()=>location.includes("non-conformities")?"nc":location.includes("/capa")?"capa":location.includes("/actions")?"actions":"cockpit",[location]);
+  return <div className="mx-auto max-w-[1500px] space-y-6 py-3"><header><p className="text-sm font-medium text-blue-700">Système de management de la qualité</p><h1 className="mt-1 text-3xl font-bold tracking-tight">Amélioration continue</h1><p className="mt-2 text-muted-foreground">De la détection de l’écart jusqu’à la preuve d’efficacité.</p></header><nav className="flex gap-1 overflow-x-auto rounded-xl border bg-white p-1.5" aria-label="Navigation amélioration continue">{tabs.map(tab=>{const Icon=tab.icon;const active=location===tab.path||(tab.path!=="/improvement"&&location.startsWith(tab.path));return <Link key={tab.path} href={tab.path} className={`flex min-w-max items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium ${active?"bg-blue-600 text-white shadow-sm":"text-slate-600 hover:bg-slate-100"}`}><Icon className="h-4 w-4"/>{tab.label}</Link>;})}</nav>
+    {watchItemId&&<Card className="border-blue-200 bg-blue-50 p-5"><h2 className="font-semibold">Créer une CAPA depuis une alerte réglementaire</h2><p className="mt-1 text-sm text-muted-foreground">Sélectionnez l’audit de rattachement ; la provenance restera tracée.</p><div className="mt-4 flex flex-col gap-3 sm:flex-row"><Select value={watchAuditId} onValueChange={setWatchAuditId}><SelectTrigger className="sm:w-96"><SelectValue placeholder="Sélectionner un audit"/></SelectTrigger><SelectContent>{(audits??[]).map((a:any)=><SelectItem key={a.id} value={String(a.id)}>{a.name||`Audit ${a.id}`}</SelectItem>)}</SelectContent></Select><Button disabled={!watchAuditId||createFromWatch.isPending} onClick={()=>createFromWatch.mutate({auditId:Number(watchAuditId),watchItemId})}>Créer la CAPA</Button></div></Card>}
+    {dashboard&&(activeView==="nc"||activeView==="actions")&&<div className="flex justify-end gap-2"><Button variant="outline" size="sm" onClick={()=>activeView==="nc"?exportNonConformitiesPdf(dashboard.nonConformities):exportActionPlanPdf(dashboard.actions)}><FileText className="mr-2 h-4 w-4"/>Export PDF</Button><Button variant="outline" size="sm" onClick={()=>activeView==="nc"?exportNonConformitiesExcel(dashboard.nonConformities):exportActionPlanExcel(dashboard.actions)}><FileSpreadsheet className="mr-2 h-4 w-4"/>Export Excel</Button></div>}
+    {isLoading?<Card className="p-10 text-center text-muted-foreground"><Clock3 className="mx-auto mb-3 h-6 w-6 animate-pulse"/>Chargement du cockpit qualité…</Card>:error?<Card className="border-red-200 bg-red-50 p-6 text-red-800"><strong>Impossible de charger le module.</strong><p className="mt-1 text-sm">{error.message}</p></Card>:dashboard?<>{activeView==="cockpit"&&<Cockpit dashboard={dashboard}/>} {activeView==="nc"&&<NonConformities items={dashboard.nonConformities} search={search} setSearch={setSearch} criticality={criticality} setCriticality={setCriticality}/>} {activeView==="capa"&&<><SearchBox value={search} onChange={setSearch} placeholder="Rechercher une CAPA, un constat ou un audit…"/><CapaRegistry actions={dashboard.actions} search={search}/></>} {activeView==="actions"&&<><div className="flex flex-col gap-3 sm:flex-row"><SearchBox value={search} onChange={setSearch} placeholder="Rechercher une action ou un responsable…"/><Select value={status} onValueChange={setStatus}><SelectTrigger className="sm:w-56"><SelectValue/></SelectTrigger><SelectContent><SelectItem value="all">Tous les statuts</SelectItem>{Object.entries(statusLabels).map(([value,label])=><SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></div><ActionPlan actions={dashboard.actions} search={search} status={status}/></>}</>:null}
+  </div>;
 }
