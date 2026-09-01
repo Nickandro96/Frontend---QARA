@@ -9,6 +9,7 @@ export type WatchFiltersValue = {
   impact: "ALL" | "Low" | "Medium" | "High" | "Critical";
   status: "ALL" | "NEW" | "UPDATED" | "REPEALED" | "CORRIGENDUM";
   market: string; role: string; sourceId: string; readStatus: "all"|"read"|"unread"; sortBy: "date"|"criticality"|"relevance";
+  analysisStatus: "all"|"analyzed"|"pending"; actionRequiredOnly: boolean;
 };
 
 export function WatchFilters(props: {
@@ -58,6 +59,8 @@ export function WatchFilters(props: {
       </div>
 
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <Button variant={v.actionRequiredOnly ? "default" : "outline"} onClick={() => props.onChange({ ...v, actionRequiredOnly: !v.actionRequiredOnly })}>Action requise</Button>
+        <Select value={v.analysisStatus} onValueChange={(analysisStatus)=>props.onChange({...v,analysisStatus:analysisStatus as any})}><SelectTrigger><SelectValue placeholder="Analyse IA"/></SelectTrigger><SelectContent><SelectItem value="all">Toutes analyses</SelectItem><SelectItem value="pending">À analyser</SelectItem><SelectItem value="analyzed">Analysées</SelectItem></SelectContent></Select>
         <Select value={v.market} onValueChange={(market)=>props.onChange({...v,market})}><SelectTrigger><SelectValue placeholder="Marché"/></SelectTrigger><SelectContent>{[["ALL","Tous marchés"],["EU","UE"],["USA","USA"],["UK","UK"],["CA","Canada"],["AU","Australie"],["BR","Brésil"],["JP","Japon"],["CH","Suisse"]].map(([x,l])=><SelectItem key={x} value={x}>{l}</SelectItem>)}</SelectContent></Select>
         <Select value={v.role} onValueChange={(role)=>props.onChange({...v,role})}><SelectTrigger><SelectValue placeholder="Rôle"/></SelectTrigger><SelectContent>{[["ALL","Tous rôles"],["fabricant","Fabricant"],["importateur","Importateur"],["distributeur","Distributeur"],["mandataire","Mandataire"]].map(([x,l])=><SelectItem key={x} value={x}>{l}</SelectItem>)}</SelectContent></Select>
         <Select value={v.sourceId} onValueChange={(sourceId)=>props.onChange({...v,sourceId})}><SelectTrigger><SelectValue placeholder="Source"/></SelectTrigger><SelectContent><SelectItem value="ALL">Toutes sources</SelectItem>{props.sources?.map(s=><SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent></Select>

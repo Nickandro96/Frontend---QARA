@@ -35,7 +35,7 @@ export function WatchDashboard() {
     type: "ALL",
     impact: "ALL",
     status: "ALL",
-    market:"ALL", role:"ALL", sourceId:"ALL", readStatus:"all", sortBy:"date",
+    market:"ALL", role:"ALL", sourceId:"ALL", readStatus:"all", sortBy:"date", analysisStatus:"all", actionRequiredOnly:false,
   });
 
   const query = useWatchUpdates({
@@ -46,6 +46,7 @@ export function WatchDashboard() {
     impactLevel: filters.impact === "ALL" ? undefined : (filters.impact as any),
     status: filters.status === "ALL" ? undefined : (filters.status as any),
     marketsImpacted: filters.market === "ALL" ? undefined : [filters.market], rolesImpacted: filters.role === "ALL" ? undefined : [filters.role], sourceIds: filters.sourceId === "ALL" ? undefined : [filters.sourceId], readStatus: filters.readStatus, sortBy: filters.sortBy,
+    analysisStatus: filters.analysisStatus, actionRequiredOnly: filters.actionRequiredOnly,
   });
   const sourcesQuery=useWatchSources(); const unreadQuery=useUnreadCount(); const markRead=useMarkAsRead();
 
@@ -66,7 +67,7 @@ export function WatchDashboard() {
     setDrawerOpen(true);
   };
 
-  const onReset = () => setFilters({ search: "", type: "ALL", impact: "ALL", status: "ALL", market:"ALL",role:"ALL",sourceId:"ALL",readStatus:"all",sortBy:"date" });
+  const onReset = () => setFilters({ search: "", type: "ALL", impact: "ALL", status: "ALL", market:"ALL",role:"ALL",sourceId:"ALL",readStatus:"all",sortBy:"date",analysisStatus:"all",actionRequiredOnly:false });
 
   return (
     <div className="space-y-6">
@@ -117,6 +118,7 @@ export function WatchDashboard() {
       ) : null}
       <div className="grid gap-2 md:grid-cols-3">{((sourcesQuery.data as any)?.sources??[]).map((s:any)=>{const age=s.lastSuccessAt?Date.now()-new Date(s.lastSuccessAt).getTime():Infinity;const state=s.lastError?"Erreur":age>86400000?"Données de plus de 24h":"À jour";return <div key={s.id} className="rounded border bg-card p-3 text-xs"><div className="font-medium">{s.name}</div><div>last_success_at : {formatDateTime(s.lastSuccessAt)}</div><Badge variant={s.lastError?"destructive":"outline"}>{state}</Badge>{s.lastError?<div className="mt-1 text-destructive">Erreur : {String(s.lastError).slice(0,100)}</div>:null}</div>})}</div>
       <div className="text-sm">Éléments non lus : <Badge variant="destructive">{(unreadQuery.data as any)?.count??0}</Badge></div>
+      <div className="text-xs text-muted-foreground">{meta?.totalFiltered ?? items.length} item(s) visible(s) sur {meta?.totalAvailable ?? items.length}</div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
         <Card>

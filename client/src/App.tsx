@@ -208,6 +208,7 @@ function Router() {
           <ActionDashboard />
         </ProtectedPage>
       </Route>
+      <Route path="/plan-action"><Redirect to="/action-plan" /></Route>
       <Route path="/reports/comparative">
         <ProtectedPage>
           <ReportComparative />
