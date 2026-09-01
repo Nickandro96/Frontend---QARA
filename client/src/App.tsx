@@ -49,6 +49,10 @@ import ReportGeneration from "./pages/ReportGeneration";
 import ReportHistory from "./pages/ReportHistory";
 import Reports from "./pages/Reports";
 import SiteManagement from "./pages/SiteManagement";
+import CGU from "./pages/legal/CGU";
+import PolitiqueConfidentialite from "./pages/legal/PolitiqueConfidentialite";
+import MentionsLegales from "./pages/legal/MentionsLegales";
+import { LegalFooter } from "./components/LegalFooter";
 
 function PublicPage({ children }: { children: ReactNode }) {
   return <PublicOnlyRoute>{children}</PublicOnlyRoute>;
@@ -111,6 +115,9 @@ function Router() {
       <Route path="/pricing" component={Pricing} />
       <Route path="/contact" component={Contact} />
       <Route path="/faq" component={FAQ} />
+      <Route path="/cgu" component={CGU} />
+      <Route path="/politique-confidentialite" component={PolitiqueConfidentialite} />
+      <Route path="/mentions-legales" component={MentionsLegales} />
 
       <Route path="/onboarding">
         <ProtectedPage forceOnboarding={false}>
@@ -400,7 +407,10 @@ export default function App() {
           <ThemeProvider>
             <TooltipProvider>
               <HreflangTags />
-              <Router />
+              <div className="flex min-h-screen flex-col">
+                <div className="flex-1"><Router /></div>
+                <LegalFooter />
+              </div>
               <Toaster richColors position="top-right" />
             </TooltipProvider>
           </ThemeProvider>
