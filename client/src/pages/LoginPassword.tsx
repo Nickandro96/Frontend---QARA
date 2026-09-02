@@ -50,7 +50,7 @@ export default function LoginPassword() {
           </div>
           <CardTitle className="text-2xl font-bold">Se connecter</CardTitle>
           <CardDescription>
-            Accédez à votre plateforme MDR Compliance
+            Accédez à votre espace QARA
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -79,15 +79,10 @@ export default function LoginPassword() {
               />
             </div>
 
+            {/* Encart d'erreur unique — voir IMP-5 (rapport QA 2026-09-02). */}
             {error && (
               <div className="p-3 bg-red-50 border border-red-200 text-red-600 text-sm rounded">
                 {error}
-              </div>
-            )}
-
-            {loginMutation.error && (
-              <div className="p-3 bg-red-50 border border-red-200 text-red-600 text-sm rounded">
-                {loginMutation.error.message}
               </div>
             )}
 

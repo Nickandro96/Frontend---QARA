@@ -91,14 +91,12 @@ export default function Login() {
               </Link>
             </div>
 
+            {/* Message d'erreur unique : `error` est déjà alimenté par
+                `onError` (mutation) et par la validation locale. Afficher en
+                plus `loginMutation.error.message` produisait deux encarts
+                rouges identiques superposés (rapport QA 2026-09-02, IMP-5). */}
             {error ? (
               <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-600">{error}</div>
-            ) : null}
-
-            {loginMutation.error ? (
-              <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-600">
-                {loginMutation.error.message}
-              </div>
             ) : null}
 
             <Button type="submit" className="w-full py-6 text-lg font-semibold" disabled={loginMutation.isPending}>

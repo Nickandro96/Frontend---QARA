@@ -1,11 +1,9 @@
 import { useEffect } from "react";
-import { Link } from "wouter";
-import { Loader2, Newspaper, Shield, BarChart3 } from "lucide-react";
 
 import { LockedFeature } from "@/components/LockedFeature";
 import { hasCapability } from "@/lib/plans";
 import { AlertPreferencesDialog } from "@/components/AlertPreferencesDialog";
-import { Button } from "@/components/ui/button";
+import { Loader2, Newspaper } from "lucide-react";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -33,7 +31,7 @@ export default function RegulatoryWatch() {
 
   // Page title (no react-helmet dependency)
   useEffect(() => {
-    document.title = "Veille Réglementaire — MDR Compliance";
+    document.title = "Veille Réglementaire — QARA";
   }, []);
 
   // Redirect unauthenticated users without doing side-effects during render
@@ -60,76 +58,38 @@ export default function RegulatoryWatch() {
     return <LockedFeature feature="Veille reglementaire" />;
   }
 
+  // Le shell applicatif (AuthenticatedLayout : sidebar + en-tête QARA) est
+  // fourni par ProtectedPage dans App.tsx. Cette page ne rend donc que son
+  // contenu — elle rendait auparavant un second <header> complet avec un
+  // ancien logo « MDR Compliance » et une nav dupliquée (rapport QA
+  // 2026-09-02, IMP-3). Le bouton « Statistiques » pointait vers
+  // /watch-dashboard, qui redirige vers /veille : cliquer ne faisait rien
+  // (IMP-2). Les KPIs sont déjà affichés par WatchDashboardPro ci-dessous.
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="border-b bg-white sticky top-0 z-50">
-        <div className="container flex h-16 items-center justify-between">
-          <div className="flex items-center gap-6">
-            <Link href="/">
-              <div className="flex items-center gap-2 cursor-pointer">
-                <Shield className="h-6 w-6 text-primary" />
-                <span className="font-bold">MDR Compliance</span>
-              </div>
-            </Link>
+    <main className="container py-8">
+      <div className="flex items-center gap-3 mb-8">
+        <Newspaper className="h-8 w-8 text-primary" />
+        <h1 className="text-3xl font-bold">Veille Réglementaire</h1>
+      </div>
 
-            <nav className="flex items-center gap-4">
-              <Link href="/dashboard">
-                <Button variant="ghost">Dashboard</Button>
-              </Link>
-              <Link href="/audit">
-                <Button variant="ghost">Audit</Button>
-              </Link>
-              <Link href="/reports">
-                <Button variant="ghost">Rapports</Button>
-              </Link>
-              <Link href="/regulatory-watch">
-                <Button variant="ghost" className="font-medium">
-                  Veille
-                </Button>
-              </Link>
-            </nav>
-          </div>
+      {/* Info Card */}
+      <Card className="mb-8 border-blue-300 bg-blue-50">
+        <CardHeader>
+          <CardTitle className="text-blue-900">Restez informé des évolutions réglementaires</CardTitle>
+          <CardDescription className="text-blue-700">
+            Suivez les changements MDR, MDCG, normes harmonisées (JOUE) et référentiels qualité (ISO) avec une analyse
+            d&apos;impact et des actions recommandées.
+          </CardDescription>
+        </CardHeader>
+      </Card>
 
-          <div className="flex items-center gap-4">
-            <Link href="/profile">
-              <Button variant="outline">{user?.name || "Profil"}</Button>
-            </Link>
-          </div>
-        </div>
-      </header>
+      {/* Préférences d'alertes */}
+      <div className="flex justify-end gap-3 mb-4">
+        <AlertPreferencesDialog />
+      </div>
 
-      <main className="container py-8">
-        <div className="flex items-center gap-3 mb-8">
-          <Newspaper className="h-8 w-8 text-primary" />
-          <h1 className="text-3xl font-bold">Veille Réglementaire</h1>
-        </div>
-
-        {/* Info Card */}
-        <Card className="mb-8 border-blue-300 bg-blue-50">
-          <CardHeader>
-            <CardTitle className="text-blue-900">Restez informé des évolutions réglementaires</CardTitle>
-            <CardDescription className="text-blue-700">
-              Suivez les changements MDR, MDCG, normes harmonisées (JOUE) et référentiels qualité (ISO) avec une analyse
-              d&apos;impact et des actions recommandées.
-            </CardDescription>
-          </CardHeader>
-        </Card>
-
-        {/* Alert preferences and dashboard buttons */}
-        <div className="flex justify-end gap-3 mb-4">
-          <Link href="/watch-dashboard">
-            <Button variant="outline" size="sm">
-              <BarChart3 className="h-4 w-4 mr-2" />
-              Statistiques
-            </Button>
-          </Link>
-          <AlertPreferencesDialog />
-        </div>
-
-        {/* ✅ Nouveau module premium (cache + refresh async + UX complète) */}
-        <WatchDashboardPro />
-      </main>
-    </div>
+      {/* Module premium (cache + refresh async + UX complète) */}
+      <WatchDashboardPro />
+    </main>
   );
 }

@@ -18,6 +18,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useRoute } from "wouter";
 import { trpc } from "@/lib/trpc";
+import { auditMethodLabel } from "@/lib/auditLabels";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -799,13 +800,16 @@ export default function MDRAudit() {
                 <strong>Rôle économique :</strong> {selectedRole}
               </div>
               <div>
-                <strong>Processus sélectionné :</strong> {selectedProcess}
+                <strong>Processus sélectionné :</strong>{" "}
+                {selectedProcess === "all"
+                  ? "Tous les processus"
+                  : processes.find((p: any) => String(p.id) === selectedProcess)?.name || selectedProcess}
               </div>
               <div>
                 <strong>Scope :</strong> {auditScope}
               </div>
               <div>
-                <strong>Méthode :</strong> {auditMethod}
+                <strong>Méthode :</strong> {auditMethodLabel(auditMethod)}
               </div>
               <div>
                 <strong>Auditeur responsable :</strong> {auditLeader}

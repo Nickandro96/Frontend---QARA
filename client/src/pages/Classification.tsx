@@ -466,7 +466,7 @@ export default function Classification() {
 
                 <div>
                   <Label className="text-base font-semibold mb-3 block">
-                    {t('classification.description', 'Description')} ({t('common.optional', 'optionnelle')})
+                    {t('classification.description', 'Description (optionnelle)')}
                   </Label>
                   <textarea
                     className="w-full px-4 py-2 border rounded-md"

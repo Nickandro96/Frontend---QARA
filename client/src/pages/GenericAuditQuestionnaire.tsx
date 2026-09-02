@@ -464,6 +464,13 @@ export default function GenericAuditQuestionnaire() {
   const persistOne = async (row: ResponseRow) => {
     if (!enabled || !auditId) return;
 
+    // Le backend attend processId en chaîne|null (jamais en nombre) — on
+    // normalise ici, au point de sortie réseau, pour éviter le 400 Zod.
+    const normalizedProcessId =
+      row.processId === null || row.processId === undefined || row.processId === ""
+        ? null
+        : String(row.processId);
+
     await saveResponseMutation.mutateAsync({
       auditId,
       questionKey: row.questionKey,
@@ -472,7 +479,7 @@ export default function GenericAuditQuestionnaire() {
       note: row.note ?? "",
       evidenceFiles: row.evidenceFiles ?? [],
       role: row.role ?? null,
-      processId: row.processId ?? null,
+      processId: normalizedProcessId,
       answeredBy: row.answeredBy ?? (auditContext as any)?.userId ?? (auditContext as any)?.createdBy ?? 1,
       answeredAt: row.answeredAt ?? new Date().toISOString(),
     } as any);

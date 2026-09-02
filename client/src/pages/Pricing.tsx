@@ -191,10 +191,25 @@ export default function Pricing() {
   const { user, isAuthenticated } = useAuth();
   const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly");
   const createCheckoutMutation = trpc.stripe.createCheckoutSession.useMutation();
+  // Le paiement en ligne est piloté côté serveur par des variables
+  // d'environnement Stripe. Tant qu'il n'est pas activé, on affiche un état
+  // « Bientôt disponible » plutôt qu'un bouton qui échoue en silence
+  // (rapport QA 2026-09-02, CRIT-2).
+  const { data: stripeConfig } = trpc.stripe.getConfig.useQuery(undefined, {
+    enabled: isAuthenticated,
+    retry: false,
+  });
+  const billingEnabled = stripeConfig?.enabled ?? false;
 
   const handleSubscribe = async (tier: string, interval: "month" | "year") => {
     if (!isAuthenticated) {
       window.location.href = getLoginUrl();
+      return;
+    }
+
+    if (!billingEnabled) {
+      toast.info("Le paiement en ligne arrive bientôt. Contactez-nous pour souscrire dès maintenant.");
+      window.location.href = "/contact";
       return;
     }
 
@@ -294,9 +309,14 @@ export default function Pricing() {
                     onClick={() => handleSubscribe(plan.tier, interval)}
                     className={`w-full mt-6 ${plan.popular ? "bg-primary hover:bg-primary/90" : ""}`}
                     size="lg"
+                    variant={billingEnabled ? "default" : "outline"}
                     disabled={createCheckoutMutation.isPending}
                   >
-                    {createCheckoutMutation.isPending ? "Chargement..." : plan.cta}
+                    {createCheckoutMutation.isPending
+                      ? "Chargement..."
+                      : billingEnabled
+                        ? plan.cta
+                        : "Bientôt disponible — nous contacter"}
                   </Button>
 
                   <p className="text-xs text-slate-500 mt-4">{plan.targetAudience}</p>
