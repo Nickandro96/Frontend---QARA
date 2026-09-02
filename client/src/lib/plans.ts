@@ -7,6 +7,8 @@ export type PlanCapabilities = {
   canUseVeille: boolean;
   canExportReports: boolean;
   canUseAI: boolean;
+  canUseSectorIntelligence: boolean;
+  canUseSectorBenchmark: boolean;
 };
 
 // Free : 1 referentiel, audits + score, rapport a l'ecran sans export,
@@ -18,6 +20,8 @@ const FREE_CAPABILITIES: PlanCapabilities = {
   canUseVeille: false,
   canExportReports: false,
   canUseAI: false,
+  canUseSectorIntelligence: false,
+  canUseSectorBenchmark: false,
 };
 
 // Pro : tout, sauf l'IA qui reste desactivee tant que la cle API serveur
@@ -29,6 +33,8 @@ const PRO_CAPABILITIES: PlanCapabilities = {
   canUseVeille: true,
   canExportReports: true,
   canUseAI: false,
+  canUseSectorIntelligence: true,
+  canUseSectorBenchmark: false,
 };
 
 export const PLAN_LABELS: Record<PlanTier, string> = {
@@ -47,7 +53,7 @@ export function normalizePlanTier(value: unknown): PlanTier {
 }
 
 export function getPlanCapabilities(tier: unknown): PlanCapabilities {
-  return normalizePlanTier(tier) === "free" ? FREE_CAPABILITIES : PRO_CAPABILITIES;
+  const normalized=normalizePlanTier(tier); return normalized === "free" ? FREE_CAPABILITIES : normalized === "entreprise" ? {...PRO_CAPABILITIES,canUseSectorBenchmark:true} : PRO_CAPABILITIES;
 }
 
 export function getPlanLabel(tier: unknown): string {
