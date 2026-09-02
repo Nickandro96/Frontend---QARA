@@ -4,7 +4,6 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -42,14 +41,20 @@ export default function AdminUsers() {
     onSuccess: () => {
       toast.success("Rôle mis à jour");
       refetch();
-    }
+    },
+    onError: (error: { message?: string }) => {
+      toast.error(error.message || "Impossible de mettre à jour le rôle");
+    },
   });
 
   const updateProfileMutation = trpc.system.updateUserProfile.useMutation({
     onSuccess: () => {
       toast.success("Abonnement mis à jour");
       refetch();
-    }
+    },
+    onError: (error: { message?: string }) => {
+      toast.error(error.message || "Impossible de mettre à jour l’abonnement");
+    },
   });
 
   if (currentUser && currentUser.role !== "admin") {
@@ -111,7 +116,7 @@ export default function AdminUsers() {
                     </TableCell>
                     <TableCell>
                       <Select
-                        defaultValue={u.role}
+                        value={u.role}
                         onValueChange={(val) => updateRoleMutation.mutate({ userId: u.id, role: val as any })}
                       >
                         <SelectTrigger className="w-32">
@@ -125,7 +130,7 @@ export default function AdminUsers() {
                     </TableCell>
                     <TableCell>
                       <Select
-                        defaultValue={u.profile?.subscriptionTier || "free"}
+                        value={u.profile?.subscriptionTier || "free"}
                         onValueChange={(val) => updateProfileMutation.mutate({ userId: u.id, subscriptionTier: val as any })}
                       >
                         <SelectTrigger className="w-32">
@@ -140,9 +145,20 @@ export default function AdminUsers() {
                       </Select>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={u.profile?.subscriptionStatus === "active" ? "default" : "secondary"}>
-                        {u.profile?.subscriptionStatus || "N/A"}
-                      </Badge>
+                      <Select
+                        value={u.profile?.subscriptionStatus || "active"}
+                        onValueChange={(val) => updateProfileMutation.mutate({ userId: u.id, subscriptionStatus: val as any })}
+                      >
+                        <SelectTrigger className="w-36">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="active">Actif</SelectItem>
+                          <SelectItem value="trialing">Essai</SelectItem>
+                          <SelectItem value="past_due">Paiement dû</SelectItem>
+                          <SelectItem value="canceled">Annulé</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {u.lastSignedIn ? new Date(u.lastSignedIn).toLocaleDateString() : "Jamais"}
