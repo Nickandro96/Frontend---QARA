@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
-import { Loader2, Search, Filter, Eye, FileText, Plus } from "lucide-react";
+import { Loader2, Search, Filter, Eye, FileText, Plus, CalendarClock } from "lucide-react";
 import { Link } from "wouter";
 import { getLoginUrl } from "@/const";
 
@@ -72,6 +72,7 @@ export default function AuditsList() {
       certification: "Certification",
       surveillance: "Surveillance",
       blanc: "Blanc",
+      external_preparation: "Préparation audit externe",
     };
     return labels[type as keyof typeof labels] || type;
   };
@@ -82,12 +83,12 @@ export default function AuditsList() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-xl font-bold">Mes Audits</h1>
-        <Link href="/audit/generic">
+        <div className="flex gap-2"><Link href="/preparation"><Button variant="outline" className="gap-2"><CalendarClock className="h-4 w-4"/>Préparer un audit externe</Button></Link><Link href="/audit/generic">
           <Button className="gap-2">
             <Plus className="h-4 w-4" />
             Nouvel Audit
           </Button>
-        </Link>
+        </Link></div>
       </div>
 
       <div className="space-y-6">

@@ -233,6 +233,7 @@
     }
   },
   "pricing": {
+    "badge": "Transparent pricing",
     "title": "Choose your plan",
     "subtitle": "Solutions tailored to every stage of your compliance journey",
     "monthly": "Monthly",

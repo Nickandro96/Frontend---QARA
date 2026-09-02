@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { trpc } from "@/lib/trpc";
+import { auditTypeLabel } from "@/lib/auditLabels";
 import { Shield, Loader2, FileText, Calendar, User, MapPin, CheckCircle2, XCircle, AlertCircle, Clock, ArrowLeft, Plus, Trash2 } from "lucide-react";
 import { Link, useParams, useLocation } from "wouter";
 import { getLoginUrl } from "@/const";
@@ -288,7 +289,7 @@ export default function AuditDetail() {
             <Shield className="h-5 w-5 text-muted-foreground mt-0.5" />
             <div>
               <p className="text-sm font-medium text-muted-foreground">Type d'audit</p>
-              <p className="text-base font-semibold">{audit.type || 'Non spécifié'}</p>
+              <p className="text-base font-semibold">{auditTypeLabel(audit.type)}</p>
             </div>
           </div>
 

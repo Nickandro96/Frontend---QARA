@@ -4,6 +4,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { trpc } from "@/lib/trpc";
 import { Loader2, CheckCircle2, Download, Plus, Trash2 } from "lucide-react";
 import { useState, useEffect } from "react";
@@ -224,6 +234,8 @@ export default function Profile() {
 
   const [economicRole, setEconomicRole] = useState<string>("");
   const [companyName, setCompanyName] = useState("");
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
 
   useEffect(() => {
     if (profile) {
@@ -268,15 +280,19 @@ export default function Profile() {
       link.download = `qara-export-${new Date().toISOString().slice(0, 10)}.json`;
       link.click();
       URL.revokeObjectURL(url);
+      toast.success("Export de vos données téléchargé");
     } catch { toast.error("Impossible de générer l'export"); }
   };
 
-  const handleDelete = async () => {
-    const confirmation = window.prompt('Pour confirmer, saisissez exactement "SUPPRIMER". Cette action anonymise votre compte.');
-    if (confirmation !== "SUPPRIMER") return;
+  // Confirmation via modale applicative (AlertDialog) — le window.prompt()
+  // natif n'était pas stylé et levait une exception non catchée dans les
+  // environnements où prompt() est indisponible (rapport QA 2026-09-02, IMP-7).
+  const handleConfirmDelete = async () => {
+    if (deleteConfirmText.trim() !== "SUPPRIMER") return;
     try {
       await deleteAccount.mutateAsync({ confirmation: "SUPPRIMER" });
       toast.success("Votre compte a été anonymisé");
+      setDeleteDialogOpen(false);
       window.location.assign("/");
     } catch { toast.error("La suppression du compte a échoué"); }
   };
@@ -401,10 +417,43 @@ export default function Profile() {
               {exportData.isFetching ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
               Télécharger mes données
             </Button>
-            <Button variant="destructive" onClick={handleDelete} disabled={deleteAccount.isPending} className="w-full">
+            <Button
+              variant="destructive"
+              onClick={() => { setDeleteConfirmText(""); setDeleteDialogOpen(true); }}
+              disabled={deleteAccount.isPending}
+              className="w-full"
+            >
               <Trash2 className="mr-2 h-4 w-4" /> Supprimer mon compte
             </Button>
             <p className="text-xs text-muted-foreground">La suppression anonymise vos données personnelles. Les audits nécessaires à la traçabilité réglementaire sont conservés.</p>
+
+            <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Supprimer votre compte ?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Cette action anonymise définitivement vos données personnelles. Les audits
+                    nécessaires à la traçabilité réglementaire sont conservés. Pour confirmer,
+                    saisissez <strong>SUPPRIMER</strong> ci-dessous.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <Input
+                  value={deleteConfirmText}
+                  onChange={(e) => setDeleteConfirmText(e.target.value)}
+                  placeholder="SUPPRIMER"
+                  autoFocus
+                />
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Annuler</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={(e) => { e.preventDefault(); void handleConfirmDelete(); }}
+                    disabled={deleteConfirmText.trim() !== "SUPPRIMER" || deleteAccount.isPending}
+                  >
+                    {deleteAccount.isPending ? "Suppression…" : "Supprimer définitivement"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </CardContent>
         </Card>
 

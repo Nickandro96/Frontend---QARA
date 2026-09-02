@@ -20,6 +20,7 @@ const CapaPlan=lazy(()=>import("./pages/CapaPlan"));
 const AuditHistory=lazy(()=>import("./pages/AuditHistory"));
 const AuditResults=lazy(()=>import("./pages/AuditResults"));
 const AuditsList=lazy(()=>import("./pages/AuditsList"));
+const PreparationDashboard=lazy(()=>import("./pages/PreparationDashboard"));
 const Classification=lazy(()=>import("./pages/Classification"));
 const Contact=lazy(()=>import("./pages/Contact"));
 const Dashboard=lazy(()=>import("./pages/Dashboard"));
@@ -135,6 +136,8 @@ function Router() {
           <CapaPlan />
         </ProtectedPage>
       </Route>
+      <Route path="/preparation/:auditId"><ProtectedPage><PreparationDashboard /></ProtectedPage></Route>
+      <Route path="/preparation"><ProtectedPage><PreparationDashboard /></ProtectedPage></Route>
       <Route path="/audits/:id">
         <ProtectedPage>
           <AuditDetail />

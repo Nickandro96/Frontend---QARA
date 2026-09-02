@@ -161,6 +161,7 @@
     }
   },
   "pricing": {
+    "badge": "Tarifs transparents",
     "title": "Choisissez votre plan",
     "subtitle": "Des solutions adaptées à chaque étape de votre parcours de conformité",
     "monthly": "Mensuel",
