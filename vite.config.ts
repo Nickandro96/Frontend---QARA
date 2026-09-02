@@ -29,4 +29,8 @@ export default defineConfig({
     // Pour retrouver les lignes dans les erreurs en prod
     sourcemap: true,
   },
+  test: {
+    environment: "jsdom",
+    setupFiles: ["./src/test/setup.ts"],
+  },
 });
