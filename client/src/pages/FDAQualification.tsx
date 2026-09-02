@@ -17,7 +17,7 @@ export default function FDAQualification() {
   const [answers, setAnswers] = useState<Record<string, any>>({});
 
   const questions = data?.questions || [];
-  const steps = useMemo(() => Array.from(new Set(questions.map((q: any) => q.step))).sort((a, b) => a - b), [questions]);
+  const steps = useMemo<number[]>(() => Array.from(new Set<number>(questions.map((q: any) => Number(q.step)))).sort((a, b) => a - b), [questions]);
   const [step, setStep] = useState(steps[0] || 1);
   const currentQuestions = questions.filter((q: any) => q.step === step);
   const progress = steps.length ? Math.round((steps.indexOf(step) + 1) / steps.length * 100) : 0;
@@ -81,7 +81,7 @@ export default function FDAQualification() {
         <Card className="border-primary/30">
           <CardHeader>
             <CardTitle className="flex items-center gap-2"><ShieldCheck className="h-5 w-5" />Résultat FDA</CardTitle>
-            <CardDescription>{result.rationale}</CardDescription>
+            <CardDescription>{String(result.rationale ?? "")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex flex-wrap gap-2">

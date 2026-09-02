@@ -46,7 +46,7 @@ export default function WatchDashboard() {
   } : { EU: 0, US: 0 };
 
   // Get sorted months for timeline
-  const monthsData = stats?.byMonth ? Object.entries(stats.byMonth)
+  const monthsData: Array<[string,number]> = stats?.byMonth ? (Object.entries(stats.byMonth) as Array<[string,number]>)
     .sort(([a], [b]) => a.localeCompare(b))
     .slice(-6) // Last 6 months
     : [];

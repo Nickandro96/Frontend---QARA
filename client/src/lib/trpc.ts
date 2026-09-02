@@ -11,7 +11,11 @@ import { clearClientSession, redirectToLogin } from "./session";
 // To keep this frontend buildable in standalone mode, we keep a local type.
 import type { AppRouter } from "@/server-types";
 
-export const trpc = createTRPCReact<AppRouter>();
+// Le backend vit dans un dépôt séparé. Tant qu'un paquet de contrats tRPC
+// généré n'est pas publié, le client autonome doit rester permissif sans
+// demander à tRPC d'interpréter `any` comme un routeur réel (collision avec
+// Provider/useUtils dans tRPC v11).
+export const trpc: ReturnType<typeof createTRPCReact<any>> & Record<string, any> = createTRPCReact<any>() as any;
 
 function getApiBaseUrl() {
   const envUrl = import.meta.env.VITE_API_URL as string | undefined;

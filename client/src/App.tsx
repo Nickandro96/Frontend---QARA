@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { ReactNode } from "react";
+import { lazy, ReactNode, Suspense } from "react";
 import { Redirect, Route, Switch, useParams } from "wouter";
 import { trpc, trpcClient } from "./lib/trpc";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -10,49 +10,49 @@ import { HreflangTags } from "./components/HreflangTags";
 import { ProtectedRoute } from "./components/routing/ProtectedRoute";
 import { PublicOnlyRoute } from "./components/routing/PublicOnlyRoute";
 import { ThemeProvider } from "./contexts/ThemeContext";
-import ActionDashboard from "./pages/ActionDashboard";
-import AdminContacts from "./pages/AdminContacts";
-import AdminUsers from "./pages/AdminUsers";
-import AnalyticsDashboard from "./pages/AnalyticsDashboard";
-import AuditComparison from "./pages/AuditComparison";
-import AuditDetail from "./pages/AuditDetail";
-import CapaPlan from "./pages/CapaPlan";
-import AuditHistory from "./pages/AuditHistory";
-import AuditResults from "./pages/AuditResults";
-import AuditsList from "./pages/AuditsList";
-import Classification from "./pages/Classification";
-import Contact from "./pages/Contact";
-import Dashboard from "./pages/Dashboard";
-import Documents from "./pages/Documents";
-import FAQ from "./pages/FAQ";
-import FdaClassification from "./pages/FdaClassification";
-import ForgotPassword from "./pages/ForgotPassword";
-import ResetPassword from "./pages/ResetPassword";
-import ISOAuditReview from "./pages/ISOAuditReview";
-import ISOAuditWizard from "./pages/ISOAuditWizard";
-import GenericAuditWizard from "./pages/GenericAuditWizard";
-import GenericAuditQuestionnaire from "./pages/GenericAuditQuestionnaire";
-import ISOQualification from "./pages/ISOQualification";
-import Landing from "./pages/Landing";
-import Login from "./pages/Login";
-import MDRAuditReview from "./pages/MDRAuditReview";
-import MDRAuditWizard from "./pages/MDRAudit";
-import MdrRoutesErrorBoundary from "./components/MdrRoutesErrorBoundary";
-import NotFound from "@/pages/NotFound";
-import Onboarding from "./pages/Onboarding";
-import Pricing from "./pages/Pricing";
-import Profile from "./pages/Profile";
-import Register from "./pages/Register";
-import RegulatoryWatch from "./pages/RegulatoryWatch";
-import IntelligenceSectorielle from "./pages/IntelligenceSectorielle";
-import ReportComparative from "./pages/ReportComparative";
-import ReportGeneration from "./pages/ReportGeneration";
-import ReportHistory from "./pages/ReportHistory";
-import Reports from "./pages/Reports";
-import SiteManagement from "./pages/SiteManagement";
-import CGU from "./pages/legal/CGU";
-import PolitiqueConfidentialite from "./pages/legal/PolitiqueConfidentialite";
-import MentionsLegales from "./pages/legal/MentionsLegales";
+const ActionDashboard=lazy(()=>import("./pages/ActionDashboard"));
+const AdminContacts=lazy(()=>import("./pages/AdminContacts"));
+const AdminUsers=lazy(()=>import("./pages/AdminUsers"));
+const AnalyticsDashboard=lazy(()=>import("./pages/AnalyticsDashboard"));
+const AuditComparison=lazy(()=>import("./pages/AuditComparison"));
+const AuditDetail=lazy(()=>import("./pages/AuditDetail"));
+const CapaPlan=lazy(()=>import("./pages/CapaPlan"));
+const AuditHistory=lazy(()=>import("./pages/AuditHistory"));
+const AuditResults=lazy(()=>import("./pages/AuditResults"));
+const AuditsList=lazy(()=>import("./pages/AuditsList"));
+const Classification=lazy(()=>import("./pages/Classification"));
+const Contact=lazy(()=>import("./pages/Contact"));
+const Dashboard=lazy(()=>import("./pages/Dashboard"));
+const Documents=lazy(()=>import("./pages/Documents"));
+const FAQ=lazy(()=>import("./pages/FAQ"));
+const FdaClassification=lazy(()=>import("./pages/FdaClassification"));
+const ForgotPassword=lazy(()=>import("./pages/ForgotPassword"));
+const ResetPassword=lazy(()=>import("./pages/ResetPassword"));
+const ISOAuditReview=lazy(()=>import("./pages/ISOAuditReview"));
+const ISOAuditWizard=lazy(()=>import("./pages/ISOAuditWizard"));
+const GenericAuditWizard=lazy(()=>import("./pages/GenericAuditWizard"));
+const GenericAuditQuestionnaire=lazy(()=>import("./pages/GenericAuditQuestionnaire"));
+const ISOQualification=lazy(()=>import("./pages/ISOQualification"));
+const Landing=lazy(()=>import("./pages/Landing"));
+const Login=lazy(()=>import("./pages/Login"));
+const MDRAuditReview=lazy(()=>import("./pages/MDRAuditReview"));
+const MDRAuditWizard=lazy(()=>import("./pages/MDRAudit"));
+const MdrRoutesErrorBoundary=lazy(()=>import("./components/MdrRoutesErrorBoundary"));
+const NotFound=lazy(()=>import("@/pages/NotFound"));
+const Onboarding=lazy(()=>import("./pages/Onboarding"));
+const Pricing=lazy(()=>import("./pages/Pricing"));
+const Profile=lazy(()=>import("./pages/Profile"));
+const Register=lazy(()=>import("./pages/Register"));
+const RegulatoryWatch=lazy(()=>import("./pages/RegulatoryWatch"));
+const IntelligenceSectorielle=lazy(()=>import("./pages/IntelligenceSectorielle"));
+const ReportComparative=lazy(()=>import("./pages/ReportComparative"));
+const ReportGeneration=lazy(()=>import("./pages/ReportGeneration"));
+const ReportHistory=lazy(()=>import("./pages/ReportHistory"));
+const Reports=lazy(()=>import("./pages/Reports"));
+const SiteManagement=lazy(()=>import("./pages/SiteManagement"));
+const CGU=lazy(()=>import("./pages/legal/CGU"));
+const PolitiqueConfidentialite=lazy(()=>import("./pages/legal/PolitiqueConfidentialite"));
+const MentionsLegales=lazy(()=>import("./pages/legal/MentionsLegales"));
 import { LegalFooter } from "./components/LegalFooter";
 
 function PublicPage({ children }: { children: ReactNode }) {
@@ -429,7 +429,7 @@ export default function App() {
             <TooltipProvider>
               <HreflangTags />
               <div className="flex min-h-screen flex-col">
-                <div className="flex-1"><Router /></div>
+                <div className="flex-1"><Suspense fallback={<div className="flex min-h-[50vh] items-center justify-center text-sm text-muted-foreground">Chargement…</div>}><Router /></Suspense></div>
                 <LegalFooter />
               </div>
               <Toaster richColors position="top-right" />

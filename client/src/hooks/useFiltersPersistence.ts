@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useLocation, useNavigate } from "wouter";
+import { useLocation } from "wouter";
 
 export interface FiltersState {
   period?: string;
@@ -19,7 +19,6 @@ export interface FiltersState {
  */
 export function useFiltersPersistence(defaultFilters: FiltersState = {}) {
   const [location] = useLocation();
-  const navigate = useNavigate();
   const [filters, setFiltersState] = useState<FiltersState>(defaultFilters);
   const [isInitialized, setIsInitialized] = useState(false);
 

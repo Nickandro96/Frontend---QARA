@@ -29,10 +29,8 @@ export function ProfessionalLayout({ children, showSidebar = true }: Professiona
       await logoutMutation.mutateAsync();
       window.location.href = "/";
     } catch (error) {
-      toast({
-        title: t("auth.logoutError") || "Erreur",
+      toast.error(t("auth.logoutError") || "Erreur", {
         description: t("auth.logoutErrorMessage") || "Impossible de se déconnecter",
-        variant: "destructive",
       });
     }
   };

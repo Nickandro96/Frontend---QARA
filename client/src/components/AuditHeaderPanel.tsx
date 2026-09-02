@@ -14,6 +14,7 @@ import { toast } from "sonner";
 
 interface AuditHeaderData {
   siteId?: number | null;
+  siteLocation?: string | null;
   clientOrganization?: string | null;
   auditorName?: string | null;
   auditorEmail?: string | null;

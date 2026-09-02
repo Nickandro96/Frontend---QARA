@@ -355,7 +355,7 @@ export default function Audit() {
                   </div>
 
                   {/* Evidence Upload */}
-                  <EvidenceUpload />
+                  <EvidenceUpload questionId={Number(questions[currentQuestionIndex].id)} />
                 </CardContent>
               </Card>
             )}

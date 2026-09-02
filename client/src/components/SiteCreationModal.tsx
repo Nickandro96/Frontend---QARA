@@ -22,16 +22,21 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 
 interface SiteCreationModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onSiteCreated?: (siteId: number) => void;
+  isOpen?: boolean;
+  onClose?: () => void;
+  open?: boolean;
+  onOpenChange?: (open:boolean) => void;
+  onSiteCreated?: (siteId: number) => void | Promise<void>;
 }
 
 export function SiteCreationModal({
   isOpen,
   onClose,
+  open,
+  onOpenChange,
   onSiteCreated,
 }: SiteCreationModalProps) {
+  const resolvedOpen=open??isOpen??false;
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
   const [city, setCity] = useState("");
@@ -69,7 +74,8 @@ export function SiteCreationModal({
     setEmail("");
     setNotes("");
     setError(null);
-    onClose();
+    onClose?.();
+    onOpenChange?.(false);
   };
 
   const handleSubmit = () => {
@@ -101,7 +107,7 @@ export function SiteCreationModal({
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={handleClose}>
+    <Dialog open={resolvedOpen} onOpenChange={(next)=>{if(!next)handleClose();else onOpenChange?.(true);}}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Créer un nouveau site</DialogTitle>
