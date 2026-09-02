@@ -19,19 +19,12 @@ export default function ReportHistory() {
 
   const deleteMutation = trpc.reports.delete.useMutation({
     onSuccess: () => {
-      toast({
-        title: "✅ Rapport supprimé",
-        description: "Le rapport a été supprimé de l'historique.",
-      });
+      toast.success("✅ Rapport supprimé", { description: "Le rapport a été supprimé de l'historique." });
       refetch();
       setDeletingId(null);
     },
     onError: (error) => {
-      toast({
-        title: "❌ Erreur de suppression",
-        description: error.message,
-        variant: "destructive",
-      });
+      toast.error("❌ Erreur de suppression", { description: error.message });
       setDeletingId(null);
     },
   });
