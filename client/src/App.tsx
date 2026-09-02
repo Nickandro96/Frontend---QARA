@@ -44,6 +44,7 @@ import Pricing from "./pages/Pricing";
 import Profile from "./pages/Profile";
 import Register from "./pages/Register";
 import RegulatoryWatch from "./pages/RegulatoryWatch";
+import IntelligenceSectorielle from "./pages/IntelligenceSectorielle";
 import ReportComparative from "./pages/ReportComparative";
 import ReportGeneration from "./pages/ReportGeneration";
 import ReportHistory from "./pages/ReportHistory";
@@ -254,6 +255,9 @@ function Router() {
         <ProtectedPage>
           <RegulatoryWatch />
         </ProtectedPage>
+      </Route>
+      <Route path="/intelligence">
+        <ProtectedPage><IntelligenceSectorielle /></ProtectedPage>
       </Route>
       <Route path="/account">
         <ProtectedPage forceOnboarding={false}>

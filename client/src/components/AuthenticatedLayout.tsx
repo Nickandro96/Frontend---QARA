@@ -5,6 +5,7 @@ import { getPlanLabel } from "@/lib/plans";
 import {
   BarChart3,
   Bell,
+  Brain,
   ClipboardCheck,
   FileText,
   LayoutDashboard,
@@ -22,8 +23,9 @@ const navItems = [
   { label: "Classification", path: "/classification", icon: BarChart3 },
   { label: "Voies FDA", path: "/fda", icon: RouteIcon },
   { label: "Amélioration", path: "/improvement", icon: Shield },
-  { label: "Rapports", path: "/reports", icon: FileText },
   { label: "Veille", path: "/veille", icon: Bell },
+  { label: "Intelligence DM", path: "/intelligence", icon: Brain },
+  { label: "Rapports", path: "/reports", icon: FileText },
 ];
 
 type AuthenticatedLayoutProps = {
