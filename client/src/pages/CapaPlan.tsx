@@ -63,6 +63,12 @@ function ActionCard({ action, auditId }: { action: any; auditId: number }) {
   const [aiContext, setAiContext] = useState<any>(null);
   const [selectedActionIds, setSelectedActionIds] = useState<string[]>([]);
   const [aiError, setAiError] = useState<string | null>(null);
+  const [qualificationDecision, setQualificationDecision] = useState(action.qualificationDecision || "a_qualifier");
+  const [qualificationJustification, setQualificationJustification] = useState(action.qualificationJustification || "");
+  const [qualificationOwner, setQualificationOwner] = useState(action.qualificationOwner || "");
+  const [impactPatient, setImpactPatient] = useState(action.impactPatient || "inconnu");
+  const [impactReglementaire, setImpactReglementaire] = useState(action.impactReglementaire || "inconnu");
+  const [newTaskTitle, setNewTaskTitle] = useState("");
 
   const generateAI = trpc.capa.generateAnalysis.useMutation({
     onMutate: (variables) => {
@@ -115,6 +121,14 @@ function ActionCard({ action, auditId }: { action: any; auditId: number }) {
       utils.capa.list.invalidate({ auditId });
     },
     onError: (e) => toast.error(`Erreur : ${e.message}`),
+  });
+  const qualifyMutation = trpc.capa.qualify.useMutation({
+    onSuccess: () => { toast.success("Qualification de la NC enregistrée"); utils.capa.list.invalidate({ auditId }); utils.capa.dashboard.invalidate(); },
+    onError: (e) => toast.error(`Qualification impossible : ${e.message}`),
+  });
+  const createTaskMutation = trpc.capa.createTask.useMutation({
+    onSuccess: () => { setNewTaskTitle(""); toast.success("Action ajoutée au dossier CAPA"); utils.capa.list.invalidate({ auditId }); utils.capa.dashboard.invalidate(); },
+    onError: (e) => toast.error(`Création impossible : ${e.message}`),
   });
 
   const handleSaveFields = () => {
@@ -175,6 +189,17 @@ function ActionCard({ action, auditId }: { action: any; auditId: number }) {
         <CardDescription className="mt-2">{action.ecartIdentifie}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        <div className="rounded-lg border border-blue-200 bg-blue-50/40 p-4 space-y-3">
+          <div><h3 className="font-semibold">Qualification et décision de traitement</h3><p className="text-xs text-muted-foreground">Décision qualité tracée avant l'ouverture ou la poursuite d'une CAPA.</p></div>
+          <div className="grid gap-3 md:grid-cols-3">
+            <div><label className="text-sm font-medium">Décision</label><Select value={qualificationDecision} onValueChange={setQualificationDecision}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="a_qualifier">À qualifier</SelectItem><SelectItem value="capa_requise">CAPA requise</SelectItem><SelectItem value="correction_simple">Correction simple</SelectItem><SelectItem value="surveillance">Surveillance</SelectItem><SelectItem value="acceptation_justifiee">Acceptation justifiée</SelectItem><SelectItem value="doublon">Doublon</SelectItem><SelectItem value="non_applicable_apres_revue">Non applicable après revue</SelectItem></SelectContent></Select></div>
+            <div><label className="text-sm font-medium">Impact patient</label><Select value={impactPatient} onValueChange={setImpactPatient}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent>{["aucun","potentiel","avere","inconnu"].map(v=><SelectItem key={v} value={v}>{v}</SelectItem>)}</SelectContent></Select></div>
+            <div><label className="text-sm font-medium">Impact réglementaire</label><Select value={impactReglementaire} onValueChange={setImpactReglementaire}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent>{["aucun","potentiel","avere","inconnu"].map(v=><SelectItem key={v} value={v}>{v}</SelectItem>)}</SelectContent></Select></div>
+          </div>
+          <Input value={qualificationOwner} onChange={(e)=>setQualificationOwner(e.target.value)} placeholder="Responsable de la qualification"/>
+          <Textarea value={qualificationJustification} onChange={(e)=>setQualificationJustification(e.target.value)} placeholder={qualificationDecision==="capa_requise"?"Justification de la décision (recommandée)":"Justification obligatoire si aucune CAPA n'est ouverte"}/>
+          <Button type="button" size="sm" disabled={qualificationDecision==="a_qualifier"||qualifyMutation.isPending} onClick={()=>qualifyMutation.mutate({actionId:action.id,decision:qualificationDecision as any,justification:qualificationJustification||undefined,owner:qualificationOwner||undefined,impactPatient:impactPatient as any,impactReglementaire:impactReglementaire as any})}>Valider la qualification</Button>
+        </div>
         <div className="rounded-lg border border-violet-200 bg-violet-50/50 p-4">
           <div className="flex items-center justify-between gap-3">
             <div><div className="font-semibold">Analyse CAPA assistée par IA</div><p className="text-xs text-muted-foreground">L'analyse reste une proposition : vérifiez et modifiez chaque élément avant enregistrement.</p></div>
@@ -242,9 +267,11 @@ function ActionCard({ action, auditId }: { action: any; auditId: number }) {
           </div>
         )}
 
-        <div>
-          <label className="text-sm font-medium mb-1 block">Action retenue</label>
-          <Textarea value={actionRetenue} onChange={(e) => setActionRetenue(e.target.value)} placeholder="Action corrective/préventive décidée" />
+        <div className="rounded-lg border p-4 space-y-3">
+          <div><h3 className="font-semibold">Actions du dossier CAPA</h3><p className="text-xs text-muted-foreground">Chaque action possède son propre responsable, délai, statut et contrôle d'efficacité.</p></div>
+          {(action.tasks||[]).map((task:any)=><div key={task.id} className="rounded border bg-slate-50 p-3"><div className="flex items-start justify-between gap-3"><div><p className="font-medium">{task.title}</p><p className="text-xs text-muted-foreground">{task.responsible||"Responsable à attribuer"}{task.dueDate?` · ${new Date(task.dueDate).toLocaleDateString("fr-FR")}`:" · échéance à définir"}</p></div><Badge variant="outline">{task.status}</Badge></div></div>)}
+          <div className="flex gap-2"><Input value={newTaskTitle} onChange={(e)=>setNewTaskTitle(e.target.value)} placeholder="Nouvelle action corrective ou préventive"/><Button type="button" disabled={newTaskTitle.trim().length<3||createTaskMutation.isPending} onClick={()=>createTaskMutation.mutate({capaId:action.id,title:newTaskTitle.trim(),priority:"moyenne"})}>Ajouter</Button></div>
+          <details><summary className="cursor-pointer text-sm text-muted-foreground">Champ historique de synthèse</summary><Textarea className="mt-2" value={actionRetenue} onChange={(e) => setActionRetenue(e.target.value)} placeholder="Synthèse historique des actions" /></details>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
