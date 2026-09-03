@@ -1,5 +1,4 @@
-import { LockedFeature } from "@/components/LockedFeature";
-import { hasCapability } from "@/lib/plans";
+import { UpgradeRequired } from "@/components/UpgradeRequired";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,8 +20,9 @@ export default function FdaClassification() {
   const { user, isAuthenticated, loading } = useAuth();
   const { data: profile } = trpc.profile.get.useQuery(undefined, { enabled: isAuthenticated });
 
-  if (isAuthenticated && !hasCapability("canUseFDA", profile, user)) {
-    return <LockedFeature feature="Voies FDA (510(k), De Novo, PMA)" />;
+  // Block FREE users
+  if (isAuthenticated && profile && profile.subscriptionTier === 'free' && user?.role !== 'admin') {
+    return <UpgradeRequired feature="Classification FDA (US)" />;
   }
   const [, setLocation] = useLocation();
 
@@ -47,7 +47,7 @@ export default function FdaClassification() {
   const [pathway, setPathway] = useState<Pathway>(null);
   const [justification, setJustification] = useState("");
 
-  const saveClassificationMutation = trpc.fdaClassification.save.useMutation({
+  const saveClassificationMutation = trpc.fda.saveQualification.useMutation({
     onSuccess: () => {
       toast.success("Classification FDA sauvegardée avec succès !");
       setLocation("/dashboard");
@@ -108,20 +108,22 @@ export default function FdaClassification() {
     }
 
     saveClassificationMutation.mutate({
-      deviceName,
-      deviceDescription,
-      intendedUse,
-      deviceClass,
-      pathway,
-      predicateDevice: hasPredicateDevice ? predicateName : null,
-      predicate510k: hasPredicateDevice ? predicate510k : null,
-      justification,
-      answers: JSON.stringify({
+      sessionName: deviceName || "FDA Classification",
+      answers: {
+        device_name: deviceName,
+        device_description: deviceDescription,
+        intended_use: intendedUse,
+        is_medical_purpose: true,
         isImplantable,
         isSupportingLife,
         hasSignificantRisk,
-        hasPredicateDevice,
-      }),
+        has_predicate: hasPredicateDevice,
+        predicate_name: hasPredicateDevice ? predicateName : null,
+        predicate_510k: hasPredicateDevice ? predicate510k : null,
+        selected_device_class: deviceClass,
+        selected_pathway: pathway,
+        justification,
+      },
     });
   };
 
