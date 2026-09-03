@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,8 +14,7 @@ import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, Download, FileTex
 import { toast } from "sonner";
 import { exportClassificationToExcel, exportClassificationToPDF } from "@/lib/exportUtils";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { LockedFeature } from "@/components/LockedFeature";
-import { hasCapability } from "@/lib/plans";
+import { UpgradeRequired } from "@/components/UpgradeRequired";
 import { getLoginUrl } from "@/const";
 
 type WizardStep = 
@@ -53,12 +52,7 @@ interface ClassificationAnswers {
   // Fonction/énergie
   function?: string[];
   danger_level?: "potentiellement_dangereux" | "normal";
-  // Règle 3 (exception) : procédé de modification simple (filtration/centrifugation/échange gaz/chaleur)
-  modify_composition_simple?: boolean;
-  // Règle 16 : cible du nettoyage/désinfection/stérilisation
-  disinfection_target?: "non_invasif" | "invasif" | "implantable";
-  // Autre fonction
-  other_function_text?: string;
+  
   // Stérilité/mesure
   provided_sterile?: boolean;
   has_measuring_function?: boolean;
@@ -77,26 +71,6 @@ interface ClassificationAnswers {
   software_purpose?: string[];
 }
 
-function uniq<T>(arr: T[]): T[] { return Array.from(new Set(arr)); }
-
-function normalizeClassificationResult(raw: any) {
-  // tRPC client usually unwraps to the procedure output.
-  // However, network previews often show { result: { data: ... } }.
-  const unwrapped =
-    raw?.result?.data ??
-    raw?.data ??
-    raw;
-
-  if (!unwrapped || typeof unwrapped !== "object") return unwrapped;
-
-  return {
-    ...unwrapped,
-    appliedRules: Array.isArray((unwrapped as any).appliedRules) ? (unwrapped as any).appliedRules : [],
-    recommendations: Array.isArray((unwrapped as any).recommendations) ? (unwrapped as any).recommendations : [],
-    missingData: Array.isArray((unwrapped as any).missingData) ? (unwrapped as any).missingData : [],
-  };
-}
-
 export default function Classification() {
   const { t } = useTranslation();
   const { user, isAuthenticated, loading } = useAuth();
@@ -108,25 +82,6 @@ export default function Classification() {
   const [exportingExcel, setExportingExcel] = useState(false);
   const [exportingPDF, setExportingPDF] = useState(false);
 
-  // ✅ Hooks must be called unconditionally. Keep mutations above any early returns.
-  const classifyMutation = trpc.classification.classify.useMutation({
-    onSuccess: (result) => {
-      setClassificationResult(normalizeClassificationResult(result));
-      setCurrentStep("result");
-      toast.success(t("classification.successMessage", "Classification effectuée avec succès !"));
-    },
-    onError: (error) => {
-      toast.error(t("classification.errorMessage", "Erreur : {{message}}", { message: error.message }));
-    },
-  });
-
-  // ✅ Avoid side-effects inside render
-  useEffect(() => {
-    if (!loading && !isAuthenticated) {
-      window.location.href = getLoginUrl();
-    }
-  }, [loading, isAuthenticated]);
-
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -136,12 +91,26 @@ export default function Classification() {
   }
 
   if (!isAuthenticated) {
+    window.location.href = getLoginUrl();
     return null;
   }
 
-  if (!hasCapability("canUseClassification", profile, user)) {
-    return <LockedFeature feature="Classification MDR" />;
+  // Check subscription tier
+  const tier = profile?.subscriptionTier?.toUpperCase();
+  if (tier === "FREE" && user?.role !== "admin") {
+    return <UpgradeRequired feature="la classification MDR" />;
   }
+
+  const classifyMutation = trpc.classification.classify.useMutation({
+    onSuccess: (result) => {
+      setClassificationResult(result);
+      setCurrentStep("result");
+      toast.success(t('classification.successMessage', 'Classification effectuée avec succès !'));
+    },
+    onError: (error) => {
+      toast.error(t('classification.errorMessage', 'Erreur : {{message}}', { message: error.message }));
+    }
+  });
 
   const steps: { id: WizardStep; title: string; description: string }[] = [
     { id: "general", title: t('classification.steps.general', 'Informations générales'), description: t('classification.steps.generalDesc', 'Type de dispositif') },
@@ -172,146 +141,12 @@ export default function Classification() {
     });
   };
 
-  // ✅ Validation "Annexe VIII-ready" (bloquant)
-  const getStepErrors = (step: WizardStep, a: ClassificationAnswers): string[] => {
-    const errs: string[] = [];
-
-    const requireBool = (label: string, v: boolean | undefined) => {
-      if (v === undefined) errs.push(label);
-    };
-
-    const requireNonEmptyArray = (label: string, v: string[] | undefined) => {
-      if (!v || v.length === 0) errs.push(label);
-    };
-
-    switch (step) {
-      case "general":
-        if (!a.device_type) errs.push("Type de dispositif (DM / accessoire)");
-        requireBool("Dispositif actif (Oui/Non)", a.is_active);
-        requireBool("Logiciel (Oui/Non)", a.is_software);
-        break;
-
-      case "invasiveness":
-        if (!a.invasiveness) errs.push("Niveau d’invasivité");
-        if (a.invasiveness && a.invasiveness !== "non-invasif") {
-          requireBool("Implantable (Oui/Non)", a.implantable);
-          requireBool("Contact système nerveux central (Oui/Non)", a.contact_nervous_system);
-          requireBool("Contact système circulatoire central (Oui/Non)", a.contact_circulatory_system);
-        }
-        break;
-
-      case "duration":
-        if (!a.duration) errs.push("Durée de contact (transitoire / court terme / long terme)");
-        break;
-
-      case "anatomical_site":
-        requireNonEmptyArray("Site(s) anatomique(s) de contact", a.contact_site);
-        if (a.contact_site?.includes("peau_lesee") && !a.wound_depth) {
-          errs.push("Profondeur de la plaie (superficielle / profonde)");
-        }
-        break;
-
-      case "function_energy":
-        requireNonEmptyArray("Finalité / fonction(s) (au moins 1)", a.function);
-
-        // Si finalités actives (énergie / diagnostic / monitoring / radiations / administration) → danger_level requis
-        if (
-          a.function?.some((f) =>
-            [
-              "administrer_energie",
-              "diagnostic_monitoring",
-              "monitoring_vital",
-              "radiations_ionisantes",
-              "administrer_medicament",
-            ].includes(f)
-          )
-        ) {
-          if (!a.danger_level) errs.push("Niveau de danger / impact clinique (normal / potentiellement dangereux)");
-        }
-
-        // Règle 3 : si modification de composition → préciser si exception "simple" (filtration/centrifugation/échange gaz/chaleur)
-        if (a.function?.includes("modifier_composition")) {
-          requireBool("Procédé de modification simple (Oui/Non)", a.modify_composition_simple);
-        }
-
-        // Règle 16 : si désinfection/stérilisation d'autres DM → cible requise
-        if (a.function?.includes("sterilisation_dm")) {
-          if (!a.disinfection_target) errs.push("Cible désinfection/stérilisation (non invasif / invasif / implantable)");
-        }
-
-        // Autre
-        if (a.function?.includes("autre_fonction")) {
-          if (!a.other_function_text || !a.other_function_text.trim()) errs.push("Autre fonction (texte)");
-        }
-        break;
-
-      case "sterility":
-        requireBool("Fourni stérile (Oui/Non)", a.provided_sterile);
-        requireBool("Fonction de mesure (Oui/Non)", a.has_measuring_function);
-        requireBool("Instrument chirurgical réutilisable (Oui/Non)", a.reusable_surgical);
-        break;
-
-      case "special_cases":
-        // Si nanomatériaux → exposition interne doit être renseignée
-        if (a.contains_nanomaterials) requireBool("Exposition interne élevée (Oui/Non)", a.high_internal_exposure);
-        break;
-
-      case "software":
-        // Ce step n’est obligatoire que si is_software = true
-        if (a.is_software) {
-          requireNonEmptyArray("Finalité du logiciel (au moins 1)", a.software_purpose);
-          if (!a.danger_level) errs.push("Impact clinique du logiciel (normal / potentiellement dangereux)");
-        }
-        break;
-
-      case "result":
-        break;
-    }
-
-    return errs;
-  };
-
-  const showStepErrors = (errs: string[]) => {
-    toast.error("Champs obligatoires manquants", {
-      description: errs.map((e) => `• ${e}`).join("\n"),
-    });
-  };
-
-
   const goToNextStep = () => {
-    const errs = getStepErrors(currentStep, answers);
-    if (errs.length) {
-      showStepErrors(errs);
-      return;
-    }
-
     if (currentStepIndex < steps.length - 2) {
-      // Skip software step if not applicable
-      const next = steps[currentStepIndex + 1].id;
-      if (next === "software" && !answers.is_software) {
-        setCurrentStep("result");
-        // Submit immediately (all previous steps validated)
-        classifyMutation.mutate({
-          ...answers,
-          software_purpose: answers.software_purpose ?? [],
-        });
-        return;
-      }
-      setCurrentStep(next);
+      setCurrentStep(steps[currentStepIndex + 1].id);
     } else {
-      // Soumettre la classification (validation globale avant envoi)
-      const globalMissing: string[] = [];
-      for (const s of steps.map((x) => x.id)) {
-        globalMissing.push(...getStepErrors(s, answers));
-      }
-      if (globalMissing.length) {
-        showStepErrors(uniq(globalMissing));
-        return;
-      }
-      classifyMutation.mutate({
-        ...answers,
-        software_purpose: answers.software_purpose ?? [],
-      });
+      // Soumettre la classification
+      classifyMutation.mutate(answers);
     }
   };
 
@@ -370,46 +205,13 @@ export default function Classification() {
   const canProceed = () => {
     switch (currentStep) {
       case "general":
-        return Boolean(answers.device_type) && answers.is_active !== undefined && answers.is_software !== undefined;
+        return answers.device_type && answers.is_active !== undefined;
       case "invasiveness":
-        if (answers.invasiveness === undefined) return false;
-        if (answers.invasiveness !== "non-invasif") {
-          return (
-            answers.implantable !== undefined &&
-            answers.contact_nervous_system !== undefined &&
-            answers.contact_circulatory_system !== undefined
-          );
-        }
-        return true;
+        return answers.invasiveness !== undefined;
       case "duration":
-        // ✅ Durée = critère clé Annexe VIII. On la rend obligatoire pour une classification fiable.
-        return answers.duration !== undefined;
-      case "anatomical_site": {
-        const sitesOk = Array.isArray(answers.contact_site) && answers.contact_site.length > 0;
-        if (!sitesOk) return false;
-        if (answers.contact_site?.includes("peau_lesee")) {
-          return answers.wound_depth !== undefined;
-        }
-        return true;
-      }
-      case "function_energy": {
-        const funcsOk = Array.isArray(answers.function) && answers.function.length > 0;
-        if (!funcsOk) return false;
-        const needsDanger =
-          answers.function?.includes("administrer_energie") ||
-          answers.function?.includes("administrer_medicament") ||
-          answers.is_software === true;
-        if (needsDanger && !answers.danger_level) return false;
-        return true;
-      }
-      case "sterility":
-        return (
-          answers.provided_sterile !== undefined &&
-          answers.has_measuring_function !== undefined &&
-          answers.reusable_surgical !== undefined
-        );
+        return answers.invasiveness === "non-invasif" || answers.duration !== undefined;
       case "software":
-        return !answers.is_software || (Array.isArray(answers.software_purpose) && answers.software_purpose.length > 0 && !!answers.danger_level);
+        return !answers.is_software || answers.software_purpose;
       default:
         return true;
     }
@@ -466,7 +268,7 @@ export default function Classification() {
 
                 <div>
                   <Label className="text-base font-semibold mb-3 block">
-                    {t('classification.description', 'Description (optionnelle)')}
+                    {t('classification.description', 'Description')} ({t('common.optional', 'optionnelle')})
                   </Label>
                   <textarea
                     className="w-full px-4 py-2 border rounded-md"
@@ -648,46 +450,47 @@ export default function Classification() {
             )}
 
             {/* Step: Duration */}
-{currentStep === "duration" && (
-  <div className="space-y-6">
-    <Alert>
-      <Info className="h-4 w-4" />
-      <AlertDescription>
-        La durée d’utilisation est un critère clé de l’Annexe VIII. Même pour les DM non invasifs, elle améliore la précision de la classification.
-      </AlertDescription>
-    </Alert>
+            {currentStep === "duration" && answers.invasiveness !== "non-invasif" && (
+              <div className="space-y-6">
+                <div>
+                  <Label className="text-base font-semibold mb-3 block">
+                    {t('classification.durationOfUse', 'Durée d\'utilisation')} *
+                  </Label>
+                  <RadioGroup
+                    value={answers.duration}
+                    onValueChange={(value) => updateAnswer("duration", value)}
+                  >
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="transitoire" id="transitoire" />
+                      <Label htmlFor="transitoire" className="cursor-pointer">
+                        {t('classification.transient', 'Transitoire (≤ 60 minutes)')}
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="court_terme" id="court_terme" />
+                      <Label htmlFor="court_terme" className="cursor-pointer">
+                        {t('classification.shortTerm', 'Court terme (> 60 min à ≤ 30 jours)')}
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="long_terme" id="long_terme" />
+                      <Label htmlFor="long_terme" className="cursor-pointer">
+                        {t('classification.longTerm', 'Long terme (> 30 jours)')}
+                      </Label>
+                    </div>
+                  </RadioGroup>
+                </div>
+              </div>
+            )}
 
-    <div>
-      <Label className="text-base font-semibold mb-3 block">
-        {t('classification.durationOfUse', "Durée d'utilisation")} *
-      </Label>
-      <RadioGroup
-        value={answers.duration}
-        onValueChange={(value) => updateAnswer("duration", value)}
-      >
-        <div className="flex items-center space-x-2">
-          <RadioGroupItem value="transitoire" id="transitoire" />
-          <Label htmlFor="transitoire" className="cursor-pointer">
-            {t('classification.transient', 'Transitoire (≤ 60 minutes)')}
-          </Label>
-        </div>
-        <div className="flex items-center space-x-2">
-          <RadioGroupItem value="court_terme" id="court_terme" />
-          <Label htmlFor="court_terme" className="cursor-pointer">
-            {t('classification.shortTerm', 'Court terme (> 60 min à ≤ 30 jours)')}
-          </Label>
-        </div>
-        <div className="flex items-center space-x-2">
-          <RadioGroupItem value="long_terme" id="long_terme" />
-          <Label htmlFor="long_terme" className="cursor-pointer">
-            {t('classification.longTerm', 'Long terme (> 30 jours)')}
-          </Label>
-        </div>
-      </RadioGroup>
-    </div>
-  </div>
-)}
-
+            {currentStep === "duration" && answers.invasiveness === "non-invasif" && (
+              <Alert>
+                <Info className="h-4 w-4" />
+                <AlertDescription>
+                  {t('classification.durationNotApplicable', 'La durée d\'utilisation n\'est pas applicable pour les dispositifs non invasifs. Passez à l\'étape suivante.')}
+                </AlertDescription>
+              </Alert>
+            )}
 
             {/* Step: Anatomical Site */}
             {currentStep === "anatomical_site" && (
@@ -754,34 +557,29 @@ export default function Classification() {
             {currentStep === "function_energy" && (
               <div className="space-y-6">
                 <div>
-                  <Label className="text-base font-semibold mb-2 block">
-                    Finalité / fonction(s) principale(s) du dispositif (sélection multiple)
+                  <Label className="text-base font-semibold mb-3 block">
+                    Fonction(s) du dispositif (sélection multiple)
                   </Label>
-                  <p className="text-sm text-muted-foreground">
-                    Sélectionnez toutes les fonctions correspondant à l&apos;intention d&apos;usage revendiquée. Certaines réponses déclenchent des questions complémentaires nécessaires
-                    pour appliquer les règles de l&apos;Annexe VIII (MDR 2017/745).
-                  </p>
-                </div>
-
-                {/* Non actif — support / protection / soins */}
-                <div className="space-y-3">
-                  <div className="text-sm font-semibold">Non actif — support / protection / soins</div>
-
                   <div className="space-y-2">
                     {[
-                      { value: "support_positionnement_patient", label: "Support / positionnement du patient (ex. lit médicalisé, table d’examen, brancard, fauteuil médical)" },
-                      { value: "prevention_escarres", label: "Prévention / réduction des escarres — redistribution de pression (ex. matelas médical, matelas anti-escarres passif, coussin anti-escarres)" },
-                      { value: "support_compression_immobilisation", label: "Support, compression, immobilisation, orthèse (ex. bas de contention, bandage de maintien, attelle)" },
-                      { value: "barriere_mecanique", label: "Barrière mécanique / protection (ex. pansement barrière, écran, protection cutanée)" },
-                      { value: "soin_plaies", label: "Soin des plaies / gestion de l’environnement de la plaie (ex. pansement absorbant, maintien humidité, protection plaie)" },
-                    ].map((func) => (
-                      <div key={func.value} className="flex items-start space-x-2">
+                      { value: "canaliser_stocker_sang", label: "Canaliser ou stocker du sang/liquides corporels" },
+                      { value: "modifier_composition", label: "Modifier la composition biologique/chimique" },
+                      { value: "administrer_energie", label: "Administrer ou échanger de l'énergie" },
+                      { value: "energie_dangereuse", label: "Administrer énergie de manière potentiellement dangereuse" },
+                      { value: "diagnostic_monitoring", label: "Diagnostic ou monitoring" },
+                      { value: "monitoring_vital", label: "Monitoring de paramètres vitaux critiques" },
+                      { value: "administrer_medicament", label: "Administrer médicaments/substances" },
+                      { value: "radiations_ionisantes", label: "Émettre des radiations ionisantes" },
+                      { value: "contraception", label: "Contraception ou prévention IST" },
+                      { value: "sterilisation_dm", label: "Stérilisation/désinfection d'autres DM" }
+                    ].map(func => (
+                      <div key={func.value} className="flex items-center space-x-2">
                         <Checkbox
                           id={func.value}
                           checked={answers.function?.includes(func.value)}
                           onCheckedChange={() => toggleArrayValue("function", func.value)}
                         />
-                        <Label htmlFor={func.value} className="cursor-pointer leading-snug">
+                        <Label htmlFor={func.value} className="cursor-pointer">
                           {func.label}
                         </Label>
                       </div>
@@ -789,209 +587,28 @@ export default function Classification() {
                   </div>
                 </div>
 
-                <Separator />
-
-                {/* Gestion de sang / liquides / tissus — non invasif */}
-                <div className="space-y-3">
-                  <div className="text-sm font-semibold">Gestion de sang / liquides corporels / tissus (non invasif)</div>
-
-                  <div className="space-y-2">
-                    {[
-                      { value: "canaliser_stocker_sang", label: "Canaliser ou stocker du sang, liquides corporels, tissus ou cellules (ex. poches/sets, récipients, circuits)" },
-                      { value: "modifier_composition", label: "Modifier la composition biologique/chimique (ex. dialyse, adsorption, échanges ioniques, purification)" },
-                    ].map((func) => (
-                      <div key={func.value} className="flex items-start space-x-2">
-                        <Checkbox
-                          id={func.value}
-                          checked={answers.function?.includes(func.value)}
-                          onCheckedChange={() => toggleArrayValue("function", func.value)}
-                        />
-                        <Label htmlFor={func.value} className="cursor-pointer leading-snug">
-                          {func.label}
+                {(answers.function?.includes("administrer_energie") || answers.function?.includes("administrer_medicament")) && (
+                  <div>
+                    <Label className="text-base font-semibold mb-3 block">
+                      Niveau de danger
+                    </Label>
+                    <RadioGroup
+                      value={answers.danger_level}
+                      onValueChange={(value) => updateAnswer("danger_level", value)}
+                    >
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="normal" id="normal" />
+                        <Label htmlFor="normal" className="cursor-pointer">Normal</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="potentiellement_dangereux" id="dangereux" />
+                        <Label htmlFor="dangereux" className="cursor-pointer">
+                          Potentiellement dangereux
                         </Label>
                       </div>
-                    ))}
+                    </RadioGroup>
                   </div>
-
-                  {/* Règle 3 — exception */}
-                  {answers.function?.includes("modifier_composition") && (
-                    <div className="mt-3 p-3 rounded-md border bg-muted/30 space-y-2">
-                      <div className="flex items-center gap-2">
-                        <Info className="h-4 w-4 text-muted-foreground" />
-                        <div className="text-sm font-medium">Précision nécessaire (Règle 3)</div>
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        Le procédé est-il une <b>modification simple</b> (filtration, centrifugation, échange de gaz ou de chaleur), sans modification substantielle de la composition ?
-                      </p>
-                      <RadioGroup
-                        value={answers.modify_composition_simple === undefined ? "" : (answers.modify_composition_simple ? "yes" : "no")}
-                        onValueChange={(v) => updateAnswer("modify_composition_simple", v === "yes")}
-                        className="space-y-2"
-                      >
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="yes" id="modify_comp_yes" />
-                          <Label htmlFor="modify_comp_yes" className="cursor-pointer">Oui (modification simple)</Label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="no" id="modify_comp_no" />
-                          <Label htmlFor="modify_comp_no" className="cursor-pointer">Non (modification substantielle)</Label>
-                        </div>
-                      </RadioGroup>
-                    </div>
-                  )}
-                </div>
-
-                <Separator />
-
-                {/* Dispositif actif — énergie / diagnostic / monitoring */}
-                <div className="space-y-3">
-                  <div className="text-sm font-semibold">Dispositif actif — énergie / diagnostic / monitoring</div>
-
-                  <div className="space-y-2">
-                    {[
-                      { value: "administrer_energie", label: "Administrer ou échanger de l’énergie (ex. chaleur/froid, ultrasons, RF, laser, stimulation électrique, ventilation, perfusion motorisée…)" },
-                      { value: "diagnostic_monitoring", label: "Diagnostic ou monitoring (mesure/surveillance d’un paramètre physiologique)" },
-                      { value: "monitoring_vital", label: "Monitoring de paramètres vitaux où des variations peuvent entraîner un danger immédiat" },
-                      { value: "radiations_ionisantes", label: "Émettre des radiations ionisantes (imagerie / CT / radiothérapie, etc.)" },
-                      { value: "administrer_medicament", label: "Administrer, retirer ou contrôler l’administration de médicaments/substances/fluids (ex. pompe, perfuseur, injecteur)" },
-                    ].map((func) => (
-                      <div key={func.value} className="flex items-start space-x-2">
-                        <Checkbox
-                          id={func.value}
-                          checked={answers.function?.includes(func.value)}
-                          onCheckedChange={() => toggleArrayValue("function", func.value)}
-                        />
-                        <Label htmlFor={func.value} className="cursor-pointer leading-snug">
-                          {func.label}
-                        </Label>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Danger level (règles 9/10/11) */}
-                  {answers.function?.some((f) =>
-                    [
-                      "administrer_energie",
-                      "diagnostic_monitoring",
-                      "monitoring_vital",
-                      "radiations_ionisantes",
-                      "administrer_medicament",
-                    ].includes(f)
-                  ) && (
-                    <div className="mt-3 p-3 rounded-md border bg-muted/30 space-y-2">
-                      <div className="flex items-center gap-2">
-                        <Info className="h-4 w-4 text-muted-foreground" />
-                        <div className="text-sm font-medium">Niveau de danger / impact clinique</div>
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        Le fonctionnement peut-il présenter un danger potentiel pour le patient (énergie/pilotage/monitoring critique, risque immédiat) ?
-                      </p>
-                      <RadioGroup
-                        value={answers.danger_level || ""}
-                        onValueChange={(value) => updateAnswer("danger_level", value)}
-                        className="space-y-2"
-                      >
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="normal" id="danger_normal" />
-                          <Label htmlFor="danger_normal" className="cursor-pointer">Normal</Label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="potentiellement_dangereux" id="danger_dangerous" />
-                          <Label htmlFor="danger_dangerous" className="cursor-pointer">Potentiellement dangereux</Label>
-                        </div>
-                      </RadioGroup>
-                    </div>
-                  )}
-                </div>
-
-                <Separator />
-
-                {/* Autres finalités pertinentes */}
-                <div className="space-y-3">
-                  <div className="text-sm font-semibold">Autres finalités pertinentes pour la classification</div>
-
-                  <div className="space-y-2">
-                    {[
-                      { value: "contraception", label: "Contraception / prévention des IST (incl. dispositifs de fertilité / reproduction assistée, selon usage revendiqué)" },
-                      { value: "sterilisation_dm", label: "Désinfection, nettoyage, rinçage ou stérilisation d’autres dispositifs médicaux" },
-                      { value: "rehabilitation_assistance", label: "Rééducation / assistance fonctionnelle (ex. dispositifs d’aide à la marche, rééducation, limitation fonctionnelle) " },
-                      { value: "chirurgie_instrumentation", label: "Chirurgie / instrumentation (ex. instruments, guides, dispositifs de suture/agrafage) — l’invasivité & durée détermineront la règle applicable" },
-                    ].map((func) => (
-                      <div key={func.value} className="flex items-start space-x-2">
-                        <Checkbox
-                          id={func.value}
-                          checked={answers.function?.includes(func.value)}
-                          onCheckedChange={() => toggleArrayValue("function", func.value)}
-                        />
-                        <Label htmlFor={func.value} className="cursor-pointer leading-snug">
-                          {func.label}
-                        </Label>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Règle 16 — cible */}
-                  {answers.function?.includes("sterilisation_dm") && (
-                    <div className="mt-3 p-3 rounded-md border bg-muted/30 space-y-2">
-                      <div className="flex items-center gap-2">
-                        <Info className="h-4 w-4 text-muted-foreground" />
-                        <div className="text-sm font-medium">Précision nécessaire (Règle 16)</div>
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        La désinfection/stérilisation vise principalement des dispositifs :
-                      </p>
-                      <RadioGroup
-                        value={answers.disinfection_target || ""}
-                        onValueChange={(v) => updateAnswer("disinfection_target", v)}
-                        className="space-y-2"
-                      >
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="non_invasif" id="disinf_noninv" />
-                          <Label htmlFor="disinf_noninv" className="cursor-pointer">Non invasifs</Label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="invasif" id="disinf_inv" />
-                          <Label htmlFor="disinf_inv" className="cursor-pointer">Invasifs (hors implantables)</Label>
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="implantable" id="disinf_impl" />
-                          <Label htmlFor="disinf_impl" className="cursor-pointer">Implantables</Label>
-                        </div>
-                      </RadioGroup>
-                    </div>
-                  )}
-                </div>
-
-                <Separator />
-
-                {/* Autre */}
-                <div className="space-y-3">
-                  <div className="text-sm font-semibold">Autre (si aucune option ne correspond)</div>
-
-                  <div className="space-y-2">
-                    <div className="flex items-start space-x-2">
-                      <Checkbox
-                        id="autre_fonction"
-                        checked={answers.function?.includes("autre_fonction")}
-                        onCheckedChange={() => toggleArrayValue("function", "autre_fonction")}
-                      />
-                      <Label htmlFor="autre_fonction" className="cursor-pointer leading-snug">
-                        Autre fonction à préciser
-                      </Label>
-                    </div>
-
-                    {answers.function?.includes("autre_fonction") && (
-                      <div className="pl-7">
-                        <input
-                          className="w-full px-4 py-2 border rounded-md"
-                          placeholder="Décrivez brièvement la finalité revendiquée (ex. imagerie non ionisante, implant, etc.)"
-                          value={answers.other_function_text || ""}
-                          onChange={(e) => updateAnswer("other_function_text", e.target.value)}
-                        />
-                      </div>
-                    )}
-                  </div>
-                </div>
+                )}
               </div>
             )}
 
@@ -1239,7 +856,7 @@ export default function Classification() {
                 <div>
                   <h3 className="text-lg font-semibold mb-3">{t('classification.appliedRules', 'Règles appliquées')}</h3>
                   <div className="space-y-2">
-                    {(classificationResult.appliedRules ?? []).map((rule: any) => (
+                    {classificationResult.appliedRules.map((rule: any) => (
                       <Card key={rule.id}>
                         <CardContent className="pt-4">
                           <div className="flex items-start gap-3">
@@ -1271,7 +888,7 @@ export default function Classification() {
                 <div>
                   <h3 className="text-lg font-semibold mb-3">{t('classification.recommendations', 'Recommandations next-step')}</h3>
                   <div className="space-y-2">
-                    {(classificationResult.recommendations ?? []).map((rec: string, index: number) => (
+                    {classificationResult.recommendations.map((rec: string, index: number) => (
                       <div key={index} className="flex items-start gap-2 p-3 bg-slate-50 rounded-md">
                         <span className="text-sm">{rec}</span>
                       </div>
@@ -1280,13 +897,13 @@ export default function Classification() {
                 </div>
 
                 {/* Données manquantes */}
-                {(classificationResult.missingData ?? []).length > 0 && (
+                {classificationResult.missingData.length > 0 && (
                   <Alert>
                     <AlertCircle className="h-4 w-4" />
                     <AlertDescription>
                       <p className="font-semibold mb-2">{t('classification.missingData', 'Données manquantes')} :</p>
                       <ul className="list-disc list-inside space-y-1">
-                        {(classificationResult.missingData ?? []).map((data: string, index: number) => (
+                        {classificationResult.missingData.map((data: string, index: number) => (
                           <li key={index} className="text-sm">{data}</li>
                         ))}
                       </ul>
