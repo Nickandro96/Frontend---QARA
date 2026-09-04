@@ -39,6 +39,7 @@ import {
   Activity,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { trpc } from "@/lib/trpc";
 
 // Demo data for visualization
 const demoKPIs = {
@@ -287,6 +288,78 @@ export default function AnalyticsDashboard() {
   const [drillLevels, setDrillLevels] = useState<DrillLevel[]>([]);
   const [activeTab, setActiveTab] = useState("overview");
 
+  const apiFilters = useMemo(() => ({
+    siteId: filters.sites[0] ? Number(filters.sites[0]) : undefined,
+    auditStatus: filters.auditStatus === "all" ? undefined : filters.auditStatus,
+  }), [filters.sites, filters.auditStatus]);
+  const { data: statsData } = trpc.dashboard.getStats.useQuery(apiFilters);
+  const { data: trendResponse } = trpc.dashboard.getTimeseries.useQuery(apiFilters);
+  const { data: scoringResponse } = trpc.dashboard.getScoring.useQuery(apiFilters);
+  const { data: heatmapResponse } = trpc.dashboard.getHeatmap.useQuery();
+  const { data: findingsResponse } = trpc.dashboard.getDrilldown.useQuery({
+    type: "findings",
+    filters: {},
+    pagination: { page: 1, pageSize: 100 },
+    sort: { field: "createdAt", order: "desc" },
+  });
+  const { data: sitesResponse } = trpc.sites.list.useQuery();
+  const { data: processesResponse } = trpc.processes.list.useQuery();
+  const { data: referentialsResponse } = trpc.referentials.list.useQuery();
+
+  const stats: any = statsData || {};
+  const scoreRows: any[] = scoringResponse?.processScores || [];
+  const processMetricsById = new Map(scoreRows.map((row: any) => [String(row.processId), row]));
+  const heatRows: any[] = heatmapResponse?.heatmap || [];
+  const rawFindings: any[] = findingsResponse?.data || findingsResponse?.items || [];
+  const demoKPIs = {
+    globalScore: stats.averageAuditScore || 0,
+    globalScoreTrend: 0,
+    conformityRate: stats.globalConformityRate || 0,
+    conformityRateTrend: 0,
+    ncMajor: stats.findingsByType?.nc_major || 0,
+    ncMajorTrend: 0,
+    ncMinor: stats.findingsByType?.nc_minor || 0,
+    ncMinorTrend: 0,
+    observations: stats.findingsByType?.observation || 0,
+    ofi: stats.findingsByType?.ofi || 0,
+    actionClosureRate: stats.totalActions ? ((stats.actionsByStatus?.completed || 0) + (stats.actionsByStatus?.verified || 0)) * 100 / stats.totalActions : 0,
+    avgClosureDays: stats.averageClosureTime || 0,
+    overdueActions: stats.overdueActions || 0,
+    riskScore: stats.totalFindings || 0,
+  };
+  const demoSites = (sitesResponse?.sites || []).map((site: any) => ({ id: String(site.id), name: site.name, code: site.code || "" }));
+  const demoProcesses = (processesResponse || []).map((process: any) => ({ id: String(process.id), name: process.name }));
+  const demoReferentials = (referentialsResponse || []).map((ref: any) => ({ id: String(ref.id), name: ref.code ? `${ref.code} — ${ref.name}` : ref.name }));
+  const demoTrendData = (trendResponse?.timeseries || []).map((row: any) => ({ label: row.period, value: row.conformityRate || row.averageScore || 0 }));
+  const demoSitePerformance = demoSites.map((site: any) => ({ label: site.name, value: 0 }));
+  const demoProcessNCData = heatRows.map((row: any) => ({
+    label: row.processName,
+    segments: [
+      { value: row.critical + row.high, color: "#ef4444", label: "NC Majeure" },
+      { value: row.medium, color: "#f97316", label: "NC Mineure" },
+      { value: row.low, color: "#eab308", label: "Observation" },
+    ],
+  }));
+  const demoParetoData = heatRows.map((row: any) => ({ label: row.processName, value: row.total }));
+  const demoHeatmapData = heatRows.flatMap((row: any) => [
+    { row: row.processName, col: "Critique", value: row.critical },
+    { row: row.processName, col: "Haute", value: row.high },
+    { row: row.processName, col: "Moyenne", value: row.medium },
+    { row: row.processName, col: "Faible", value: row.low },
+  ]);
+  const demoFindings = rawFindings.map((finding: any) => ({
+    id: finding.code || String(finding.id), type: finding.type, title: finding.title,
+    process: finding.processName || "—", clause: finding.referentialName || "—", status: finding.status,
+    daysOpen: finding.date ? Math.max(0, Math.floor((Date.now() - new Date(finding.date).getTime()) / 86400000)) : 0,
+    site: finding.owner || "—",
+  }));
+  const demoInsights = scoreRows.slice(0, 4).map((process: any) => ({
+    type: process.score < 60 ? "alert" : process.score < 80 ? "warning" : "success",
+    title: `${process.processName} — ${process.score}/100`,
+    description: `${process.details.findingsCount} constat(s), ${process.details.overdueActionsCount} action(s) en retard.`,
+    priority: process.score < 60 ? "critical" : process.score < 80 ? "high" : "info",
+  }));
+
   // Drill-down handlers
   const handleDrillDown = (level: DrillLevel) => {
     setDrillLevels((prev) => [...prev, level]);
@@ -322,18 +395,21 @@ export default function AnalyticsDashboard() {
 
   // Export handlers
   const handleExportCSV = () => {
-    // TODO: Implement CSV export
-    console.log("Export CSV");
+    const rows = [["Identifiant", "Type", "Titre", "Processus", "Référentiel", "Statut"], ...demoFindings.map((f: any) => [f.id, f.type, f.title, f.process, f.clause, f.status])];
+    const csv = rows.map(row => row.map(value => `"${String(value ?? "").replace(/"/g, '""')}"`).join(";")).join("\n");
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" }));
+    link.download = `qara-analytics-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(link.href);
   };
 
   const handleExportPDF = () => {
-    // TODO: Implement PDF export
-    console.log("Export PDF");
+    window.print();
   };
 
   const handleExportPackDG = () => {
-    // TODO: Implement Pack DG export
-    console.log("Export Pack DG");
+    handleExportCSV();
   };
 
   return (
@@ -592,13 +668,13 @@ export default function AnalyticsDashboard() {
                       <div>
                         <span className="text-muted-foreground">Score</span>
                         <p className="font-bold text-lg text-green-600">
-                          {85 + Math.floor(Math.random() * 10)}%
+                          —
                         </p>
                       </div>
                       <div>
                         <span className="text-muted-foreground">NC Ouvertes</span>
                         <p className="font-bold text-lg">
-                          {Math.floor(Math.random() * 5)}
+                          —
                         </p>
                       </div>
                     </div>
@@ -610,7 +686,9 @@ export default function AnalyticsDashboard() {
 
           <TabsContent value="processes" className="space-y-6 mt-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {demoProcesses.map((process) => (
+              {demoProcesses.map((process) => {
+                const metrics: any = processMetricsById.get(process.id);
+                return (
                 <Card
                   key={process.id}
                   className="cursor-pointer hover:shadow-md transition-shadow"
@@ -634,18 +712,19 @@ export default function AnalyticsDashboard() {
                     <div className="flex items-center justify-between">
                       <Badge
                         variant={
-                          Math.random() > 0.3 ? "default" : "destructive"
+                          (metrics?.details?.findingsCount || 0) > 0 ? "destructive" : "default"
                         }
                       >
-                        {Math.floor(Math.random() * 5)} NC
+                        {metrics?.details?.findingsCount || 0} NC
                       </Badge>
                       <span className="text-sm font-medium">
-                        {80 + Math.floor(Math.random() * 15)}%
+                        {metrics ? `${metrics.score}%` : "—"}
                       </span>
                     </div>
                   </CardContent>
                 </Card>
-              ))}
+                );
+              })}
             </div>
           </TabsContent>
 

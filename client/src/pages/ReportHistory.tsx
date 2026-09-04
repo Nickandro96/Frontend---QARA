@@ -117,7 +117,7 @@ export default function ReportHistory() {
                         <FormatIcon className="h-6 w-6" />
                       </div>
                       <div>
-                        <CardTitle className="text-lg mb-1">{report.reference ?? `Rapport audit #${report.auditId}`}</CardTitle>
+                        <CardTitle className="text-lg mb-1">{report.reportTitle ?? `Rapport audit #${report.auditId}`}</CardTitle>
                         <CardDescription className="flex items-center gap-2">
                           <Calendar className="h-3 w-3" />
                           Généré {formatDistanceToNow(new Date(report.createdAt), { addSuffix: true, locale: fr })}
@@ -134,7 +134,7 @@ export default function ReportHistory() {
                         <span className="font-medium">Audit :</span> #{report.auditId}
                       </div>
                       <div>
-                        <span className="font-medium">Version :</span> {report.version}
+                        <span className="font-medium">Version :</span> {report.reportVersion}
                       </div>
                       <div>
                         <span className="font-medium">Langue :</span> {report.language?.toUpperCase()}

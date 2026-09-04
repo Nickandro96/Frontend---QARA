@@ -185,7 +185,7 @@ export default function Home() {
                       <p className="text-xs text-muted-foreground">{user?.email}</p>
                       <p className="text-xs text-muted-foreground mt-1">
                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                          {profile?.subscriptionTier?.toUpperCase() || 'FREE'}
+                          {user?.role === 'admin' ? 'ENTREPRISE' : (profile?.subscriptionTier?.toUpperCase() || 'FREE')}
                         </span>
                       </p>
                     </div>

@@ -291,8 +291,6 @@ export default function MDRAudit() {
       auditType: "internal",
       type: "internal",
 
-      status: "draft",
-
       referentialIds: mdrReferentialId ? [mdrReferentialId] : [],
       processIds: selectedProcess === "all" ? [] : [selectedProcess],
 

@@ -229,6 +229,7 @@ export default function Profile() {
   const { user, isAuthenticated, loading, logout } = useAuth();
   const { data: profile, refetch } = trpc.profile.get.useQuery(undefined, { enabled: isAuthenticated });
   const updateProfile = trpc.profile.update.useMutation();
+  const effectiveTier = user?.role === "admin" ? "entreprise" : (profile?.subscriptionTier || "free");
   const exportData = trpc.users.exportMyData.useQuery(undefined, { enabled: false });
   const deleteAccount = trpc.users.deleteMyAccount.useMutation();
 
@@ -391,13 +392,13 @@ export default function Profile() {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <p className="font-medium text-lg">
-                  Plan {profile?.subscriptionTier?.toUpperCase() || "FREE"}
+                  Plan {effectiveTier.toUpperCase()}
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  {profile?.subscriptionTier === "free" && "Accès limité aux fonctionnalités de base"}
-                  {profile?.subscriptionTier === "pro" && "Accès complet aux audits et rapports"}
-                  {profile?.subscriptionTier === "expert" && "IA contextuelle + exports avancés"}
-                  {profile?.subscriptionTier === "entreprise" && "Solution complète avec support prioritaire"}
+                  {effectiveTier === "free" && "Accès limité aux fonctionnalités de base"}
+                  {effectiveTier === "pro" && "Accès complet aux audits et rapports"}
+                  {effectiveTier === "expert" && "IA contextuelle + exports avancés"}
+                  {effectiveTier === "entreprise" && "Solution complète avec support prioritaire"}
                 </p>
               </div>
             </div>
