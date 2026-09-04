@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { trpc } from "@/lib/trpc";
 import { auditTypeLabel } from "@/lib/auditLabels";
@@ -43,14 +44,24 @@ export default function AuditDetail() {
   );
 
   const reopenAudit = trpc.audit.reopen.useMutation();
+  const [reopenDialogOpen, setReopenDialogOpen] = useState(false);
+  const [reopenReason, setReopenReason] = useState("");
+  const normalizedReopenReason = reopenReason.trim();
+  const reopenReasonIsValid = normalizedReopenReason.length >= 5 && normalizedReopenReason.length <= 2000;
 
-  const handleResumeAudit = async () => {
+  const handleReopenAudit = async () => {
     if (!audit) return;
     try {
-      await reopenAudit.mutateAsync({ auditId: audit.id });
+      await reopenAudit.mutateAsync({ auditId: audit.id, reason: normalizedReopenReason });
+      await refetchAudit();
+      toast.success("Audit réouvert avec succès");
+      setReopenDialogOpen(false);
+      setReopenReason("");
       navigate(`/audit/${audit.id}/questionnaire`);
-    } catch (error: any) {
-      toast.error("Impossible de reprendre l'audit", { description: error?.message });
+    } catch {
+      toast.error("Impossible de réouvrir l'audit", {
+        description: "La réouverture n'a pas pu être enregistrée. Réessayez dans quelques instants.",
+      });
     }
   };
 
@@ -215,9 +226,15 @@ export default function AuditDetail() {
         </div>
         
         <div className="flex items-center gap-2">
-          {/* closed is the only final lock; reopening restores in_progress */}
-          {audit.status !== 'closed' && (
-            <Button size="lg" variant="outline" className="gap-2" onClick={handleResumeAudit} disabled={reopenAudit.isPending}>
+          {audit.status === 'completed' && (
+            <Button size="lg" variant="outline" className="gap-2" onClick={() => setReopenDialogOpen(true)} disabled={reopenAudit.isPending}>
+              <Clock className="h-5 w-5" />
+              Réouvrir l'audit
+            </Button>
+          )}
+
+          {['draft', 'planned', 'in_progress'].includes(audit.status) && (
+            <Button size="lg" variant="outline" className="gap-2" onClick={() => navigate(`/audit/${audit.id}/questionnaire`)}>
               <Clock className="h-5 w-5" />
               Reprendre l'audit
             </Button>
@@ -624,6 +641,52 @@ export default function AuditDetail() {
           </CardContent>
         </Card>
       )}
+
+      <Dialog
+        open={reopenDialogOpen}
+        onOpenChange={(open) => {
+          if (reopenAudit.isPending) return;
+          setReopenDialogOpen(open);
+          if (!open) setReopenReason("");
+        }}
+      >
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Réouvrir cet audit ?</DialogTitle>
+            <DialogDescription>
+              La réouverture permettra de modifier à nouveau les réponses et les informations de l’audit.
+              Indiquez la raison de cette décision afin d’en assurer la traçabilité.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <div className="flex items-center justify-between gap-4">
+              <Label htmlFor="reopen-reason">Motif de la réouverture</Label>
+              <span className="text-xs text-muted-foreground">{reopenReason.length}/2000</span>
+            </div>
+            <Textarea
+              id="reopen-reason"
+              value={reopenReason}
+              maxLength={2000}
+              rows={5}
+              placeholder="Ex. : ajout de preuves complémentaires demandé lors de la revue."
+              onChange={(event) => setReopenReason(event.target.value)}
+              disabled={reopenAudit.isPending}
+            />
+            {reopenReason.length > 0 && normalizedReopenReason.length < 5 && (
+              <p className="text-sm text-destructive">Le motif doit comporter au moins 5 caractères significatifs.</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setReopenDialogOpen(false)} disabled={reopenAudit.isPending}>
+              Annuler
+            </Button>
+            <Button type="button" onClick={handleReopenAudit} disabled={!reopenReasonIsValid || reopenAudit.isPending}>
+              {reopenAudit.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Confirmer la réouverture
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
