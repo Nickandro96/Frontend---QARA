@@ -10,7 +10,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { trpc } from "@/lib/trpc";
-import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, Download, FileText, Info, Loader2 } from "lucide-react";
+import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, Download, FileText, History, Info, Loader2, RotateCcw, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { exportClassificationToExcel, exportClassificationToPDF } from "@/lib/exportUtils";
 import { useAuth } from "@/_core/hooks/useAuth";
@@ -105,19 +105,57 @@ export default function Classification() {
   const [currentStep, setCurrentStep] = useState<WizardStep>("general");
   const [answers, setAnswers] = useState<ClassificationAnswers>({});
   const [classificationResult, setClassificationResult] = useState<any>(null);
+  const [sessionId, setSessionId] = useState<number | null>(null);
   const [exportingExcel, setExportingExcel] = useState(false);
   const [exportingPDF, setExportingPDF] = useState(false);
 
-  // ✅ Hooks must be called unconditionally. Keep mutations above any early returns.
+  // ✅ Hooks must be called unconditionally. Keep queries/mutations above any early returns.
+  const utils = trpc.useUtils();
+  const historyQuery = trpc.classification.list.useQuery(undefined, { enabled: isAuthenticated });
+  const saveDraftMutation = trpc.classification.saveDraft.useMutation({
+    onSuccess: (saved: any) => {
+      setSessionId(saved.sessionId);
+      void utils.classification.list.invalidate();
+      toast.success("Brouillon sauvegardé");
+    },
+    onError: (error: any) => toast.error(error.message),
+  });
   const classifyMutation = trpc.classification.classify.useMutation({
     onSuccess: (result) => {
       setClassificationResult(normalizeClassificationResult(result));
+      setSessionId(result.sessionId);
       setCurrentStep("result");
+      void utils.classification.list.invalidate();
       toast.success(t("classification.successMessage", "Classification effectuée avec succès !"));
     },
     onError: (error) => {
       toast.error(t("classification.errorMessage", "Erreur : {{message}}", { message: error.message }));
     },
+  });
+  const reviseMutation = trpc.classification.revise.useMutation({
+    onSuccess: (revision: any) => {
+      const source = (historyQuery.data ?? []).find((item: any) => item.id === revision.sourceSessionId);
+      setSessionId(revision.sessionId);
+      setAnswers((source?.answersJson ?? {}) as ClassificationAnswers);
+      setClassificationResult(null);
+      setCurrentStep("general");
+      void utils.classification.list.invalidate();
+      toast.success("Nouvelle révision créée ; la décision précédente est conservée.");
+    },
+    onError: (error: any) => toast.error(error.message),
+  });
+  const deleteDraftMutation = trpc.classification.deleteDraft.useMutation({
+    onSuccess: (_data: any, variables: any) => {
+      if (sessionId === variables.sessionId) {
+        setSessionId(null);
+        setAnswers({});
+        setClassificationResult(null);
+        setCurrentStep("general");
+      }
+      void utils.classification.list.invalidate();
+      toast.success("Brouillon supprimé");
+    },
+    onError: (error: any) => toast.error(error.message),
   });
 
   // ✅ Avoid side-effects inside render
@@ -293,6 +331,7 @@ export default function Classification() {
         // Submit immediately (all previous steps validated)
         classifyMutation.mutate({
           ...answers,
+          ...(sessionId ? { sessionId } : {}),
           software_purpose: answers.software_purpose ?? [],
         });
         return;
@@ -310,6 +349,7 @@ export default function Classification() {
       }
       classifyMutation.mutate({
         ...answers,
+        ...(sessionId ? { sessionId } : {}),
         software_purpose: answers.software_purpose ?? [],
       });
     }
@@ -427,6 +467,54 @@ export default function Classification() {
             {t('classification.subtitle', 'Annexe VIII - Règlement (UE) 2017/745 (MDR)')}
           </p>
         </div>
+
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2"><History className="h-5 w-5" />Historique des classifications</CardTitle>
+            <CardDescription>Les décisions terminées sont conservées avec leurs réponses et la version du moteur.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {historyQuery.isLoading ? (
+              <div className="flex items-center gap-2 text-sm text-slate-600"><Loader2 className="h-4 w-4 animate-spin" />Chargement…</div>
+            ) : historyQuery.isError ? (
+              <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertDescription>Historique indisponible : {historyQuery.error.message}</AlertDescription></Alert>
+            ) : (historyQuery.data ?? []).length === 0 ? (
+              <p className="text-sm text-slate-600">Aucune classification enregistrée. Votre première décision apparaîtra ici.</p>
+            ) : (
+              <div className="space-y-3">
+                {(historyQuery.data ?? []).map((item: any) => (
+                  <div key={item.id} className="flex flex-col gap-3 rounded-md border p-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-medium">{item.sessionName}</span>
+                        <Badge variant={item.status === "completed" ? "default" : "secondary"}>{item.status === "completed" ? "Terminée" : "Brouillon"}</Badge>
+                        {item.resultJson?.resultingClass && <Badge variant="outline">Classe {item.resultJson.resultingClass}</Badge>}
+                      </div>
+                      <p className="mt-1 text-xs text-slate-500">Moteur {item.rulesetVersion} · {new Date(item.updatedAt).toLocaleDateString()}</p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button size="sm" variant="outline" onClick={() => {
+                        setSessionId(item.id);
+                        setAnswers((item.answersJson ?? {}) as ClassificationAnswers);
+                        setClassificationResult(item.resultJson ? normalizeClassificationResult(item.resultJson) : null);
+                        setCurrentStep(item.status === "completed" ? "result" : "general");
+                      }}>{item.status === "completed" ? "Consulter" : "Reprendre"}</Button>
+                      {item.status === "completed" ? (
+                        <Button size="sm" variant="outline" disabled={reviseMutation.isPending} onClick={() => reviseMutation.mutate({ sessionId: item.id })}>
+                          <RotateCcw className="mr-2 h-4 w-4" />Réviser
+                        </Button>
+                      ) : (
+                        <Button size="sm" variant="outline" disabled={deleteDraftMutation.isPending} onClick={() => {
+                          if (window.confirm("Supprimer définitivement ce brouillon ?")) deleteDraftMutation.mutate({ sessionId: item.id });
+                        }}><Trash2 className="mr-2 h-4 w-4" />Supprimer</Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Progress */}
         <div className="mb-8">
@@ -1296,11 +1384,11 @@ export default function Classification() {
 
                 {/* Actions */}
                 <div className="flex gap-3">
-                  <Button variant="outline" className="flex-1">
+                  <Button variant="outline" className="flex-1" onClick={handleExportPDF} disabled={exportingPDF}>
                     <Download className="w-4 h-4 mr-2" />
                     {t('classification.exportPDF', 'Exporter PDF')}
                   </Button>
-                  <Button variant="outline" className="flex-1">
+                  <Button variant="outline" className="flex-1" onClick={handleExportExcel} disabled={exportingExcel}>
                     <FileText className="w-4 h-4 mr-2" />
                     {t('classification.exportExcel', 'Exporter Excel')}
                   </Button>
@@ -1312,7 +1400,7 @@ export default function Classification() {
 
         {/* Navigation */}
         {currentStep !== "result" && (
-          <div className="flex justify-between">
+          <div className="flex flex-wrap justify-between gap-3">
             <Button
               variant="outline"
               onClick={goToPreviousStep}
@@ -1321,13 +1409,15 @@ export default function Classification() {
               <ChevronLeft className="w-4 h-4 mr-2" />
               {t('common.previous', 'Précédent')}
             </Button>
-            <Button
-              onClick={goToNextStep}
-              disabled={!canProceed() || classifyMutation.isPending}
-            >
-              {currentStepIndex === steps.length - 2 ? t('classification.classify', 'Classifier') : t('common.next', 'Suivant')}
-              <ChevronRight className="w-4 h-4 ml-2" />
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => saveDraftMutation.mutate({ ...(sessionId ? { sessionId } : {}), answers })} disabled={saveDraftMutation.isPending}>
+                {saveDraftMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}Sauvegarder le brouillon
+              </Button>
+              <Button onClick={goToNextStep} disabled={!canProceed() || classifyMutation.isPending}>
+                {currentStepIndex === steps.length - 2 ? t('classification.classify', 'Classifier') : t('common.next', 'Suivant')}
+                <ChevronRight className="w-4 h-4 ml-2" />
+              </Button>
+            </div>
           </div>
         )}
 
@@ -1339,6 +1429,7 @@ export default function Classification() {
                 setCurrentStep("general");
                 setAnswers({});
                 setClassificationResult(null);
+                setSessionId(null);
               }}
             >
               {t('classification.newClassification', 'Nouvelle classification')}
