@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
+import { reportGenerationHref } from "@/lib/reportRouting";
 import {
   AlertCircle,
   ArrowLeft,
@@ -977,7 +978,7 @@ export default function MDRAuditDrilldown() {
         <CardContent className="p-4">
           <div className="flex items-center justify-between gap-2">
             <div className="text-sm font-medium">Table de progression audit</div>
-            <Button type="button" variant="outline" size="sm" onClick={() => setSaveMessage("Mode impression rapport : bientôt") }>
+            <Button type="button" variant="outline" size="sm" onClick={() => setLocation(reportGenerationHref(auditId))}>
               Générer rapport audit
             </Button>
           </div>

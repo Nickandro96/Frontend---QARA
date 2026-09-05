@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { FileText, Download, Loader2, CheckCircle2, AlertTriangle, Sparkles } from "lucide-react";
+import { parseReportAuditId } from "@/lib/reportRouting";
 
 type OutputFormat = "pdf" | "docx" | "xlsx";
 type ReportLanguage = "fr" | "en";
@@ -22,7 +23,7 @@ export default function ReportGeneration() {
   const [location, navigate] = useLocation();
   const searchParams = new URLSearchParams(location.split("?")[1]);
   const auditIdParam = searchParams.get("auditId");
-  const initialAuditId = auditIdParam ? parseInt(auditIdParam) : null;
+  const initialAuditId = parseReportAuditId(auditIdParam);
   const [auditId, setAuditId] = useState<number | null>(initialAuditId);
 
   const [outputFormat, setOutputFormat] = useState<OutputFormat>("pdf");
