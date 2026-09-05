@@ -40,6 +40,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
+import { closedActionRate, uniqueHeatmapRows } from "@/lib/analyticsMetrics";
 
 // Demo data for visualization
 const demoKPIs = {
@@ -322,7 +323,7 @@ export default function AnalyticsDashboard() {
     ncMinorTrend: 0,
     observations: stats.findingsByType?.observation || 0,
     ofi: stats.findingsByType?.ofi || 0,
-    actionClosureRate: stats.totalActions ? ((stats.actionsByStatus?.completed || 0) + (stats.actionsByStatus?.verified || 0)) * 100 / stats.totalActions : 0,
+    actionClosureRate: closedActionRate(stats.totalActions, stats.actionsByStatus?.closed),
     avgClosureDays: stats.averageClosureTime || 0,
     overdueActions: stats.overdueActions || 0,
     riskScore: stats.totalFindings || 0,
@@ -331,7 +332,9 @@ export default function AnalyticsDashboard() {
   const demoProcesses = (processesResponse || []).map((process: any) => ({ id: String(process.id), name: process.name }));
   const demoReferentials = (referentialsResponse || []).map((ref: any) => ({ id: String(ref.id), name: ref.code ? `${ref.code} — ${ref.name}` : ref.name }));
   const demoTrendData = (trendResponse?.timeseries || []).map((row: any) => ({ label: row.period, value: row.conformityRate || row.averageScore || 0 }));
-  const demoSitePerformance = demoSites.map((site: any) => ({ label: site.name, value: 0 }));
+  // Aucun agrégat de score par site n'est exposé : ne jamais dessiner de barres à 0
+  // qui pourraient être interprétées comme une performance mesurée.
+  const demoSitePerformance: Array<{ label: string; value: number }> = [];
   const demoProcessNCData = heatRows.map((row: any) => ({
     label: row.processName,
     segments: [
@@ -470,11 +473,6 @@ export default function AnalyticsDashboard() {
             unit="%"
             icon={<Target className="h-4 w-4" />}
             definition={KPI_DEFINITIONS.globalScore[lang]}
-            trend={{
-              value: demoKPIs.globalScoreTrend,
-              direction: "up",
-              label: "vs période précédente",
-            }}
             color="success"
             onClick={() =>
               handleDrillDown({
@@ -492,11 +490,6 @@ export default function AnalyticsDashboard() {
             unit="%"
             icon={<CheckCircle2 className="h-4 w-4" />}
             definition={KPI_DEFINITIONS.conformityRate[lang]}
-            trend={{
-              value: demoKPIs.conformityRateTrend,
-              direction: "up",
-              label: "vs période précédente",
-            }}
             color="success"
           />
           <KPICard
@@ -504,11 +497,6 @@ export default function AnalyticsDashboard() {
             value={demoKPIs.ncMajor}
             icon={<AlertTriangle className="h-4 w-4" />}
             definition={KPI_DEFINITIONS.ncMajor[lang]}
-            trend={{
-              value: Math.abs(demoKPIs.ncMajorTrend),
-              direction: demoKPIs.ncMajorTrend < 0 ? "down" : "up",
-              label: "vs période précédente",
-            }}
             color="danger"
           />
           <KPICard
@@ -516,10 +504,6 @@ export default function AnalyticsDashboard() {
             value={demoKPIs.ncMinor}
             icon={<AlertTriangle className="h-4 w-4" />}
             definition={KPI_DEFINITIONS.ncMinor[lang]}
-            trend={{
-              value: Math.abs(demoKPIs.ncMinorTrend),
-              direction: demoKPIs.ncMinorTrend < 0 ? "down" : "up",
-            }}
             color="warning"
           />
           <KPICard
@@ -593,6 +577,11 @@ export default function AnalyticsDashboard() {
                   </p>
                 </div>
               ))}
+              {demoInsights.length === 0 && (
+                <p className="col-span-full py-6 text-center text-sm text-muted-foreground">
+                  Données insuffisantes pour produire un insight fiable.
+                </p>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -614,11 +603,11 @@ export default function AnalyticsDashboard() {
                 title="Évolution du Score Global (12 mois)"
                 color="#3b82f6"
               />
-              <BarChart
-                data={demoSitePerformance}
-                title="Performance par Site"
-                horizontal
-              />
+              {demoSitePerformance.length > 0 ? (
+                <BarChart data={demoSitePerformance} title="Performance par Site" horizontal />
+              ) : (
+                <Card><CardContent className="flex min-h-64 items-center justify-center text-sm text-muted-foreground">La performance par site sera disponible lorsque cet agrégat aura été calculé.</CardContent></Card>
+              )}
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -635,9 +624,9 @@ export default function AnalyticsDashboard() {
             {/* Heatmap */}
             <Heatmap
               data={demoHeatmapData}
-              rows={["Paris", "Lyon", "Bordeaux", "Munich", "Boston"]}
-              cols={["Conception", "Production", "Achats", "Risques"]}
-              title="Matrice Site × Processus (Taux de Conformité)"
+              rows={uniqueHeatmapRows(demoHeatmapData)}
+              cols={["Critique", "Haute", "Moyenne", "Faible"]}
+              title="Matrice processus × criticité (nombre de constats)"
             />
           </TabsContent>
 
@@ -817,6 +806,9 @@ export default function AnalyticsDashboard() {
                         </TableCell>
                       </TableRow>
                     ))}
+                    {demoFindings.length === 0 && (
+                      <TableRow><TableCell colSpan={8} className="py-10 text-center text-muted-foreground">Aucun constat pour les filtres sélectionnés.</TableCell></TableRow>
+                    )}
                   </TableBody>
                 </Table>
               </CardContent>
