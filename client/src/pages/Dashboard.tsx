@@ -3,6 +3,7 @@ import { trpc } from "@/lib/trpc";
 import { getLoginUrl } from "@/const";
 import { getActiveReferentials } from "@/lib/onboarding";
 import { getMaxReferentiels, getPlanLabel } from "@/lib/plans";
+import { auditProgress, qualityDashboardMetrics } from "@/lib/qualityMetrics";
 import { LockedFeature } from "@/components/LockedFeature";
 import { Link } from "wouter";
 import {
@@ -10,7 +11,8 @@ import {
   Bell,
   CheckCircle2,
   ChevronRight,
-  Layers3,
+  ClipboardCheck,
+  Clock3,
   Loader2,
   Plus,
   Settings,
@@ -132,6 +134,7 @@ export default function Dashboard() {
   const { user, isAuthenticated, loading } = useAuth();
   const { data: profile } = trpc.profile.get.useQuery(undefined, { enabled: isAuthenticated });
   const { data: kpiData } = trpc.dashboard.getKPIs.useQuery(undefined, { enabled: isAuthenticated });
+  const { data: capaDashboard } = trpc.capa.dashboard.useQuery(undefined, { enabled: isAuthenticated });
   const { data: recentFindings } = trpc.dashboard.getRecentFindings.useQuery(
     { limit: 4 },
     { enabled: isAuthenticated }
@@ -144,14 +147,8 @@ export default function Dashboard() {
   const maxReferentiels = getMaxReferentiels(profile, user);
 
   const safeKPIs = useMemo(() => {
-    const scoreGlobal = Number((kpiData as any)?.scoreGlobal ?? 0);
-    const nonConformitiesCount = Number((kpiData as any)?.nonConformitiesCount ?? 0);
-    // TODO(data): aucun endpoint backend ne fournit ces deux indicateurs pour le moment.
-    const classifiedDevices = Number((kpiData as any)?.classifiedDevices ?? 0);
-    const watchAlerts = Number((kpiData as any)?.watchAlerts ?? 0);
-
-    return { scoreGlobal, nonConformitiesCount, classifiedDevices, watchAlerts };
-  }, [kpiData]);
+    return qualityDashboardMetrics(kpiData, capaDashboard);
+  }, [kpiData, capaDashboard]);
 
   const references = useMemo<ReferenceCard[]>(() => {
     // TODO(data): pas d'endpoint backend de score par referentiel pour le moment.
@@ -178,7 +175,7 @@ export default function Dashboard() {
     return audits.slice(0, 4).map((audit: any, index) => ({
       title: audit?.title ?? audit?.name ?? `Audit en cours ${index + 1}`,
       meta: audit?.framework ?? audit?.type ?? "Audit",
-      progress: Number(audit?.progression ?? audit?.progress ?? 0),
+      progress: auditProgress(audit),
       href: audit?.id ? `/audits/${audit.id}` : "/audits",
     }));
   }, [recentAudits]);
@@ -251,24 +248,24 @@ export default function Dashboard() {
         />
         <KpiCard
           icon={AlertTriangle}
-          label="Écarts ouverts"
-          value={String(safeKPIs.nonConformitiesCount)}
-          detail="Actions à prioriser"
+          label="NC ouvertes"
+          value={String(safeKPIs.openNonConformities)}
+          detail="Constats non clôturés"
           color="#dc2626"
         />
         <KpiCard
-          icon={Layers3}
-          label="Dispositifs classés"
-          value={String(safeKPIs.classifiedDevices)}
-          detail="MDR, IVDR et FDA"
+          icon={ClipboardCheck}
+          label="CAPA ouvertes"
+          value={String(safeKPIs.openCapas)}
+          detail="Plans correctifs actifs"
           color="#3b6fe0"
         />
         <KpiCard
-          icon={Bell}
-          label="Alertes de veille"
-          value={String(safeKPIs.watchAlerts)}
-          detail="Évolutions à suivre"
-          color="#eab308"
+          icon={Clock3}
+          label="Actions en retard"
+          value={String(safeKPIs.overdueActions)}
+          detail="Échéances dépassées"
+          color="#dc2626"
         />
       </section>
 

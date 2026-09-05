@@ -17,6 +17,7 @@ import { trpc } from "@/lib/trpc";
 import { Loader2, Search, Filter, Eye, FileText, Plus, CalendarClock } from "lucide-react";
 import { Link } from "wouter";
 import { getLoginUrl } from "@/const";
+import { auditProgress } from "@/lib/qualityMetrics";
 
 export default function AuditsList() {
   const { isAuthenticated, loading } = useAuth();
@@ -188,6 +189,7 @@ export default function AuditsList() {
                       <TableHead>Site</TableHead>
                       <TableHead>Date de début</TableHead>
                       <TableHead>Date de fin</TableHead>
+                      <TableHead>Progression</TableHead>
                       <TableHead>Conformité</TableHead>
                       <TableHead>Statut</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
@@ -214,7 +216,18 @@ export default function AuditsList() {
                             : "-"}
                         </TableCell>
                         <TableCell>
-                          {audit.conformityRate ? (
+                          <div className="flex items-center gap-2">
+                            <div className="w-16 h-2 bg-gray-200 rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-blue-500"
+                                style={{ width: `${auditProgress(audit)}%` }}
+                              />
+                            </div>
+                            <span className="text-sm font-medium">{auditProgress(audit)}%</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {audit.conformityRate != null ? (
                             <div className="flex items-center gap-2">
                               <div className="w-16 h-2 bg-gray-200 rounded-full overflow-hidden">
                                 <div
