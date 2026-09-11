@@ -431,8 +431,11 @@ export default function App() {
           <ThemeProvider>
             <TooltipProvider>
               <HreflangTags />
+              <a href="#contenu-principal" className="fixed left-3 top-3 z-[100] -translate-y-24 rounded-md bg-primary px-4 py-2 text-primary-foreground shadow focus:translate-y-0">
+                Aller au contenu principal
+              </a>
               <div className="flex min-h-screen flex-col">
-                <div className="flex-1"><Suspense fallback={<div className="flex min-h-[50vh] items-center justify-center text-sm text-muted-foreground">Chargement…</div>}><Router /></Suspense></div>
+                <div id="contenu-principal" tabIndex={-1} className="flex-1"><Suspense fallback={<div role="status" aria-live="polite" className="flex min-h-[50vh] items-center justify-center text-sm text-muted-foreground">Chargement…</div>}><Router /></Suspense></div>
                 <LegalFooter />
               </div>
               <Toaster richColors position="top-right" />

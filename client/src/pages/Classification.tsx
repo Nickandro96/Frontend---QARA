@@ -12,7 +12,6 @@ import { Separator } from "@/components/ui/separator";
 import { trpc } from "@/lib/trpc";
 import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, Download, FileText, History, Info, Loader2, RotateCcw, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { exportClassificationToExcel, exportClassificationToPDF } from "@/lib/exportUtils";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { LockedFeature } from "@/components/LockedFeature";
 import { hasCapability } from "@/lib/plans";
@@ -369,6 +368,7 @@ export default function Classification() {
     
     setExportingExcel(true);
     try {
+      const { exportClassificationToExcel } = await import("@/lib/exportUtils");
       await exportClassificationToExcel(
         answers.device_name || "Dispositif",
         classificationResult.resultingClass,
@@ -384,7 +384,7 @@ export default function Classification() {
     }
   };
   
-  const handleExportPDF = () => {
+  const handleExportPDF = async () => {
     if (!classificationResult) {
       toast.error("Aucun résultat de classification disponible");
       return;
@@ -392,6 +392,7 @@ export default function Classification() {
     
     setExportingPDF(true);
     try {
+      const { exportClassificationToPDF } = await import("@/lib/exportUtils");
       exportClassificationToPDF(
         answers.device_name || "Dispositif",
         classificationResult.resultingClass,

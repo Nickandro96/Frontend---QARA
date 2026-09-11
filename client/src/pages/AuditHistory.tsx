@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, FileText, Download, Trash2, Play, CheckCircle2, Clock, AlertCircle } from "lucide-react";
+import { Loader2, FileText, Trash2, Play, CheckCircle2, Clock, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -22,6 +22,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { reportGenerationHref } from "@/lib/reportRouting";
 
 const STATUS_CONFIG = {
   draft: { label: "Brouillon", icon: Clock, color: "bg-gray-100 text-gray-800" },
@@ -66,13 +67,7 @@ export default function AuditHistory() {
     setLocation(`/audit/${auditId}/results`);
   };
 
-  const handleDownloadReport = async (auditId: number) => {
-    toast.info("Génération du rapport en cours...");
-    // TODO: Implement PDF generation
-    setTimeout(() => {
-      toast.success("Rapport téléchargé");
-    }, 2000);
-  };
+  const handleGenerateReport = (auditId: number) => setLocation(reportGenerationHref(auditId));
 
   if (isLoading) {
     return (
@@ -86,7 +81,7 @@ export default function AuditHistory() {
 
   return (
     <div className="container max-w-6xl py-8">
-      <div className="flex items-center justify-between mb-8">
+      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold">Historique des Audits</h1>
           <p className="text-muted-foreground mt-2">
@@ -121,8 +116,8 @@ export default function AuditHistory() {
       ) : (
         <div className="grid gap-4">
           {filteredAudits.map((audit) => {
-            const StatusIcon = STATUS_CONFIG[audit.status as keyof typeof STATUS_CONFIG].icon;
-            const statusConfig = STATUS_CONFIG[audit.status as keyof typeof STATUS_CONFIG];
+            const statusConfig = STATUS_CONFIG[audit.status as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.draft;
+            const StatusIcon = statusConfig.icon;
 
             return (
               <Card key={audit.id} className="hover:shadow-md transition-shadow">
@@ -148,21 +143,21 @@ export default function AuditHistory() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                      {audit.conformityRate && (
+                      {audit.conformityRate != null && (
                         <div>
                           Conformité : <span className="font-semibold text-foreground">{audit.conformityRate}%</span>
                         </div>
                       )}
-                      {audit.score && (
+                      {audit.score != null && (
                         <div>
                           Score : <span className="font-semibold text-foreground">{audit.score}/100</span>
                         </div>
                       )}
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center justify-end gap-2">
                       {audit.status === "completed" || audit.status === "closed" ? (
                         <>
                           <Button
@@ -176,10 +171,10 @@ export default function AuditHistory() {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleDownloadReport(audit.id)}
+                            onClick={() => handleGenerateReport(audit.id)}
                           >
-                            <Download className="h-4 w-4 mr-2" />
-                            Télécharger PDF
+                            <FileText className="h-4 w-4 mr-2" />
+                            Générer le rapport
                           </Button>
                         </>
                       ) : (
@@ -192,13 +187,11 @@ export default function AuditHistory() {
                           Reprendre
                         </Button>
                       )}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setDeleteAuditId(audit.id)}
-                      >
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
+                      {audit.status === "draft" || audit.status === "in_progress" ? (
+                        <Button variant="ghost" size="sm" aria-label={`Supprimer l’audit ${audit.name}`} onClick={() => setDeleteAuditId(audit.id)}>
+                          <Trash2 className="h-4 w-4 text-destructive" aria-hidden="true" />
+                        </Button>
+                      ) : null}
                     </div>
                   </div>
                 </CardContent>
