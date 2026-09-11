@@ -8,8 +8,6 @@ import { Input } from "@/components/ui/input";
 import { sanitizeReturnTo } from "@/lib/session";
 import { trpc } from "@/lib/trpc";
 
-const AUTH_REFRESH_TIMEOUT_MS = 1500;
-
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -18,16 +16,14 @@ export default function Login() {
   const [, navigate] = useLocation();
 
   const loginMutation = trpc.system.login.useMutation({
-    onSuccess: () => {
-      void Promise.race([
-        refresh(),
-        new Promise((resolve) => window.setTimeout(resolve, AUTH_REFRESH_TIMEOUT_MS)),
-      ])
-        .catch(() => undefined)
-        .finally(() => {
-          const params = new URLSearchParams(window.location.search);
-          navigate(sanitizeReturnTo(params.get("returnTo")));
-        });
+    onSuccess: async () => {
+      const refreshed = await refresh().catch(() => null);
+      if (!refreshed?.data) {
+        setError("La session n’a pas pu être confirmée. Veuillez réessayer.");
+        return;
+      }
+      const params = new URLSearchParams(window.location.search);
+      navigate(sanitizeReturnTo(params.get("returnTo")));
     },
     onError: (err: { message?: string }) => {
       setError(err.message || "Une erreur est survenue");
@@ -54,7 +50,7 @@ export default function Login() {
             <Shield className="h-6 w-6" />
           </div>
           <CardTitle className="text-2xl font-bold">Se connecter</CardTitle>
-          <CardDescription>Accedez a votre espace QARA</CardDescription>
+          <CardDescription>Accédez à votre espace QARA</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -87,7 +83,7 @@ export default function Login() {
 
             <div className="text-right">
               <Link href="/forgot-password" className="text-sm font-medium text-[#3b6fe0] hover:underline">
-                Mot de passe oublie ?
+                Mot de passe oublié ?
               </Link>
             </div>
 

@@ -18,6 +18,9 @@ import type { AppRouter } from "@/server-types";
 export const trpc: ReturnType<typeof createTRPCReact<any>> & Record<string, any> = createTRPCReact<any>() as any;
 
 function getApiBaseUrl() {
+  // En production, Vercel relaie /trpc vers Railway. Le navigateur ne voit
+  // donc qu'une seule origine et le cookie httpOnly n'est plus cross-site.
+  if (import.meta.env.PROD && typeof window !== "undefined") return window.location.origin;
   const envUrl = import.meta.env.VITE_API_URL as string | undefined;
   if (!envUrl) return "http://localhost:3001";
   return envUrl.replace(/\/$/, "");
