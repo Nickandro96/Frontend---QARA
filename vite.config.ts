@@ -26,8 +26,9 @@ export default defineConfig({
 
     emptyOutDir: true,
 
-    // Pour retrouver les lignes dans les erreurs en prod
-    sourcemap: true,
+    // Les sources restent disponibles localement sans publier le code source
+    // complet dans les artefacts de production.
+    sourcemap: false,
   },
   test: {
     environment: "jsdom",
