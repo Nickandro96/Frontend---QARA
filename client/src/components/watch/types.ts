@@ -47,6 +47,7 @@ export type WatchUpdate = {
   aiAnalysisDate?: string | Date | null;
   isRead?: boolean;
   sourceRegistryId?: string | null;
+  sourceAuthority?: "official" | "secondary" | "unknown";
   jurisdiction: string;
   impactedDomains: string[];
   impactedRoles: string[];
@@ -72,4 +73,5 @@ export type CompanyProfile = {
   deviceClass: "I" | "IIa" | "IIb" | "III";
   deviceFamilies: ("active" | "non_active" | "implantable" | "sterile" | "software" | "in_vitro")[];
   markets: ("EU" | "UK" | "CH" | "US")[];
+  configured?: boolean;
 };

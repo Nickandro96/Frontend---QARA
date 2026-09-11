@@ -41,6 +41,11 @@ export function CompanyProfilePanel(props: { profile: CompanyProfile; onSaved?: 
         <CardTitle className="text-sm">Profil entreprise (premium)</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {!props.profile.configured ? (
+          <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+            Profil non configuré : les valeurs affichées sont proposées uniquement pour démarrer. Vérifiez-les puis sauvegardez-les avant d’utiliser l’analyse personnalisée.
+          </div>
+        ) : null}
         <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
           <div>
             <div className="mb-1 text-xs font-medium text-muted-foreground">Rôle économique</div>

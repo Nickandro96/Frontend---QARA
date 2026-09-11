@@ -89,7 +89,7 @@ export function WatchDashboard() {
           <h1 className="text-2xl font-semibold tracking-tight">Veille réglementaire</h1>
           <div className="mt-1 text-sm text-muted-foreground">
             Dernière synchro: <span className="font-medium">{formatDateTime(meta?.lastRefresh)}</span>
-            {meta?.stale ? <span className="ml-2"><Badge variant="secondary">Cache stale</Badge></span> : null}
+            {meta?.stale ? <span className="ml-2"><Badge variant="secondary">Cache à actualiser</Badge></span> : null}
             {meta?.refreshInProgress ? (
               <span className="ml-2 inline-flex items-center gap-1">
                 <Loader2 className="h-3 w-3 animate-spin" />
@@ -103,14 +103,12 @@ export function WatchDashboard() {
           <Button variant="outline" onClick={() => exportReport.mutate({ organisation: user?.name || user?.email || "Organisation", period: "12 derniers mois" })} disabled={exportReport.isPending}>
             <Download className="mr-2 h-4 w-4" />Exporter le rapport PDF
           </Button>
-          <Button
-            variant="secondary"
-            onClick={() => refresh.mutate({ trigger: "manual" })}
-            disabled={refresh.isPending}
-          >
-            {refresh.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-            Rafraîchir (admin)
-          </Button>
+          {user?.role === "admin" ? (
+            <Button variant="secondary" onClick={() => refresh.mutate({ trigger: "manual" })} disabled={refresh.isPending}>
+              {refresh.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+              Rafraîchir les sources
+            </Button>
+          ) : null}
         </div>
       </div>
 
@@ -132,7 +130,7 @@ export function WatchDashboard() {
           ))}
         </div>
       ) : null}
-      <div className="grid gap-2 md:grid-cols-3">{((sourcesQuery.data as any)?.sources??[]).map((s:any)=>{const age=s.lastSuccessAt?Date.now()-new Date(s.lastSuccessAt).getTime():Infinity;const state=s.lastError?"Erreur":age>86400000?"Données de plus de 24h":"À jour";return <div key={s.id} className="rounded border bg-card p-3 text-xs"><div className="font-medium">{s.name}</div><div>last_success_at : {formatDateTime(s.lastSuccessAt)}</div><Badge variant={s.lastError?"destructive":"outline"}>{state}</Badge>{s.lastError?<div className="mt-1 text-destructive">Erreur : {String(s.lastError).slice(0,100)}</div>:null}</div>})}</div>
+      <div className="grid gap-2 md:grid-cols-3">{((sourcesQuery.data as any)?.sources??[]).map((s:any)=>{const age=s.lastSuccessAt?Date.now()-new Date(s.lastSuccessAt).getTime():Infinity;const state=s.lastError?"Erreur":age>86400000?"Données de plus de 24h":"À jour";return <div key={s.id} className="rounded border bg-card p-3 text-xs"><div className="flex items-center justify-between gap-2"><div className="font-medium">{s.name}</div><Badge variant="secondary">{s.authorityType==="official"?"Source officielle":s.authorityType==="secondary"?"Source secondaire":"Statut à confirmer"}</Badge></div><div>Dernier succès : {formatDateTime(s.lastSuccessAt)}</div><Badge variant={s.lastError?"destructive":"outline"}>{state}</Badge>{s.lastError?<div className="mt-1 text-destructive">Erreur : {String(s.lastError).slice(0,100)}</div>:null}</div>})}</div>
       <div className="text-sm">Éléments non lus : <Badge variant="destructive">{(unreadQuery.data as any)?.count??0}</Badge></div>
       <div className="text-xs text-muted-foreground">{meta?.totalFiltered ?? items.length} item(s) visible(s) sur {meta?.totalAvailable ?? items.length}</div>
 

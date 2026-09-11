@@ -43,7 +43,8 @@ export function UpdateDetailsDrawer(props: {
             <div className="rounded-lg border bg-card p-4 text-sm">
               <div className="font-medium">Provenance</div>
               <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
-                <dt>Source officielle</dt><dd><a className="underline" href={u.sourceUrl} target="_blank" rel="noreferrer">{u.sourceName}</a></dd>
+                <dt>Type de source</dt><dd>{u.sourceAuthority === "official" ? "Autorité / source officielle" : u.sourceAuthority === "secondary" ? "Source secondaire" : "Statut à confirmer"}</dd>
+                <dt>Source</dt><dd><a className="underline" href={u.sourceUrl} target="_blank" rel="noreferrer">{u.sourceName}</a></dd>
                 <dt>Identifiant officiel</dt><dd>{u.officialId ?? "Non renseigné"}</dd>
                 <dt>Date officielle</dt><dd>{u.publishedAt ? new Date(u.publishedAt).toLocaleDateString("fr-FR") : "Non disponible"}</dd>
                 <dt>Collecte QARA</dt><dd>{u.retrievedAt ? new Date(u.retrievedAt).toLocaleString("fr-FR") : "Non disponible"}</dd>
