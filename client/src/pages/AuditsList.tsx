@@ -79,6 +79,7 @@ export default function AuditsList() {
   };
 
   const filteredAudits = audits || [];
+  const sampleMode = (mode?: string) => ({ rapid: ["Rapide", "22% couvert"], standard: ["Standard", "46% couvert"], in_depth: ["Approfondi", "77% couvert"], complete: ["Complet", "100% couvert"] } as Record<string, string[]>)[mode ?? "complete"] ?? ["Complet", "100% couvert"];
 
   return (
     <div>
@@ -198,7 +199,7 @@ export default function AuditsList() {
                   <TableBody>
                     {filteredAudits.map((audit) => (
                       <TableRow key={audit.id} className="cursor-pointer hover:bg-muted/50">
-                        <TableCell className="font-medium">{audit.name}</TableCell>
+                        <TableCell className="font-medium"><div>{audit.name}</div><div className="mt-1 flex gap-1"><Badge variant="outline">{sampleMode((audit as any).sampleMode)[0]}</Badge><span className="text-xs text-muted-foreground">{sampleMode((audit as any).sampleMode)[1]}</span></div></TableCell>
                         <TableCell className="text-sm text-muted-foreground">
                           {getAuditTypeLabel(audit.auditType)}
                         </TableCell>

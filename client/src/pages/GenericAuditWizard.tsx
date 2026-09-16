@@ -33,6 +33,7 @@ import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { SiteCreationModal } from "@/components/SiteCreationModal";
+import { SampleModeSelector, type SampleMode } from "@/components/SampleModeSelector";
 
 const TYPE_SECTIONS: Record<string, { label: string; icon: typeof ShieldCheck }> = {
   regulation: { label: "Règlements", icon: ShieldCheck },
@@ -85,6 +86,7 @@ export default function GenericAuditWizard() {
   const [economicRole, setEconomicRole] = useState<string>("");
   const [processMode, setProcessMode] = useState<"all" | "select">("all");
   const [selectedProcessIds, setSelectedProcessIds] = useState<string[]>([]);
+  const [sampleMode, setSampleMode] = useState<SampleMode>("standard");
 
   const { data: referentialsData, isLoading: loadingReferentials } = trpc.referentials.list.useQuery();
   // Étape 0 uniquement : liste filtrée enabled=true pour le sélecteur de
@@ -174,6 +176,7 @@ export default function GenericAuditWizard() {
       siteId: Number(siteId),
       economicRole,
       processIds,
+      sampleMode,
     });
   };
 
@@ -334,6 +337,8 @@ export default function GenericAuditWizard() {
             <Label>Nom de l'audit</Label>
             <Input value={auditName} onChange={(e) => setAuditName(e.target.value)} />
           </div>
+
+          <SampleModeSelector value={sampleMode} onChange={setSampleMode} />
 
           <div className="space-y-2">
             <Label>Site audité *</Label>

@@ -31,6 +31,7 @@ import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { SiteCreationModal } from "@/components/SiteCreationModal";
+import { SampleModeSelector, type SampleMode } from "@/components/SampleModeSelector";
 
 const ECONOMIC_ROLES = [
   { value: "fabricant", label: "Fabricant" },
@@ -91,6 +92,7 @@ export default function MDRAudit() {
   const [auditeeMainContact, setAuditeeMainContact] = useState<string>("");
   const [auditeeContactEmail, setAuditeeContactEmail] = useState<string>("");
   const [selectedProcess, setSelectedProcess] = useState<string>("all");
+  const [sampleMode, setSampleMode] = useState<SampleMode>("standard");
 
   // Step 2: Context fields
   const [auditedEntityName, setAuditedEntityName] = useState<string>("");
@@ -260,6 +262,7 @@ export default function MDRAudit() {
       type: "internal",
 
       status: "draft",
+      sampleMode,
 
       referentialIds: mdrReferentialId ? [mdrReferentialId] : [],
       processIds: selectedProcess === "all" ? [] : [selectedProcess],
@@ -330,6 +333,7 @@ export default function MDRAudit() {
         type: "internal",
 
         status: "in_progress",
+        sampleMode,
 
         referentialIds: mdrReferentialId ? [mdrReferentialId] : [],
         processIds: selectedProcess === "all" ? [] : [selectedProcess],
@@ -392,6 +396,8 @@ export default function MDRAudit() {
           <CardContent className="space-y-6">
             <div className="space-y-4">
               <h3 className="font-semibold text-sm text-slate-700">Identification</h3>
+
+              <SampleModeSelector value={sampleMode} onChange={setSampleMode} />
 
               <div className="space-y-2">
                 <Label>Rôle Économique *</Label>
