@@ -140,6 +140,7 @@ export default function Dashboard() {
     { enabled: isAuthenticated }
   );
   const { data: recentAudits } = trpc.audit.getRecentAudits.useQuery({ limit: 5 }, { enabled: isAuthenticated });
+  const { data: unreadWatch } = trpc.watch.getUnreadCount.useQuery(undefined, { enabled: isAuthenticated });
 
   // TODO(data): referentiels actifs stockes en localStorage tant que le backend
   // n'expose pas de persistance profil/organisation dediee (voir lib/onboarding.ts).
@@ -393,6 +394,7 @@ export default function Dashboard() {
         <div className="rounded-xl bg-white p-4 ring-1 ring-[#dfe4ea]">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-[13px] font-semibold text-[#0e1c3d]">Veille réglementaire</h2>
+            <span className="text-xs font-medium text-[#6b7688]">{unreadWatch?.count ?? 0} non lue(s)</span>
             <Link href="/veille">
               <span className="cursor-pointer text-[11px] font-medium text-[#3b6fe0]">Ouvrir</span>
             </Link>
@@ -419,7 +421,7 @@ export default function Dashboard() {
             </div>
           ) : (
             <EmptyState
-              message="Aucune alerte de veille pour le moment."
+              message={(unreadWatch?.count ?? 0) > 0 ? `${unreadWatch?.count} alerte(s) non lue(s) dans la veille.` : "Aucune alerte de veille pour le moment."}
               actionLabel="Ouvrir la veille réglementaire"
               href="/veille"
             />
