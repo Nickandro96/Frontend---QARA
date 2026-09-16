@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { FileText, Download, Loader2, CheckCircle2, AlertTriangle, Sparkles } from "lucide-react";
-import { parseReportAuditId } from "@/lib/reportRouting";
+import { reportAuditIdFromSearch } from "@/lib/reportRouting";
 
 type OutputFormat = "pdf" | "docx" | "xlsx";
 type ReportLanguage = "fr" | "en";
@@ -21,9 +21,9 @@ const API_FORMATS: Record<OutputFormat, "pdf" | "word" | "excel"> = {
 
 export default function ReportGeneration() {
   const [location, navigate] = useLocation();
-  const searchParams = new URLSearchParams(location.split("?")[1]);
-  const auditIdParam = searchParams.get("auditId");
-  const initialAuditId = parseReportAuditId(auditIdParam);
+  // Wouter's `location` contains the pathname only. Read the browser search
+  // string so links such as /reports/generate?auditId=34 are honoured.
+  const initialAuditId = reportAuditIdFromSearch(window.location.search);
   const [auditId, setAuditId] = useState<number | null>(initialAuditId);
 
   const [outputFormat, setOutputFormat] = useState<OutputFormat>("pdf");

@@ -4,6 +4,10 @@ export function parseReportAuditId(value: string | null): number | null {
   return Number.isSafeInteger(auditId) && auditId > 0 ? auditId : null;
 }
 
+export function reportAuditIdFromSearch(search: string): number | null {
+  return parseReportAuditId(new URLSearchParams(search).get("auditId"));
+}
+
 export function reportGenerationHref(auditId: number | null | undefined): string {
   return Number.isSafeInteger(auditId) && Number(auditId) > 0
     ? `/reports/generate?auditId=${auditId}`
