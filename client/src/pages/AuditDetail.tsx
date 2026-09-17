@@ -491,6 +491,12 @@ export default function AuditDetail() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
+          {audit.status === "completed" && (
+            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+              Audit terminé : ces informations sont en lecture seule. Réouvrez l’audit avec un motif pour les modifier.
+            </div>
+          )}
+          <fieldset disabled={audit.status === "completed"} className="space-y-6 disabled:opacity-75">
           <div>
             <Label htmlFor="auditNature">Nature de l'audit</Label>
             <Select value={auditNature} onValueChange={setAuditNature}>
@@ -622,6 +628,7 @@ export default function AuditDetail() {
               "Enregistrer les informations d'audit"
             )}
           </Button>
+          </fieldset>
         </CardContent>
       </Card>
 

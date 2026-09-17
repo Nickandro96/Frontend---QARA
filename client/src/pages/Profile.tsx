@@ -229,7 +229,10 @@ export default function Profile() {
   const { user, isAuthenticated, loading, logout } = useAuth();
   const { data: profile, refetch } = trpc.profile.get.useQuery(undefined, { enabled: isAuthenticated });
   const updateProfile = trpc.profile.update.useMutation();
-  const effectiveTier = user?.role === "admin" ? "entreprise" : (profile?.subscriptionTier || "free");
+  // Le rôle admin donne des droits d'administration, pas un abonnement
+  // ENTREPRISE fictif. Le plan affiché doit rester la valeur canonique du
+  // profil, identique à la barre latérale et aux contrôles d'entitlements.
+  const effectiveTier = profile?.subscriptionTier || "free";
   const exportData = trpc.users.exportMyData.useQuery(undefined, { enabled: false });
   const deleteAccount = trpc.users.deleteMyAccount.useMutation();
 

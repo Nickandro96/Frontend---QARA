@@ -14,6 +14,8 @@ const AUDIT_TYPE_LABELS: Record<string, string> = {
   certification: "Certification",
   surveillance: "Surveillance",
   blanc: "À blanc",
+  external_preparation: "Préparation d’audit externe",
+  preparation_externe: "Préparation d’audit externe",
 };
 
 const AUDIT_METHOD_LABELS: Record<string, string> = {

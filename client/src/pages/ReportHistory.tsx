@@ -134,7 +134,7 @@ export default function ReportHistory() {
                         <span className="font-medium">Audit :</span> #{report.auditId}
                       </div>
                       <div>
-                        <span className="font-medium">Version :</span> {report.reportVersion}
+                        <span className="font-medium">Version :</span> {report.version ?? report.reportVersion ?? "Non renseignée"}
                       </div>
                       <div>
                         <span className="font-medium">Langue :</span> {report.language?.toUpperCase()}

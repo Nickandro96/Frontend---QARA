@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,11 +23,17 @@ export default function AuditsList() {
   const { isAuthenticated, loading } = useAuth();
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
+  const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [referentialFilter, setReferentialFilter] = useState<string>("all");
+  const [dateFrom, setDateFrom] = useState<string>("");
+  const [dateTo, setDateTo] = useState<string>("");
+  const { data: referentials } = trpc.referentials.list.useQuery(undefined, { enabled: isAuthenticated });
 
   const { data: audits, isLoading } = trpc.audit.listAudits.useQuery(
     {
       status: statusFilter === "all" ? undefined : statusFilter,
       search: searchQuery || undefined,
+      referentialId: referentialFilter === "all" ? undefined : Number(referentialFilter),
     },
     { enabled: isAuthenticated }
   );
@@ -45,7 +51,7 @@ export default function AuditsList() {
     return null;
   }
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status: string, progression?: number | null) => {
     const styles = {
       draft: "bg-gray-100 text-gray-800",
       in_progress: "bg-blue-100 text-blue-800",
@@ -58,9 +64,10 @@ export default function AuditsList() {
       completed: "Terminé",
       closed: "Clôturé",
     };
+    const legacyIncomplete = status === "completed" && Number(progression ?? 0) < 100;
     return (
       <Badge className={styles[status as keyof typeof styles] || "bg-gray-100 text-gray-800"}>
-        {labels[status as keyof typeof labels] || status}
+        {legacyIncomplete ? "Terminé — données historiques incomplètes" : labels[status as keyof typeof labels] || status}
       </Badge>
     );
   };
@@ -74,11 +81,20 @@ export default function AuditsList() {
       surveillance: "Surveillance",
       blanc: "Blanc",
       external_preparation: "Préparation audit externe",
+      preparation_externe: "Préparation audit externe",
     };
     return labels[type as keyof typeof labels] || type;
   };
 
-  const filteredAudits = audits || [];
+  const filteredAudits = useMemo(() => (audits || []).filter((audit: any) => {
+    const auditType = String(audit.auditType ?? audit.type ?? "");
+    if (typeFilter !== "all" && auditType !== typeFilter) return false;
+    const rawDate = audit.startDate ?? audit.auditDatePrevue ?? audit.createdAt;
+    const day = rawDate ? new Date(rawDate).toISOString().slice(0, 10) : "";
+    if (dateFrom && (!day || day < dateFrom)) return false;
+    if (dateTo && (!day || day > dateTo)) return false;
+    return true;
+  }), [audits, typeFilter, dateFrom, dateTo]);
   const sampleMode = (mode?: string) => ({ rapid: ["Rapide", "22% couvert"], standard: ["Standard", "46% couvert"], in_depth: ["Approfondi", "77% couvert"], complete: ["Complet", "100% couvert"] } as Record<string, string[]>)[mode ?? "complete"] ?? ["Complet", "100% couvert"];
 
   return (
@@ -106,7 +122,7 @@ export default function AuditsList() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
               {/* Search */}
               <div className="space-y-2 md:col-span-2">
                 <label className="text-sm font-medium">Rechercher</label>
@@ -136,6 +152,48 @@ export default function AuditsList() {
                     <SelectItem value="closed">Clôturé</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Référentiel</label>
+                <Select value={referentialFilter} onValueChange={setReferentialFilter}>
+                  <SelectTrigger><SelectValue placeholder="Tous les référentiels" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tous les référentiels</SelectItem>
+                    {(referentials ?? []).map((ref: any) => <SelectItem key={ref.id} value={String(ref.id)}>{ref.code}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Type</label>
+                <Select value={typeFilter} onValueChange={setTypeFilter}>
+                  <SelectTrigger><SelectValue placeholder="Tous les types" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tous les types</SelectItem>
+                    <SelectItem value="internal">Interne</SelectItem>
+                    <SelectItem value="external">Externe</SelectItem>
+                    <SelectItem value="supplier">Fournisseur</SelectItem>
+                    <SelectItem value="external_preparation">Préparation d’audit externe</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Du</label>
+                <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Au</label>
+                <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+              </div>
+
+              <div className="flex items-end">
+                <Button type="button" variant="outline" onClick={() => {
+                  setSearchQuery(""); setStatusFilter("all"); setReferentialFilter("all");
+                  setTypeFilter("all"); setDateFrom(""); setDateTo("");
+                }}>Réinitialiser</Button>
               </div>
             </div>
 
@@ -246,7 +304,7 @@ export default function AuditsList() {
                             <span className="text-sm text-muted-foreground">-</span>
                           )}
                         </TableCell>
-                        <TableCell>{getStatusBadge(audit.status)}</TableCell>
+                        <TableCell>{getStatusBadge(audit.status, auditProgress(audit))}</TableCell>
                         <TableCell className="text-right">
                           <Link href={`/audit/${audit.id}`}>
                             <Button variant="ghost" size="sm" className="gap-2">
