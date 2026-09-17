@@ -55,6 +55,8 @@ export function WatchDashboard() {
   const sourcesQuery=useWatchSources(); const unreadQuery=useUnreadCount(); const markRead=useMarkAsRead();
 
   const refresh = useWatchRefreshMutation();
+  const [refreshPolling, setRefreshPolling] = React.useState(false);
+  const refreshBaseline = React.useRef<string | null>(null);
   const exportReport = trpc.watch.exportReport.useMutation({
     onSuccess: (result) => {
       const bytes = Uint8Array.from(atob(result.base64), (char) => char.charCodeAt(0));
@@ -73,6 +75,48 @@ export function WatchDashboard() {
   const profile: CompanyProfile | undefined = data?.companyProfile as CompanyProfile | undefined;
 
   const kpis = React.useMemo(() => computeKpis(items), [items]);
+
+  React.useEffect(() => {
+    if (!refreshPolling) return;
+    const startedAt = Date.now();
+    let stopped = false;
+    const poll = async () => {
+      const [updatesResult] = await Promise.all([query.refetch(), sourcesQuery.refetch()]);
+      if (stopped) return;
+      const nextMeta = (updatesResult.data as any)?.meta as WatchMeta | undefined;
+      const nextRefresh = nextMeta?.lastRefresh ? String(nextMeta.lastRefresh) : null;
+      if (!nextMeta?.refreshInProgress && nextRefresh && nextRefresh !== refreshBaseline.current) {
+        stopped = true;
+        setRefreshPolling(false);
+        toast.success(nextMeta?.degraded
+          ? "Synchronisation terminée en mode dégradé"
+          : "Synchronisation terminée");
+      } else if (Date.now() - startedAt >= 90_000) {
+        stopped = true;
+        setRefreshPolling(false);
+        toast.warning("La synchronisation continue en arrière-plan. Revenez dans quelques instants.");
+      }
+    };
+    void poll();
+    const interval = window.setInterval(() => void poll(), 2_500);
+    return () => {
+      stopped = true;
+      window.clearInterval(interval);
+    };
+  }, [refreshPolling]);
+
+  const handleRefresh = () => {
+    refreshBaseline.current = meta?.lastRefresh ? String(meta.lastRefresh) : null;
+    refresh.mutate({ trigger: "manual" }, {
+      onSuccess: (result) => {
+        if (!result.started) {
+          toast.info("Une synchronisation est déjà en cours");
+        }
+        setRefreshPolling(true);
+      },
+      onError: (error) => toast.error(error.message),
+    });
+  };
 
   const openDetails = (u: WatchUpdate) => {
     if(u.isRead===false) markRead.mutate({itemId:u.id},{onSuccess:()=>{query.refetch();unreadQuery.refetch();}});
@@ -104,8 +148,8 @@ export function WatchDashboard() {
             <Download className="mr-2 h-4 w-4" />Exporter le rapport PDF
           </Button>
           {user?.role === "admin" ? (
-            <Button variant="secondary" onClick={() => refresh.mutate({ trigger: "manual" })} disabled={refresh.isPending}>
-              {refresh.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+            <Button variant="secondary" onClick={handleRefresh} disabled={refresh.isPending || refreshPolling}>
+              {refresh.isPending || refreshPolling ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
               Rafraîchir les sources
             </Button>
           ) : null}

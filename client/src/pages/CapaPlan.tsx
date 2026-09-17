@@ -354,6 +354,7 @@ export default function CapaPlan() {
   const overdueCount = list.filter(
     (a: any) => a.dueDate && new Date(a.dueDate) < new Date() && !["cloturee_efficace", "cloturee_sans_suite"].includes(a.statut)
   ).length;
+  const taskCount = list.reduce((total: number, action: any) => total + (action.tasks?.length ?? 0), 0);
 
   return (
     <div className="container mx-auto py-8 space-y-6">
@@ -375,10 +376,14 @@ export default function CapaPlan() {
       </div>
 
       {list.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Total des actions</CardTitle></CardHeader>
+            <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Dossiers CAPA</CardTitle></CardHeader>
             <CardContent><div className="text-3xl font-bold">{list.length}</div></CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Actions opérationnelles</CardTitle></CardHeader>
+            <CardContent><div className="text-3xl font-bold">{taskCount}</div></CardContent>
           </Card>
           <Card>
             <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Clôturées</CardTitle></CardHeader>
