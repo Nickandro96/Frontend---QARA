@@ -72,6 +72,6 @@ export type CompanyProfile = {
   economicRole: "fabricant" | "importateur" | "distributeur" | "sous_traitant" | "ar";
   deviceClass: "I" | "IIa" | "IIb" | "III";
   deviceFamilies: ("active" | "non_active" | "implantable" | "sterile" | "software" | "in_vitro")[];
-  markets: ("EU" | "UK" | "CH" | "US")[];
+  markets: ("EU" | "UK" | "CH" | "US" | "CA" | "AU" | "JP")[];
   configured?: boolean;
 };

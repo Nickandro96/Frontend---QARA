@@ -8,7 +8,7 @@ import type { CompanyProfile } from "./types";
 import { useUpsertCompanyProfile } from "@/api/watch";
 
 const FAMILIES: CompanyProfile["deviceFamilies"] = ["active", "non_active", "implantable", "sterile", "software", "in_vitro"];
-const MARKETS: CompanyProfile["markets"] = ["EU", "CH", "UK", "US"];
+const MARKETS: CompanyProfile["markets"] = ["EU", "CH", "UK", "US", "CA", "AU", "JP"];
 
 export function CompanyProfilePanel(props: { profile: CompanyProfile; onSaved?: (p: CompanyProfile) => void }) {
   const [draft, setDraft] = React.useState<CompanyProfile>(props.profile);
