@@ -18,6 +18,14 @@ const statusTone: Record<StatusKey, string> = {
   in_progress: "bg-slate-300",
 };
 
+const statusLabel: Record<StatusKey, string> = {
+  compliant: "Conforme",
+  partial: "Partiellement conforme",
+  non_compliant: "Non conforme",
+  not_applicable: "Non applicable",
+  in_progress: "En cours",
+};
+
 function percent(part: number, total: number) {
   if (!total) return 0;
   return Math.round((part / total) * 100);
@@ -365,7 +373,7 @@ ${htmlBody}
                       <td className="px-3 py-2">{risk.criticality || "n/a"}</td>
                       <td className="px-3 py-2">
                         <span className={`mr-2 inline-block h-2.5 w-2.5 rounded-full ${statusTone[risk.responseValue as StatusKey] || "bg-slate-300"}`} />
-                        {risk.responseValue}
+                        {statusLabel[risk.responseValue as StatusKey] ?? "Statut inconnu"}
                       </td>
                       <td className="no-print px-3 py-2">
                         <Button size="sm" variant="outline" onClick={() => setLocation(`/mdr/audit/${auditId}`)}>Ouvrir question</Button>
