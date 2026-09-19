@@ -69,6 +69,7 @@ function ActionCard({ action, auditId }: { action: any; auditId: number }) {
   const [impactPatient, setImpactPatient] = useState(action.impactPatient || "inconnu");
   const [impactReglementaire, setImpactReglementaire] = useState(action.impactReglementaire || "inconnu");
   const [newTaskTitle, setNewTaskTitle] = useState("");
+  const persistedFiveWhys = action.ai5Pourquoi as Record<string, any> | null | undefined;
 
   const generateAI = trpc.capa.generateAnalysis.useMutation({
     onMutate: (variables) => {
@@ -203,10 +204,17 @@ function ActionCard({ action, auditId }: { action: any; auditId: number }) {
         <div className="rounded-lg border border-violet-200 bg-violet-50/50 p-4">
           <div className="flex items-center justify-between gap-3">
             <div><div className="font-semibold">Analyse CAPA assistée par IA</div><p className="text-xs text-muted-foreground">L'analyse reste une proposition : vérifiez et modifiez chaque élément avant enregistrement.</p></div>
-            <Button type="button" size="sm" onClick={handleGenerateAI} disabled={generateAI.isPending}>
+            {!persistedFiveWhys && <Button type="button" size="sm" onClick={handleGenerateAI} disabled={generateAI.isPending}>
               {generateAI.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Analyser avec l'IA
-            </Button>
+            </Button>}
           </div>
+          {persistedFiveWhys && !aiAnalysis && (
+            <div className="mt-4 space-y-2 rounded border border-violet-200 bg-white p-3">
+              <p className="text-sm font-medium">Analyse 5 Pourquoi enregistrée</p>
+              {[1,2,3,4,5].map((n) => { const item = persistedFiveWhys[`pourquoi${n}`]; return item ? <div key={n} className="text-sm" style={{ marginLeft: `${(n-1)*12}px` }}><strong>Pourquoi {n} :</strong> {item.question} → {item.reponse}</div> : null; })}
+              <p className="text-sm"><strong>Cause racine :</strong> {persistedFiveWhys.causeRacineIdentifiee || action.analyseCauseRacine}</p>
+            </div>
+          )}
           {generateAI.isPending && <div className="mt-3 rounded border border-violet-200 bg-white p-3 text-sm"><Loader2 className="mr-2 inline h-4 w-4 animate-spin"/>Analyse 5 Pourquoi en cours…</div>}
           {aiError && <div role="alert" className="mt-3 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800"><strong>Analyse IA non générée.</strong> {aiError}</div>}
           {aiAnalysis && (
