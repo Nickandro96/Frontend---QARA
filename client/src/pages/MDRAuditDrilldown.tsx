@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useRoute } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
+import { shouldCompleteAudit } from "@/lib/auditQuestionnaireCompletion";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -451,12 +452,15 @@ export default function MDRAuditDrilldown() {
   const goNext = () => setCurrentIndex((i) => Math.min(totalQuestions - 1, i + 1));
 
   const handleSaveAndContinue = async () => {
+    const currentResponseValue =
+      localDrafts[currentQuestion?.questionKey ?? ""]?.responseValue ??
+      currentResponse?.responseValue ??
+      "in_progress";
+    const completesAudit = shouldCompleteAudit({ answeredCount, totalQuestions, currentResponseValue });
     const ok = await handleSaveCurrent();
     if (!ok) return;
 
-    const isLastQuestion = currentIndex >= totalQuestions - 1;
-
-    if (isLastQuestion) {
+    if (completesAudit) {
       if (enabled && auditId) {
         try {
           await completeAuditMutation.mutateAsync({ auditId } as any);
@@ -823,7 +827,7 @@ export default function MDRAuditDrilldown() {
 
               <Button onClick={handleSaveAndContinue} disabled={saving} className="h-11 px-5">
                 {saving ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Save className="mr-2 h-5 w-5" />}
-                Enregistrer et continuer
+                {answeredCount >= totalQuestions && totalQuestions > 0 ? "Terminer l'audit" : "Enregistrer et continuer"}
               </Button>
             </div>
 
