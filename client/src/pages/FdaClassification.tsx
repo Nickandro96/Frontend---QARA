@@ -61,9 +61,15 @@ export default function FdaClassification() {
     let detectedClass: DeviceClass = "I";
     let detectedPathway: Pathway = "Exempt";
     let reasoning = "";
+    const deviceText = `${deviceName} ${deviceDescription} ${intendedUse}`.toLocaleLowerCase("fr");
+    const isSurgicalSuture = /sutur/.test(deviceText);
 
     // Classification logic
-    if (isSupportingLife) {
+    if (isSurgicalSuture) {
+      detectedClass = "II";
+      detectedPathway = "510(k)";
+      reasoning = "Les sutures chirurgicales résorbables et non résorbables relèvent généralement de la **Class II avec 510(k) obligatoire** (21 CFR 878.5010 / 878.5020). Vérifiez le code produit exact dans la base FDA Product Classification.";
+    } else if (isSupportingLife) {
       detectedClass = "III";
       reasoning = "Le dispositif est destiné à maintenir la vie (life-supporting/life-sustaining), ce qui le classe automatiquement en **Class III** selon la FDA.";
     } else if (isImplantable && hasSignificantRisk) {
@@ -78,7 +84,9 @@ export default function FdaClassification() {
     }
 
     // Pathway determination
-    if (detectedClass === "III") {
+    if (isSurgicalSuture) {
+      // La famille réglementaire connue prime sur l'arbre générique.
+    } else if (detectedClass === "III") {
       detectedPathway = "PMA";
       reasoning += "\n\n**Pathway réglementaire : PMA (Premarket Approval)**\n\nLes dispositifs de Class III nécessitent un PMA, le processus d'approbation le plus rigoureux de la FDA. Vous devrez fournir des données cliniques complètes démontrant la sécurité et l'efficacité du dispositif.";
     } else if (detectedClass === "II") {
@@ -167,6 +175,16 @@ export default function FdaClassification() {
       </header>
 
       <main className="container py-8 max-w-4xl">
+        <div className="mb-6 p-4 bg-amber-50 border border-amber-300 rounded-lg" role="alert">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="h-5 w-5 text-amber-700 mt-0.5 shrink-0" />
+            <p className="text-sm text-amber-900">
+              <strong>Attention :</strong> la classification FDA repose sur les codes produit des 21 CFR Parts 862 à 892 et les produits réellement commercialisés. Ce module fournit une orientation préliminaire uniquement. Consultez la{" "}
+              <a href="https://www.accessdata.fda.gov/scripts/cdrh/cfdocs/cfPCD/classification.cfm" target="_blank" rel="noopener noreferrer" className="underline font-medium">FDA Product Classification Database</a>{" "}
+              et un expert RA FDA avant toute décision de soumission.
+            </p>
+          </div>
+        </div>
         {/* Progress */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-2">
