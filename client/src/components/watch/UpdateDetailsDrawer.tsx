@@ -33,7 +33,7 @@ export function UpdateDetailsDrawer(props: {
 
         {u ? (
           <div className="mt-4 space-y-4">
-            <div className="rounded-lg border bg-card p-4 text-sm whitespace-pre-wrap">{u.summaryLong}</div>
+            <div className="rounded-lg border bg-card p-4 text-sm whitespace-pre-wrap">{u.summaryFr || u.summaryLong}</div>
             {u.aiAnalyzed ? (
               <div className="rounded-lg border border-violet-200 bg-violet-50 p-3 text-xs text-violet-950">
                 Ce résumé a été généré par analyse IA du document officiel publié le {u.publishedAt ? new Date(u.publishedAt).toLocaleDateString("fr-FR") : "date non renseignée"} par {u.sourceName}. Il ne remplace pas la lecture du document original.{" "}

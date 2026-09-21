@@ -38,7 +38,7 @@ export function UpdateCard(props: { update: WatchUpdate; onOpen: () => void }) {
       </CardHeader>
 
       <CardContent className="space-y-3">
-        <p className="text-sm text-muted-foreground">{u.summaryShort}</p>
+        <p className="text-sm text-muted-foreground">{u.summaryFr || u.summaryShort}</p>
         {/^https:\/\//i.test(u.sourceUrl ?? "") ? <a className="text-xs font-medium text-blue-700 underline" href={u.sourceUrl} target="_blank" rel="noreferrer" onClick={(e)=>e.stopPropagation()}>Document officiel ↗</a> : null}
 
         {personalized ? (
