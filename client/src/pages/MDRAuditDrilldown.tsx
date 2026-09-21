@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useRoute } from "wouter";
 import { trpc } from "@/lib/trpc";
+import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -200,6 +201,7 @@ function formatRiskText(risk: any): string {
 }
 
 export default function MDRAuditDrilldown() {
+  const { toast } = useToast();
   const [, params] = useRoute("/mdr/audit/:auditId");
   const auditId = params?.auditId ? Number(params.auditId) : null;
 
@@ -459,9 +461,9 @@ export default function MDRAuditDrilldown() {
       if (enabled && auditId) {
         try {
           await completeAuditMutation.mutateAsync({ auditId } as any);
-        } catch (e) {
-          // safe fallback: keep review navigation even if completion status update fails
-          console.warn("[MDR] completeAudit failed, fallback to review navigation", e);
+        } catch (e: any) {
+          toast({ variant: "destructive", title: "Clôture impossible", description: e?.message ?? "L’audit n’a pas pu être terminé. Vérifiez les réponses puis réessayez." });
+          return;
         }
       }
       setLocation(`/mdr/audit/${auditId}/review`);

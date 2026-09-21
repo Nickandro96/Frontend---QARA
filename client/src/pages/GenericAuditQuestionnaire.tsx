@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useRoute } from "wouter";
 import { trpc } from "@/lib/trpc";
+import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -251,6 +252,7 @@ function computeRiskTextForQuestion(q: any): string {
 }
 
 export default function GenericAuditQuestionnaire() {
+  const { toast } = useToast();
   const [, params] = useRoute("/audit/:auditId/questionnaire");
   const auditId = params?.auditId ? Number(params.auditId) : null;
 
@@ -546,8 +548,9 @@ export default function GenericAuditQuestionnaire() {
       if (enabled && auditId) {
         try {
           await completeAuditMutation.mutateAsync({ auditId } as any);
-        } catch (e) {
-          console.warn("[AUDIT] completeAudit failed, fallback to review navigation", e);
+        } catch (e: any) {
+          toast({ variant: "destructive", title: "Clôture impossible", description: e?.message ?? "L’audit n’a pas pu être terminé. Vérifiez les réponses puis réessayez." });
+          return;
         }
       }
 
