@@ -1068,7 +1068,7 @@ export default function GenericAuditQuestionnaire() {
         <CardContent className="p-4">
           <div className="flex items-center justify-between gap-2">
             <div className="text-sm font-medium">Table de progression audit</div>
-            <Button type="button" variant="outline" size="sm" onClick={() => setSaveMessage("Mode impression rapport : bientôt") }>
+            <Button type="button" variant="outline" size="sm" disabled={!auditId} onClick={() => setLocation(`/reports/generate?auditId=${auditId}`)}>
               Générer rapport audit
             </Button>
           </div>
