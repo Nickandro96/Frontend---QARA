@@ -557,8 +557,7 @@ export default function GenericAuditQuestionnaire() {
         }
       }
 
-      // ✅ FIX: ISO route (was MDR)
-      setLocation(`/iso/audit/${auditId}/review`);
+      setLocation(`/audits/${auditId}`);
       return;
     }
 

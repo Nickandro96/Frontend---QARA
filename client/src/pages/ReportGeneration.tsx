@@ -20,7 +20,9 @@ const API_FORMATS: Record<OutputFormat, "pdf" | "word" | "excel"> = {
 
 export default function ReportGeneration() {
   const [location, navigate] = useLocation();
-  const searchParams = new URLSearchParams(location.split("?")[1]);
+  const searchParams = new URLSearchParams(
+    typeof window !== "undefined" ? window.location.search : location.split("?")[1] ?? ""
+  );
   const auditIdParam = searchParams.get("auditId");
   const initialAuditId = auditIdParam ? parseInt(auditIdParam) : null;
   const [auditId, setAuditId] = useState<number | null>(initialAuditId);
