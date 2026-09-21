@@ -270,6 +270,10 @@ export default function MDRAudit() {
 
       auditorName: auditLeader || null,
       auditorEmail: auditeeContactEmail || null,
+      auditTeam: auditTeamMembers ? [{ name: auditTeamMembers, role: "Équipe d’audit" }] : [],
+      auditeesRepresentatives: auditeeMainContact ? [{ name: auditeeMainContact, function: "Contact principal" }] : [],
+      scopeExclusions: exclusions || null,
+      markets: markets ? markets.split(/[,;\n]/).map((v) => v.trim()).filter(Boolean) : [],
 
       startDate: startIso,
       endDate: endIso,
@@ -306,6 +310,10 @@ export default function MDRAudit() {
 
       auditorName: auditLeader || null,
       auditorEmail: auditeeContactEmail || null,
+      auditTeam: auditTeamMembers ? [{ name: auditTeamMembers, role: "Équipe d’audit" }] : [],
+      auditeesRepresentatives: auditeeMainContact ? [{ name: auditeeMainContact, function: "Contact principal" }] : [],
+      scopeExclusions: exclusions || null,
+      markets: markets ? markets.split(/[,;\n]/).map((v) => v.trim()).filter(Boolean) : [],
 
       startDate: startIso,
       endDate: endIso,
@@ -346,6 +354,10 @@ export default function MDRAudit() {
 
         auditorName: auditLeader || null,
         auditorEmail: auditeeContactEmail || null,
+        auditTeam: auditTeamMembers ? [{ name: auditTeamMembers, role: "Équipe d’audit" }] : [],
+        auditeesRepresentatives: auditeeMainContact ? [{ name: auditeeMainContact, function: "Contact principal" }] : [],
+        scopeExclusions: exclusions || null,
+        markets: markets ? markets.split(/[,;\n]/).map((v) => v.trim()).filter(Boolean) : [],
 
         startDate: startIso,
         endDate: endIso,
