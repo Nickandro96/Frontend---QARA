@@ -403,8 +403,16 @@ export default function ISOAuditWizard() {
                 <Input value={auditeeMainContact} onChange={(e) => setAuditeeMainContact(e.target.value)} placeholder="Nom du contact" />
               </div>
               <div className="space-y-2">
-                <Label>Email contact audité</Label>
-                <Input value={auditeeContactEmail} onChange={(e) => setAuditeeContactEmail(e.target.value)} placeholder="email@exemple.com" />
+                <Label htmlFor="iso-auditee-email">Email contact audité</Label>
+                <Input
+                  id="iso-auditee-email"
+                  name="auditeeEmail"
+                  type="email"
+                  autoComplete="email"
+                  value={auditeeContactEmail}
+                  onChange={(e) => setAuditeeContactEmail(e.currentTarget.value)}
+                  placeholder="email@exemple.com"
+                />
               </div>
             </div>
 

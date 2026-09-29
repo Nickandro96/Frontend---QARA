@@ -21,6 +21,17 @@ const AUDIT_NATURE_LABEL: Record<string, string> = {
   revue_conformite: "Revue de conformité",
 };
 
+function readJsonArray<T>(value: unknown): T[] {
+  if (Array.isArray(value)) return value as T[];
+  if (typeof value !== "string" || !value.trim()) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed as T[] : [];
+  } catch {
+    return [];
+  }
+}
+
 export default function AuditDetail() {
   const { t } = useTranslation();
   const { user, isAuthenticated, loading } = useAuth();
@@ -77,18 +88,8 @@ export default function AuditDetail() {
     if (!audit) return;
     setAuditNature((audit as any).auditNature || "");
     setScopeExclusions((audit as any).scopeExclusions || "");
-    try {
-      const team = (audit as any).auditTeam ? JSON.parse((audit as any).auditTeam) : [];
-      setAuditTeam(Array.isArray(team) ? team : []);
-    } catch {
-      setAuditTeam([]);
-    }
-    try {
-      const reps = (audit as any).auditeesRepresentatives ? JSON.parse((audit as any).auditeesRepresentatives) : [];
-      setRepresentatives(Array.isArray(reps) ? reps : []);
-    } catch {
-      setRepresentatives([]);
-    }
+    setAuditTeam(readJsonArray((audit as any).auditTeam));
+    setRepresentatives(readJsonArray((audit as any).auditeesRepresentatives));
   }, [audit]);
 
   const handleSaveAuditInfo = async () => {
