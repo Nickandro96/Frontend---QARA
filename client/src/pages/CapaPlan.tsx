@@ -48,6 +48,7 @@ const NEXT_STATUTS: Record<string, string[]> = {
 
 function ActionCard({ action, auditId }: { action: any; auditId: number }) {
   const utils = trpc.useUtils();
+  const [correctionImmediate, setCorrectionImmediate] = useState(action.correctionImmediate || "");
   const [analyseCauseRacine, setAnalyseCauseRacine] = useState(action.analyseCauseRacine || "");
   const [actionRetenue, setActionRetenue] = useState(action.actionRetenue || "");
   const [responsible, setResponsible] = useState(action.responsible || "");
@@ -78,11 +79,13 @@ function ActionCard({ action, auditId }: { action: any; auditId: number }) {
   const handleSaveFields = () => {
     updateMutation.mutate({
       actionId: action.id,
+      correctionImmediate: correctionImmediate || undefined,
       analyseCauseRacine: analyseCauseRacine || undefined,
       actionRetenue: actionRetenue || undefined,
       responsible: responsible || undefined,
       dueDate: dueDate ? new Date(dueDate).toISOString() : undefined,
       preuveRealisation: preuveRealisation || undefined,
+      preuveEfficacite: preuveEfficacite || undefined,
       rootCauseMethod: (rootCauseMethod || undefined) as any,
       mdsapGrade: mdsapGrade ? Number(mdsapGrade) : undefined,
       mdsapEscalation: mdsapEscalation || undefined,
@@ -136,6 +139,15 @@ function ActionCard({ action, auditId }: { action: any; auditId: number }) {
         <div>
           <label className="text-sm font-medium mb-1 block">Action recommandée (pré-remplie)</label>
           <p className="text-sm text-muted-foreground bg-muted/40 rounded p-2">{action.actionRecommandee}</p>
+        </div>
+
+        <div>
+          <label className="text-sm font-medium mb-1 block">Correction immédiate (containment)</label>
+          <Textarea
+            value={correctionImmediate}
+            onChange={(e) => setCorrectionImmediate(e.target.value)}
+            placeholder="Mesure immédiate prise pour contenir le risque avant l'action corrective"
+          />
         </div>
 
         <div>
@@ -198,12 +210,14 @@ function ActionCard({ action, auditId }: { action: any; auditId: number }) {
           <Textarea value={preuveRealisation} onChange={(e) => setPreuveRealisation(e.target.value)} placeholder="Référence document / preuve que l'action a été réalisée" />
         </div>
 
-        {action.statut === "a_verifier" && (
-          <div>
-            <label className="text-sm font-medium mb-1 block">Preuve d'efficacité (requise pour clôturer)</label>
-            <Textarea value={preuveEfficacite} onChange={(e) => setPreuveEfficacite(e.target.value)} placeholder="Élément prouvant l'efficacité (ou l'inefficacité) de l'action" />
-          </div>
-        )}
+        <div>
+          <label className="text-sm font-medium mb-1 block">Indicateur d'efficacité</label>
+          <Textarea
+            value={preuveEfficacite}
+            onChange={(e) => setPreuveEfficacite(e.target.value)}
+            placeholder="Ex. : 0 dépassement de délai sur 3 mois"
+          />
+        </div>
 
         <div className="flex items-center gap-2 flex-wrap pt-2">
           <Button size="sm" variant="outline" onClick={handleSaveFields} disabled={updateMutation.isPending}>
