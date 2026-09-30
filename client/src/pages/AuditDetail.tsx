@@ -19,6 +19,7 @@ const AUDIT_NATURE_LABEL: Record<string, string> = {
   fournisseur: "Fournisseur",
   blanc: "Audit à blanc",
   revue_conformite: "Revue de conformité",
+  surveillance: "Audit de surveillance",
 };
 
 function readJsonArray<T>(value: unknown): T[] {
