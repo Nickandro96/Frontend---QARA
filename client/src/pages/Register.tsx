@@ -4,6 +4,7 @@ import { Loader2, Shield } from "lucide-react";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { trpc } from "@/lib/trpc";
@@ -21,6 +22,8 @@ export default function Register() {
     phone: "",
   });
   const [error, setError] = useState("");
+  const [cguAccepted, setCguAccepted] = useState(false);
+  const [marketingConsent, setMarketingConsent] = useState(false);
   const { refresh } = useAuth();
   const [, navigate] = useLocation();
 
@@ -67,6 +70,11 @@ export default function Register() {
       return;
     }
 
+    if (!cguAccepted) {
+      setError("Vous devez accepter les CGU pour créer un compte");
+      return;
+    }
+
     registerMutation.mutate({
       email: formData.email,
       name: formData.name,
@@ -74,6 +82,8 @@ export default function Register() {
       company: formData.company,
       role: formData.role,
       phone: formData.phone,
+      cguAccepted: true,
+      marketingConsent,
     });
   };
 
@@ -171,6 +181,29 @@ export default function Register() {
                 Telephone
               </label>
               <Input id="phone" name="phone" type="tel" placeholder="+33 6 12 34 56 78" value={formData.phone} onChange={handleChange} />
+            </div>
+
+            <div className="space-y-3 rounded-md border border-gray-200 p-3">
+              <div className="flex items-start gap-3">
+                <Checkbox
+                  id="cguAccepted"
+                  checked={cguAccepted}
+                  onCheckedChange={(checked) => setCguAccepted(checked === true)}
+                />
+                <label htmlFor="cguAccepted" className="text-sm leading-5">
+                  J'accepte les conditions générales d'utilisation et la politique de confidentialité. *
+                </label>
+              </div>
+              <div className="flex items-start gap-3">
+                <Checkbox
+                  id="marketingConsent"
+                  checked={marketingConsent}
+                  onCheckedChange={(checked) => setMarketingConsent(checked === true)}
+                />
+                <label htmlFor="marketingConsent" className="text-sm leading-5 text-muted-foreground">
+                  J'accepte de recevoir les actualités et communications commerciales QARA (facultatif).
+                </label>
+              </div>
             </div>
 
             {error ? (
