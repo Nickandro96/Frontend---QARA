@@ -191,7 +191,7 @@ export default function Register() {
                   onCheckedChange={(checked) => setCguAccepted(checked === true)}
                 />
                 <label htmlFor="cguAccepted" className="text-sm leading-5">
-                  J'accepte les conditions générales d'utilisation et la politique de confidentialité. *
+                  J'accepte les <a className="text-primary underline" href="/cgu" target="_blank" rel="noreferrer">conditions générales d'utilisation</a> et la <a className="text-primary underline" href="/politique-confidentialite" target="_blank" rel="noreferrer">politique de confidentialité</a>. *
                 </label>
               </div>
               <div className="flex items-start gap-3">

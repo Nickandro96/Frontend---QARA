@@ -49,6 +49,7 @@ import ReportGeneration from "./pages/ReportGeneration";
 import ReportHistory from "./pages/ReportHistory";
 import Reports from "./pages/Reports";
 import SiteManagement from "./pages/SiteManagement";
+import { LegalNotice, PrivacyPolicy, TermsOfUse } from "./pages/Legal";
 
 function PublicPage({ children }: { children: ReactNode }) {
   return <PublicOnlyRoute>{children}</PublicOnlyRoute>;
@@ -111,6 +112,9 @@ function Router() {
       <Route path="/pricing" component={Pricing} />
       <Route path="/contact" component={Contact} />
       <Route path="/faq" component={FAQ} />
+      <Route path="/cgu" component={TermsOfUse} />
+      <Route path="/politique-confidentialite" component={PrivacyPolicy} />
+      <Route path="/mentions-legales" component={LegalNotice} />
 
       <Route path="/onboarding">
         <ProtectedPage forceOnboarding={false}>

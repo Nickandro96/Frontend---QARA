@@ -237,7 +237,7 @@ export default function MDRAudit() {
       plannedStartDate &&
       auditLeader &&
       auditeeMainContact &&
-      auditeeContactEmail &&
+      /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(auditeeContactEmail.trim()) &&
       mdrReferentialId
     );
   };
@@ -581,11 +581,16 @@ export default function MDRAudit() {
               </div>
 
               <div className="space-y-2">
-                <Label>Contact auditée - Email *</Label>
+                <Label htmlFor="mdr-auditee-email">Contact auditée - Email *</Label>
                 <Input
+                  id="mdr-auditee-email"
+                  name="auditeeEmail"
                   type="email"
                   value={auditeeContactEmail}
-                  onChange={(e) => setAuditeeContactEmail(e.target.value)}
+                  autoComplete="email"
+                  onChange={(e) => setAuditeeContactEmail(e.currentTarget.value)}
+                  onInput={(e) => setAuditeeContactEmail(e.currentTarget.value)}
+                  onBlur={() => setAuditeeContactEmail((value) => value.trim())}
                   placeholder="email@example.com"
                 />
               </div>
