@@ -586,11 +586,10 @@ export default function MDRAudit() {
                   id="mdr-auditee-email"
                   name="auditeeEmail"
                   type="email"
-                  value={auditeeContactEmail}
+                  defaultValue={auditeeContactEmail}
                   autoComplete="email"
                   onChange={(e) => setAuditeeContactEmail(e.currentTarget.value)}
-                  onInput={(e) => setAuditeeContactEmail(e.currentTarget.value)}
-                  onBlur={() => setAuditeeContactEmail((value) => value.trim())}
+                  onBlur={(e) => setAuditeeContactEmail(e.currentTarget.value.trim())}
                   placeholder="email@example.com"
                 />
               </div>
