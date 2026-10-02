@@ -6,12 +6,14 @@ import {
   BarChart3,
   Bell,
   ClipboardCheck,
+  CreditCard,
   FileText,
   LayoutDashboard,
   LogOut,
   Route as RouteIcon,
   Shield,
   UserCircle,
+  Users,
 } from "lucide-react";
 import { ReactNode } from "react";
 import { Link, useLocation } from "wouter";
@@ -24,6 +26,8 @@ const navItems = [
   { label: "Plan d'action", path: "/action-plan", icon: FileText },
   { label: "Rapports", path: "/reports", icon: FileText },
   { label: "Veille", path: "/veille", icon: Bell },
+  { label: "Abonnement", path: "/subscription", icon: CreditCard },
+  { label: "Gestion des profils", path: "/admin/users", icon: Users, adminOnly: true },
 ];
 
 type AuthenticatedLayoutProps = {
@@ -65,7 +69,9 @@ export function AuthenticatedLayout({ children }: AuthenticatedLayoutProps) {
           </div>
 
           <nav className="flex-1 space-y-1 px-3 py-4">
-            {navItems.map((item) => {
+            {navItems
+              .filter((item) => !item.adminOnly || user?.role === "admin")
+              .map((item) => {
               const Icon = item.icon;
               const active = location === item.path || location.startsWith(`${item.path}/`);
 
@@ -84,7 +90,7 @@ export function AuthenticatedLayout({ children }: AuthenticatedLayoutProps) {
                   {item.label}
                 </Link>
               );
-            })}
+              })}
           </nav>
 
           <div className="border-t border-[#edf1f6] p-4">

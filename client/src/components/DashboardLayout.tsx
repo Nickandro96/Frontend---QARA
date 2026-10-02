@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft, Users, Mail, BarChart3, ClipboardCheck, Award, History, GitCompare } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft, Users, Mail, BarChart3, ClipboardCheck, Award, History, GitCompare, CreditCard } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -34,6 +34,8 @@ const menuItems = [
   { icon: History, label: "Historique Audits", path: "/audit-history" },
   { icon: GitCompare, label: "Comparer Audits", path: "/audit/compare" },
   { icon: BarChart3, label: "Analytics", path: "/analytics" },
+  { icon: CreditCard, label: "Abonnement", path: "/subscription" },
+  { icon: Users, label: "Gestion des profils", path: "/admin/users", adminOnly: true },
   { icon: Mail, label: "Messages", path: "/admin/contacts", adminOnly: true },
 ];
 
