@@ -6,9 +6,6 @@ import { FunnelNavigator, FunnelSteps, DrillLevel } from "@/components/dashboard
 import { DashboardFilters, DashboardFiltersState } from "@/components/dashboard/DashboardFilters";
 import {
   BarChart,
-  StackedBarChart,
-  LineChart,
-  Heatmap,
   ParetoChart,
 } from "@/components/dashboard/Charts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -238,6 +235,43 @@ export default function AnalyticsDashboard() {
     [recentFindings]
   );
 
+  const liveReferentialPerformance = useMemo(
+    () =>
+      [
+        { label: "MDR", value: Number(liveKPIs.frameworkScores.mdr ?? 0) },
+        { label: "ISO 13485", value: Number(liveKPIs.frameworkScores["iso-13485"] ?? 0) },
+        { label: "FDA QMSR", value: Number(liveKPIs.frameworkScores["fda-qmsr"] ?? 0) },
+        { label: "ISO 14971", value: Number(liveKPIs.frameworkScores["iso-14971"] ?? 0) },
+      ].filter((item) => item.value > 0),
+    [liveKPIs.frameworkScores]
+  );
+
+  const liveInsights = useMemo(() => {
+    const insights: Array<{ title: string; description: string; priority: string }> = [];
+    if (liveKPIs.overdueActions > 0) {
+      insights.push({
+        title: "Actions en retard",
+        description: `${liveKPIs.overdueActions} action(s) CAPA dépassent leur échéance.`,
+        priority: "critical",
+      });
+    }
+    if (liveKPIs.ncMajor > 0) {
+      insights.push({
+        title: "Non-conformités majeures",
+        description: `${liveKPIs.ncMajor} non-conformité(s) majeure(s) nécessitent une priorisation.`,
+        priority: "high",
+      });
+    }
+    if (liveKPIs.actionClosureRate > 0) {
+      insights.push({
+        title: "Clôture des actions",
+        description: `Le taux de clôture mesuré est de ${liveKPIs.actionClosureRate} %.`,
+        priority: liveKPIs.actionClosureRate >= 80 ? "info" : "medium",
+      });
+    }
+    return insights;
+  }, [liveKPIs]);
+
   // State
   const [filters, setFilters] = useState<DashboardFiltersState>({
     period: "12m",
@@ -462,7 +496,10 @@ export default function AnalyticsDashboard() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-              {demoInsights.map((insight, index) => (
+              {liveInsights.length === 0 && (
+                <p className="text-sm text-muted-foreground">Aucun insight calculable avec les données actuelles.</p>
+              )}
+              {liveInsights.map((insight, index) => (
                 <div
                   key={index}
                   className={cn(
@@ -506,38 +543,21 @@ export default function AnalyticsDashboard() {
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6 mt-6">
-            {/* Charts Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <LineChart
-                data={demoTrendData}
-                title="Évolution du Score Global (12 mois)"
-                color="#3b82f6"
-              />
+            {liveReferentialPerformance.length > 0 ? (
               <BarChart
-                data={demoSitePerformance}
-                title="Performance par Site"
+                data={liveReferentialPerformance}
+                title="Performance réelle par référentiel"
                 horizontal
               />
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <StackedBarChart
-                data={demoProcessNCData}
-                title="Répartition des Constats par Processus"
-              />
-              <ParetoChart
-                data={demoParetoData}
-                title="Pareto des Clauses Non-Conformes"
-              />
-            </div>
-
-            {/* Heatmap */}
-            <Heatmap
-              data={demoHeatmapData}
-              rows={["Paris", "Lyon", "Bordeaux", "Munich", "Boston"]}
-              cols={["Conception", "Production", "Achats", "Risques"]}
-              title="Matrice Site × Processus (Taux de Conformité)"
-            />
+            ) : (
+              <Card><CardContent className="py-8 text-sm text-muted-foreground">Aucun score par référentiel n’est encore disponible.</CardContent></Card>
+            )}
+            <Card>
+              <CardHeader><CardTitle className="text-lg">Analyses temporelles et multidimensionnelles</CardTitle></CardHeader>
+              <CardContent className="text-sm text-muted-foreground">
+                L’historique mensuel, la ventilation par site et la matrice site × processus ne sont pas encore exposés par l’API. Aucun chiffre de démonstration n’est affiché.
+              </CardContent>
+            </Card>
           </TabsContent>
 
           <TabsContent value="sites" className="space-y-6 mt-6">
