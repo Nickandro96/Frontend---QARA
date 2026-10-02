@@ -1,6 +1,5 @@
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
-import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -46,8 +45,7 @@ export default function AdminUsers() {
 
   if (currentUser && currentUser.role !== "admin") {
     return (
-      <DashboardLayout>
-        <div className="flex items-center justify-center h-full">
+        <div className="flex min-h-[60vh] items-center justify-center">
           <Card className="max-w-md">
             <CardHeader>
               <CardTitle>Accès refusé</CardTitle>
@@ -57,13 +55,11 @@ export default function AdminUsers() {
             </CardHeader>
           </Card>
         </div>
-      </DashboardLayout>
     );
   }
 
   return (
-    <DashboardLayout>
-      <div className="space-y-6">
+      <div className="w-full space-y-6">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Gestion des Utilisateurs</h1>
@@ -165,6 +161,5 @@ export default function AdminUsers() {
           </CardContent>
         </Card>
       </div>
-    </DashboardLayout>
   );
 }

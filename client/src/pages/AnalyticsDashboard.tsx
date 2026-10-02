@@ -1,6 +1,5 @@
 import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import DashboardLayout from "@/components/DashboardLayout";
 import { KPICard, KPI_DEFINITIONS } from "@/components/dashboard/KPICard";
 import { FunnelNavigator, FunnelSteps, DrillLevel } from "@/components/dashboard/FunnelNavigator";
 import { DashboardFilters, DashboardFiltersState } from "@/components/dashboard/DashboardFilters";
@@ -286,6 +285,7 @@ export default function AnalyticsDashboard() {
 
   const [drillLevels, setDrillLevels] = useState<DrillLevel[]>([]);
   const [activeTab, setActiveTab] = useState("overview");
+  const [activeFunnelStep, setActiveFunnelStep] = useState(0);
 
   // Drill-down handlers
   const handleDrillDown = (level: DrillLevel) => {
@@ -315,9 +315,19 @@ export default function AnalyticsDashboard() {
   };
 
   const handleStepClick = (step: number) => {
-    if (step < drillLevels.length) {
-      setDrillLevels(drillLevels.slice(0, step));
-    }
+    const tabByStep = [
+      "overview",
+      "sites",
+      "processes",
+      "referentials",
+      "clauses",
+      "requirements",
+      "findings",
+      "actions",
+    ];
+    setActiveFunnelStep(step);
+    setActiveTab(tabByStep[step] ?? "overview");
+    setDrillLevels([]);
   };
 
   // Export handlers
@@ -337,8 +347,7 @@ export default function AnalyticsDashboard() {
   };
 
   return (
-    <DashboardLayout>
-      <div className="space-y-6 p-6">
+      <div className="w-full space-y-6">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
@@ -364,7 +373,7 @@ export default function AnalyticsDashboard() {
         </div>
 
         {/* Funnel Navigator */}
-        <FunnelSteps currentLevel={drillLevels.length} onStepClick={handleStepClick} />
+        <FunnelSteps currentLevel={activeFunnelStep} onStepClick={handleStepClick} />
 
         {/* Breadcrumb navigation */}
         {drillLevels.length > 0 && (
@@ -522,7 +531,19 @@ export default function AnalyticsDashboard() {
         </Card>
 
         {/* Tabs for different views */}
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <Tabs
+          value={activeTab}
+          onValueChange={(value) => {
+            setActiveTab(value);
+            const stepByTab: Record<string, number> = {
+              overview: 0,
+              sites: 1,
+              processes: 2,
+              findings: 6,
+            };
+            setActiveFunnelStep(stepByTab[value] ?? 0);
+          }}
+        >
           <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="overview">Vue d'ensemble</TabsTrigger>
             <TabsTrigger value="sites">Par Site</TabsTrigger>
@@ -649,6 +670,40 @@ export default function AnalyticsDashboard() {
             </div>
           </TabsContent>
 
+          <TabsContent value="referentials" className="space-y-6 mt-6">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+              {demoReferentials.map((referential, index) => (
+                <Card key={referential.id}>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base">{referential.name}</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-2xl font-bold text-green-600">{84 + index * 3}%</div>
+                    <p className="text-sm text-muted-foreground">Conformité du référentiel</p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="clauses" className="space-y-6 mt-6">
+            <ParetoChart data={demoParetoData} title="Analyse des clauses" />
+          </TabsContent>
+
+          <TabsContent value="requirements" className="space-y-6 mt-6">
+            <Card>
+              <CardHeader><CardTitle className="text-lg">Exigences à surveiller</CardTitle></CardHeader>
+              <CardContent className="space-y-3">
+                {demoParetoData.slice(0, 6).map((item, index) => (
+                  <div key={item.label} className="flex items-center justify-between rounded-lg border p-3">
+                    <span>Exigence {item.label}</span>
+                    <Badge variant={index < 2 ? "destructive" : "secondary"}>{item.value} constats</Badge>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
           <TabsContent value="findings" className="space-y-6 mt-6">
             <Card>
               <CardHeader>
@@ -743,8 +798,28 @@ export default function AnalyticsDashboard() {
               </CardContent>
             </Card>
           </TabsContent>
+
+          <TabsContent value="actions" className="space-y-6 mt-6">
+            <Card>
+              <CardHeader><CardTitle className="text-lg">Actions correctives</CardTitle></CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader><TableRow><TableHead>Action</TableHead><TableHead>Origine</TableHead><TableHead>Statut</TableHead><TableHead>Échéance</TableHead></TableRow></TableHeader>
+                  <TableBody>
+                    {demoFindings.map((finding, index) => (
+                      <TableRow key={finding.id}>
+                        <TableCell>Action corrective {index + 1}</TableCell>
+                        <TableCell>{finding.id}</TableCell>
+                        <TableCell><Badge variant={finding.status === "closed" ? "secondary" : "default"}>{finding.status === "closed" ? "Clôturée" : "En cours"}</Badge></TableCell>
+                        <TableCell>{finding.daysOpen > 20 ? "En retard" : "Dans les délais"}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
         </Tabs>
       </div>
-    </DashboardLayout>
   );
 }

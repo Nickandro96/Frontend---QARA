@@ -10,6 +10,7 @@ import {
   FileText,
   LayoutDashboard,
   LogOut,
+  Mail,
   Route as RouteIcon,
   Shield,
   UserCircle,
@@ -26,8 +27,10 @@ const navItems = [
   { label: "Plan d'action", path: "/action-plan", icon: FileText },
   { label: "Rapports", path: "/reports", icon: FileText },
   { label: "Veille", path: "/veille", icon: Bell },
+  { label: "Analytique", path: "/analytics", icon: BarChart3 },
   { label: "Abonnement", path: "/subscription", icon: CreditCard },
   { label: "Gestion des profils", path: "/admin/users", icon: Users, adminOnly: true },
+  { label: "Messages", path: "/admin/contacts", icon: Mail, adminOnly: true },
 ];
 
 type AuthenticatedLayoutProps = {
