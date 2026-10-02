@@ -42,14 +42,16 @@ export default function Subscription() {
   }
 
   const tierNames: Record<string, string> = {
-    solo: "Solo / Startup MedTech",
-    pme: "PME / Responsable QARA",
+    free: "Gratuit",
+    pro: "PRO — Solo / Startup MedTech",
+    expert: "EXPERT — PME / Responsable QARA",
     entreprise: "Entreprise / Cabinet",
   };
 
   const tierPrices: Record<string, string> = {
-    solo: "99€/mois",
-    pme: "199€/mois",
+    free: "0€",
+    pro: "99€/mois",
+    expert: "199€/mois",
     entreprise: "À partir de 390€/mois",
   };
 
@@ -60,9 +62,12 @@ export default function Subscription() {
     past_due: { label: "Paiement en retard", color: "text-orange-600 bg-orange-50" },
   };
 
-  const currentTier = subscription?.tier?.toLowerCase() || "solo";
-  const currentStatus = subscription?.status || "active";
-  const statusInfo = statusLabels[currentStatus] || statusLabels.active;
+  const currentTier = subscription?.tier?.toLowerCase() || "free";
+  const currentStatus = subscription?.status || "free";
+  const statusInfo = statusLabels[currentStatus] || {
+    label: currentTier === "free" ? "Gratuit" : currentStatus,
+    color: "text-slate-600 bg-slate-100",
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
@@ -103,7 +108,7 @@ export default function Subscription() {
             <div>
               <div className="flex items-center gap-3 mb-2">
                 <h2 className="text-2xl font-bold">
-                  {tierNames[currentTier] || "Solo / Startup MedTech"}
+                  {tierNames[currentTier] || currentTier.toUpperCase()}
                 </h2>
                 <span
                   className={`px-3 py-1 rounded-full text-sm font-medium ${statusInfo.color}`}
@@ -112,7 +117,7 @@ export default function Subscription() {
                 </span>
               </div>
               <p className="text-muted-foreground">
-                {tierPrices[currentTier] || "99€/mois"}
+                {tierPrices[currentTier] || "Tarif personnalisé"}
               </p>
             </div>
             <CreditCard className="h-8 w-8 text-muted-foreground" />
@@ -140,7 +145,7 @@ export default function Subscription() {
 
           {/* Actions */}
           <div className="flex gap-4">
-            {subscription?.stripeCustomerId ? (
+            {subscription?.isPaid ? (
               <Button
                 onClick={handleManageSubscription}
                 disabled={createPortalMutation.isPending}
@@ -176,7 +181,7 @@ export default function Subscription() {
         <Card className="p-8 mb-6">
           <h3 className="text-xl font-bold mb-4">Fonctionnalités incluses</h3>
           <div className="grid md:grid-cols-2 gap-4">
-            {currentTier === "solo" && (
+            {(currentTier === "free" || currentTier === "pro") && (
               <>
                 <div className="flex items-start gap-3">
                   <Check className="h-5 w-5 text-green-600 shrink-0 mt-0.5" />
@@ -217,7 +222,7 @@ export default function Subscription() {
               </>
             )}
 
-            {currentTier === "pme" && (
+            {currentTier === "expert" && (
               <>
                 <div className="flex items-start gap-3">
                   <Check className="h-5 w-5 text-green-600 shrink-0 mt-0.5" />

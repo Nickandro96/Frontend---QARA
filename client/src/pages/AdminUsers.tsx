@@ -1,10 +1,8 @@
-import { useTranslation } from "react-i18next";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -21,17 +19,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { 
-  Users, 
-  Shield, 
-  CreditCard, 
-  RefreshCw,
-  UserCheck,
-  UserCog
-} from "lucide-react";
+import { RefreshCw } from "lucide-react";
 
 export default function AdminUsers() {
-  const { t } = useTranslation();
   const { user: currentUser } = useAuth();
 
   const { data: users, isLoading, refetch } = trpc.system.listUsers.useQuery(undefined, {
@@ -42,14 +32,16 @@ export default function AdminUsers() {
     onSuccess: () => {
       toast.success("Rôle mis à jour");
       refetch();
-    }
+    },
+    onError: (error) => toast.error(error.message || "Impossible de modifier le rôle"),
   });
 
   const updateProfileMutation = trpc.system.updateUserProfile.useMutation({
     onSuccess: () => {
       toast.success("Abonnement mis à jour");
       refetch();
-    }
+    },
+    onError: (error) => toast.error(error.message || "Impossible de modifier l'abonnement"),
   });
 
   if (currentUser && currentUser.role !== "admin") {
@@ -111,7 +103,8 @@ export default function AdminUsers() {
                     </TableCell>
                     <TableCell>
                       <Select
-                        defaultValue={u.role}
+                        value={u.role}
+                        disabled={updateRoleMutation.isPending}
                         onValueChange={(val) => updateRoleMutation.mutate({ userId: u.id, role: val as any })}
                       >
                         <SelectTrigger className="w-32">
@@ -125,7 +118,8 @@ export default function AdminUsers() {
                     </TableCell>
                     <TableCell>
                       <Select
-                        defaultValue={u.profile?.subscriptionTier || "free"}
+                        value={u.profile?.subscriptionTier || "free"}
+                        disabled={updateProfileMutation.isPending}
                         onValueChange={(val) => updateProfileMutation.mutate({ userId: u.id, subscriptionTier: val as any })}
                       >
                         <SelectTrigger className="w-32">
@@ -140,9 +134,26 @@ export default function AdminUsers() {
                       </Select>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={u.profile?.subscriptionStatus === "active" ? "default" : "secondary"}>
-                        {u.profile?.subscriptionStatus || "N/A"}
-                      </Badge>
+                      <Select
+                        value={u.profile?.subscriptionStatus || "canceled"}
+                        disabled={updateProfileMutation.isPending}
+                        onValueChange={(val) =>
+                          updateProfileMutation.mutate({
+                            userId: u.id,
+                            subscriptionStatus: val as "active" | "canceled" | "past_due" | "trialing",
+                          })
+                        }
+                      >
+                        <SelectTrigger className="w-36">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="active">Actif</SelectItem>
+                          <SelectItem value="trialing">Essai</SelectItem>
+                          <SelectItem value="past_due">Impayé</SelectItem>
+                          <SelectItem value="canceled">Annulé</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {u.lastSignedIn ? new Date(u.lastSignedIn).toLocaleDateString() : "Jamais"}

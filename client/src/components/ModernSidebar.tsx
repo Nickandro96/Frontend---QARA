@@ -16,6 +16,7 @@ import {
   BarChart2,
   FileCheck,
   User,
+  Users,
   LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -165,15 +166,28 @@ export function ModernSidebar() {
       icon: HelpCircle,
       href: "/faq",
     },
-    {
-      id: "administration",
-      label: t("nav.administration") || "Administration",
-      icon: Settings,
-      href: "/admin/contacts",
-    },
   ];
 
-  const navItems = market === "EU" ? [...euItems, ...transverseItems] : [...usItems, ...transverseItems];
+  const adminItems = user?.role === "admin"
+    ? [
+        {
+          id: "admin-users",
+          label: "Utilisateurs & abonnements",
+          icon: Users,
+          href: "/admin/users",
+        },
+        {
+          id: "admin-contacts",
+          label: t("nav.administration") || "Demandes de contact",
+          icon: Settings,
+          href: "/admin/contacts",
+        },
+      ]
+    : [];
+
+  const navItems = market === "EU"
+    ? [...euItems, ...transverseItems, ...adminItems]
+    : [...usItems, ...transverseItems, ...adminItems];
 
   const isActive = (href: string) => {
     if (href === "/") return location === "/";

@@ -49,6 +49,9 @@ import ReportGeneration from "./pages/ReportGeneration";
 import ReportHistory from "./pages/ReportHistory";
 import Reports from "./pages/Reports";
 import SiteManagement from "./pages/SiteManagement";
+import Subscription from "./pages/Subscription";
+import SubscriptionCancel from "./pages/SubscriptionCancel";
+import SubscriptionSuccess from "./pages/SubscriptionSuccess";
 import { LegalNotice, PrivacyPolicy, TermsOfUse } from "./pages/Legal";
 
 function PublicPage({ children }: { children: ReactNode }) {
@@ -332,13 +335,19 @@ function Router() {
         <Redirect to="/account" />
       </Route>
       <Route path="/subscription/success">
-        <Redirect to="/account" />
+        <ProtectedPage forceOnboarding={false}>
+          <SubscriptionSuccess />
+        </ProtectedPage>
       </Route>
       <Route path="/subscription/cancel">
-        <Redirect to="/account" />
+        <ProtectedPage forceOnboarding={false}>
+          <SubscriptionCancel />
+        </ProtectedPage>
       </Route>
       <Route path="/subscription">
-        <Redirect to="/account" />
+        <ProtectedPage forceOnboarding={false}>
+          <Subscription />
+        </ProtectedPage>
       </Route>
       <Route path="/regulatory-watch">
         <Redirect to="/veille" />

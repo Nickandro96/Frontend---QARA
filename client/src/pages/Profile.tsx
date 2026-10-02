@@ -360,8 +360,12 @@ export default function Profile() {
                 </p>
               </div>
             </div>
-            <Button variant="outline" className="w-full" disabled>
-              Gérer l'abonnement (Prochainement)
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => (window.location.href = "/subscription")}
+            >
+              Gérer mon abonnement
             </Button>
           </CardContent>
         </Card>
