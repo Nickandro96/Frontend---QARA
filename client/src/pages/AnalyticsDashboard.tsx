@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import { trpc } from "@/lib/trpc";
 import { KPICard, KPI_DEFINITIONS } from "@/components/dashboard/KPICard";
 import { FunnelNavigator, FunnelSteps, DrillLevel } from "@/components/dashboard/FunnelNavigator";
 import { DashboardFilters, DashboardFiltersState } from "@/components/dashboard/DashboardFilters";
@@ -40,23 +41,6 @@ import {
 import { cn } from "@/lib/utils";
 
 // Demo data for visualization
-const demoKPIs = {
-  globalScore: 87.5,
-  globalScoreTrend: 3.2,
-  conformityRate: 92.3,
-  conformityRateTrend: 1.8,
-  ncMajor: 3,
-  ncMajorTrend: -2,
-  ncMinor: 12,
-  ncMinorTrend: -5,
-  observations: 24,
-  ofi: 18,
-  actionClosureRate: 78,
-  avgClosureDays: 23,
-  overdueActions: 4,
-  riskScore: 32,
-};
-
 const demoSites = [
   { id: "1", name: "Paris - Siège", code: "PAR" },
   { id: "2", name: "Lyon - Production", code: "LYO" },
@@ -185,59 +169,6 @@ const demoHeatmapData = [
   { row: "Boston", col: "Risques", value: 90 },
 ];
 
-const demoFindings = [
-  {
-    id: "F-2026-001",
-    type: "nc_major",
-    title: "Absence de revue de conception documentée",
-    process: "Conception",
-    clause: "7.3.4",
-    status: "open",
-    daysOpen: 15,
-    site: "Paris",
-  },
-  {
-    id: "F-2026-002",
-    type: "nc_minor",
-    title: "Enregistrements de formation incomplets",
-    process: "Production",
-    clause: "6.2.2",
-    status: "in_progress",
-    daysOpen: 8,
-    site: "Lyon",
-  },
-  {
-    id: "F-2026-003",
-    type: "nc_major",
-    title: "Évaluation des fournisseurs non mise à jour",
-    process: "Achats",
-    clause: "7.4.1",
-    status: "open",
-    daysOpen: 22,
-    site: "Bordeaux",
-  },
-  {
-    id: "F-2026-004",
-    type: "nc_minor",
-    title: "Procédure de rappel non testée",
-    process: "PMS",
-    clause: "8.2.3",
-    status: "closed",
-    daysOpen: 0,
-    site: "Munich",
-  },
-  {
-    id: "F-2026-005",
-    type: "observation",
-    title: "Opportunité d'amélioration du processus CAPA",
-    process: "CAPA",
-    clause: "8.5.2",
-    status: "open",
-    daysOpen: 5,
-    site: "Boston",
-  },
-];
-
 const demoInsights = [
   {
     type: "warning",
@@ -268,6 +199,44 @@ const demoInsights = [
 export default function AnalyticsDashboard() {
   const { t, i18n } = useTranslation();
   const lang = i18n.language as "fr" | "en";
+  const { data: kpiData } = trpc.dashboard.getKPIs.useQuery();
+  const { data: recentFindings } = trpc.dashboard.getRecentFindings.useQuery({ limit: 50 });
+
+  const liveKPIs = useMemo(() => {
+    const data = (kpiData ?? {}) as any;
+    const types = data.findingsByType ?? {};
+    const totalActions = Number(data.totalActions ?? 0);
+    const closedActions = Number(data.actionsByStatus?.closed ?? 0);
+    return {
+      globalScore: Number(data.scoreGlobal ?? 0),
+      conformityRate: Number(data.scoreGlobal ?? 0),
+      ncMajor: Number(types.nc_major ?? 0),
+      ncMinor: Number(types.nc_minor ?? 0),
+      observations: Number(types.observation ?? 0),
+      ofi: Number(types.ofi ?? 0),
+      overdueActions: Number(data.overdueActions ?? 0),
+      actionClosureRate: totalActions > 0 ? Math.round((closedActions / totalActions) * 1000) / 10 : 0,
+      avgClosureDays: Number(data.averageClosureTime ?? 0),
+      frameworkScores: data.frameworkScores ?? {},
+    };
+  }, [kpiData]);
+
+  const liveFindings = useMemo(
+    () =>
+      (Array.isArray(recentFindings) ? recentFindings : []).map((finding: any) => ({
+        id: finding.code ?? `FIND-${finding.id}`,
+        type: finding.type ?? "observation",
+        title: finding.title ?? "Constat",
+        process: finding.processName || "Non renseigné",
+        clause: finding.referentialName || "Non renseignée",
+        status: finding.status || "open",
+        daysOpen: finding.date
+          ? Math.max(0, Math.floor((Date.now() - new Date(finding.date).getTime()) / 86400000))
+          : 0,
+        site: finding.siteName || "Non renseigné",
+      })),
+    [recentFindings]
+  );
 
   // State
   const [filters, setFilters] = useState<DashboardFiltersState>({
@@ -328,6 +297,9 @@ export default function AnalyticsDashboard() {
     setActiveFunnelStep(step);
     setActiveTab(tabByStep[step] ?? "overview");
     setDrillLevels([]);
+    window.setTimeout(() => {
+      document.getElementById("analytics-detail")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 0);
   };
 
   // Export handlers
@@ -399,15 +371,10 @@ export default function AnalyticsDashboard() {
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
           <KPICard
             title="Score Global"
-            value={demoKPIs.globalScore}
+            value={liveKPIs.globalScore}
             unit="%"
             icon={<Target className="h-4 w-4" />}
             definition={KPI_DEFINITIONS.globalScore[lang]}
-            trend={{
-              value: demoKPIs.globalScoreTrend,
-              direction: "up",
-              label: "vs période précédente",
-            }}
             color="success"
             onClick={() =>
               handleDrillDown({
@@ -421,46 +388,32 @@ export default function AnalyticsDashboard() {
           />
           <KPICard
             title="Taux de Conformité"
-            value={demoKPIs.conformityRate}
+            value={liveKPIs.conformityRate}
             unit="%"
             icon={<CheckCircle2 className="h-4 w-4" />}
             definition={KPI_DEFINITIONS.conformityRate[lang]}
-            trend={{
-              value: demoKPIs.conformityRateTrend,
-              direction: "up",
-              label: "vs période précédente",
-            }}
             color="success"
           />
           <KPICard
             title="NC Majeures"
-            value={demoKPIs.ncMajor}
+            value={liveKPIs.ncMajor}
             icon={<AlertTriangle className="h-4 w-4" />}
             definition={KPI_DEFINITIONS.ncMajor[lang]}
-            trend={{
-              value: Math.abs(demoKPIs.ncMajorTrend),
-              direction: demoKPIs.ncMajorTrend < 0 ? "down" : "up",
-              label: "vs période précédente",
-            }}
             color="danger"
           />
           <KPICard
             title="NC Mineures"
-            value={demoKPIs.ncMinor}
+            value={liveKPIs.ncMinor}
             icon={<AlertTriangle className="h-4 w-4" />}
             definition={KPI_DEFINITIONS.ncMinor[lang]}
-            trend={{
-              value: Math.abs(demoKPIs.ncMinorTrend),
-              direction: demoKPIs.ncMinorTrend < 0 ? "down" : "up",
-            }}
             color="warning"
           />
           <KPICard
             title="Actions en Retard"
-            value={demoKPIs.overdueActions}
+            value={liveKPIs.overdueActions}
             icon={<Clock className="h-4 w-4" />}
             definition={KPI_DEFINITIONS.overdueActions[lang]}
-            color={demoKPIs.overdueActions > 0 ? "danger" : "success"}
+            color={liveKPIs.overdueActions > 0 ? "danger" : "success"}
           />
         </div>
 
@@ -468,30 +421,30 @@ export default function AnalyticsDashboard() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <KPICard
             title="Observations"
-            value={demoKPIs.observations}
+            value={liveKPIs.observations}
             icon={<Activity className="h-4 w-4" />}
             definition={KPI_DEFINITIONS.observations[lang]}
             size="sm"
           />
           <KPICard
             title="OFI"
-            value={demoKPIs.ofi}
+            value={liveKPIs.ofi}
             icon={<Lightbulb className="h-4 w-4" />}
             definition={KPI_DEFINITIONS.ofi[lang]}
             size="sm"
           />
           <KPICard
             title="Taux Clôture Actions"
-            value={demoKPIs.actionClosureRate}
+            value={liveKPIs.actionClosureRate}
             unit="%"
             icon={<CheckCircle2 className="h-4 w-4" />}
             definition={KPI_DEFINITIONS.actionClosureRate[lang]}
             size="sm"
-            color={demoKPIs.actionClosureRate >= 80 ? "success" : "warning"}
+            color={liveKPIs.actionClosureRate >= 80 ? "success" : "warning"}
           />
           <KPICard
             title="Délai Moyen Clôture"
-            value={demoKPIs.avgClosureDays}
+            value={liveKPIs.avgClosureDays}
             unit="jours"
             icon={<Clock className="h-4 w-4" />}
             definition={KPI_DEFINITIONS.avgClosureDays[lang]}
@@ -532,6 +485,7 @@ export default function AnalyticsDashboard() {
 
         {/* Tabs for different views */}
         <Tabs
+          id="analytics-detail"
           value={activeTab}
           onValueChange={(value) => {
             setActiveTab(value);
@@ -613,13 +567,13 @@ export default function AnalyticsDashboard() {
                       <div>
                         <span className="text-muted-foreground">Score</span>
                         <p className="font-bold text-lg text-green-600">
-                          {85 + Math.floor(Math.random() * 10)}%
+                          —
                         </p>
                       </div>
                       <div>
                         <span className="text-muted-foreground">NC Ouvertes</span>
                         <p className="font-bold text-lg">
-                          {Math.floor(Math.random() * 5)}
+                          —
                         </p>
                       </div>
                     </div>
@@ -655,13 +609,13 @@ export default function AnalyticsDashboard() {
                     <div className="flex items-center justify-between">
                       <Badge
                         variant={
-                          Math.random() > 0.3 ? "default" : "destructive"
+                          "secondary"
                         }
                       >
-                        {Math.floor(Math.random() * 5)} NC
+                        Données non disponibles
                       </Badge>
                       <span className="text-sm font-medium">
-                        {80 + Math.floor(Math.random() * 15)}%
+                        —
                       </span>
                     </div>
                   </CardContent>
@@ -672,13 +626,23 @@ export default function AnalyticsDashboard() {
 
           <TabsContent value="referentials" className="space-y-6 mt-6">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-              {demoReferentials.map((referential, index) => (
+              {demoReferentials.map((referential) => (
                 <Card key={referential.id}>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-base">{referential.name}</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold text-green-600">{84 + index * 3}%</div>
+                    <div className="text-2xl font-bold text-green-600">
+                      {Number(liveKPIs.frameworkScores[
+                        referential.name.toLowerCase().includes("13485")
+                          ? "iso-13485"
+                          : referential.name.toLowerCase().includes("745")
+                          ? "mdr"
+                          : referential.name.toLowerCase().includes("820")
+                          ? "fda-qmsr"
+                          : "iso-14971"
+                      ] ?? 0).toFixed(1)}%
+                    </div>
                     <p className="text-sm text-muted-foreground">Conformité du référentiel</p>
                   </CardContent>
                 </Card>
@@ -724,7 +688,7 @@ export default function AnalyticsDashboard() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {demoFindings.map((finding) => (
+                    {liveFindings.map((finding) => (
                       <TableRow
                         key={finding.id}
                         className="cursor-pointer hover:bg-muted/50"
@@ -806,7 +770,7 @@ export default function AnalyticsDashboard() {
                 <Table>
                   <TableHeader><TableRow><TableHead>Action</TableHead><TableHead>Origine</TableHead><TableHead>Statut</TableHead><TableHead>Échéance</TableHead></TableRow></TableHeader>
                   <TableBody>
-                    {demoFindings.map((finding, index) => (
+                    {liveFindings.map((finding, index) => (
                       <TableRow key={finding.id}>
                         <TableCell>Action corrective {index + 1}</TableCell>
                         <TableCell>{finding.id}</TableCell>
