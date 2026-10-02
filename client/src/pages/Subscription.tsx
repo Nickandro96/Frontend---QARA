@@ -17,7 +17,9 @@ export default function Subscription() {
   const handleManageSubscription = async () => {
     try {
       const result = await createPortalMutation.mutateAsync();
-      window.open(result.portalUrl, "_blank");
+      // A popup opened after the asynchronous API call is commonly blocked by
+      // browsers. Navigate in the current tab so the Stripe portal always opens.
+      window.location.assign(result.portalUrl);
       toast.success("Redirection vers le portail de gestion...");
     } catch (error: any) {
       if (error.message.includes("No active subscription")) {
