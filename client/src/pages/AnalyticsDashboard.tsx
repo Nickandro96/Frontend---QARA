@@ -616,7 +616,7 @@ export default function AnalyticsDashboard() {
                         </p>
                       </div>
                       <div>
-                        <span className="text-muted-foreground">NC Ouvertes</span>
+                        <span className="text-muted-foreground">Réponses analysées</span>
                         <p className="font-bold text-lg">
                           {site.responses}
                         </p>
