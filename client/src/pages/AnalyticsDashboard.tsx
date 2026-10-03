@@ -6,6 +6,7 @@ import { FunnelNavigator, FunnelSteps, DrillLevel } from "@/components/dashboard
 import { DashboardFilters, DashboardFiltersState } from "@/components/dashboard/DashboardFilters";
 import {
   BarChart,
+  LineChart,
   ParetoChart,
 } from "@/components/dashboard/Charts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -198,6 +199,7 @@ export default function AnalyticsDashboard() {
   const lang = i18n.language as "fr" | "en";
   const { data: kpiData } = trpc.dashboard.getKPIs.useQuery();
   const { data: recentFindings } = trpc.dashboard.getRecentFindings.useQuery({ limit: 50 });
+  const { data: analyticsData } = trpc.dashboard.getAnalytics.useQuery();
 
   const liveKPIs = useMemo(() => {
     const data = (kpiData ?? {}) as any;
@@ -236,14 +238,29 @@ export default function AnalyticsDashboard() {
   );
 
   const liveReferentialPerformance = useMemo(
-    () =>
-      [
-        { label: "MDR", value: Number(liveKPIs.frameworkScores.mdr ?? 0) },
-        { label: "ISO 13485", value: Number(liveKPIs.frameworkScores["iso-13485"] ?? 0) },
-        { label: "FDA QMSR", value: Number(liveKPIs.frameworkScores["fda-qmsr"] ?? 0) },
-        { label: "ISO 14971", value: Number(liveKPIs.frameworkScores["iso-14971"] ?? 0) },
-      ].filter((item) => item.value > 0),
-    [liveKPIs.frameworkScores]
+    () => ((analyticsData as any)?.referentials ?? []).map((item: any) => ({ label: item.label, value: item.score })),
+    [analyticsData]
+  );
+
+  const liveTimeline = useMemo(
+    () => ((analyticsData as any)?.timeline ?? []).map((item: any) => ({ label: item.month, value: item.score })),
+    [analyticsData]
+  );
+  const liveSites = useMemo(
+    () => ((analyticsData as any)?.sites ?? []).map((item: any, index: number) => ({ id: String(index + 1), name: item.label, code: item.label, score: item.score, responses: item.responses })),
+    [analyticsData]
+  );
+  const liveProcesses = useMemo(
+    () => ((analyticsData as any)?.processes ?? []).map((item: any, index: number) => ({ id: String(index + 1), name: item.label, score: item.score, responses: item.responses })),
+    [analyticsData]
+  );
+  const liveReferentials = useMemo(
+    () => ((analyticsData as any)?.referentials ?? []).map((item: any, index: number) => ({ id: String(index + 1), name: item.label, score: item.score, responses: item.responses })),
+    [analyticsData]
+  );
+  const liveClauses = useMemo(
+    () => ((analyticsData as any)?.clauses ?? []).map((item: any) => ({ label: item.label, value: item.nonConforming, total: item.total })),
+    [analyticsData]
   );
 
   const liveInsights = useMemo(() => {
@@ -396,9 +413,9 @@ export default function AnalyticsDashboard() {
         <DashboardFilters
           filters={filters}
           onFiltersChange={setFilters}
-          sites={demoSites}
-          processes={demoProcesses}
-          referentials={demoReferentials}
+          sites={liveSites}
+          processes={liveProcesses}
+          referentials={liveReferentials}
         />
 
         {/* KPI Cards - Zone 1 */}
@@ -543,6 +560,9 @@ export default function AnalyticsDashboard() {
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6 mt-6">
+            {liveTimeline.length > 0 && (
+              <LineChart data={liveTimeline} title="Évolution réelle du score par mois" color="#3b82f6" />
+            )}
             {liveReferentialPerformance.length > 0 ? (
               <BarChart
                 data={liveReferentialPerformance}
@@ -555,14 +575,19 @@ export default function AnalyticsDashboard() {
             <Card>
               <CardHeader><CardTitle className="text-lg">Analyses temporelles et multidimensionnelles</CardTitle></CardHeader>
               <CardContent className="text-sm text-muted-foreground">
-                L’historique mensuel, la ventilation par site et la matrice site × processus ne sont pas encore exposés par l’API. Aucun chiffre de démonstration n’est affiché.
+                {liveTimeline.length > 0
+                  ? "Les courbes et ventilations ci-dessus sont calculées à partir des audits et réponses enregistrés."
+                  : "L’historique mensuel sera affiché dès que des audits datés avec réponses seront disponibles."}
               </CardContent>
             </Card>
           </TabsContent>
 
           <TabsContent value="sites" className="space-y-6 mt-6">
+            {liveSites.length === 0 && (
+              <Card><CardContent className="py-8 text-sm text-muted-foreground">Aucun audit n’est encore rattaché à un site.</CardContent></Card>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {demoSites.map((site) => (
+              {liveSites.map((site) => (
                 <Card
                   key={site.id}
                   className="cursor-pointer hover:shadow-md transition-shadow"
@@ -587,13 +612,13 @@ export default function AnalyticsDashboard() {
                       <div>
                         <span className="text-muted-foreground">Score</span>
                         <p className="font-bold text-lg text-green-600">
-                          —
+                          {site.score}%
                         </p>
                       </div>
                       <div>
                         <span className="text-muted-foreground">NC Ouvertes</span>
                         <p className="font-bold text-lg">
-                          —
+                          {site.responses}
                         </p>
                       </div>
                     </div>
@@ -604,8 +629,11 @@ export default function AnalyticsDashboard() {
           </TabsContent>
 
           <TabsContent value="processes" className="space-y-6 mt-6">
+            {liveProcesses.length === 0 && (
+              <Card><CardContent className="py-8 text-sm text-muted-foreground">Aucune réponse n’est encore rattachée à un processus.</CardContent></Card>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {demoProcesses.map((process) => (
+              {liveProcesses.map((process) => (
                 <Card
                   key={process.id}
                   className="cursor-pointer hover:shadow-md transition-shadow"
@@ -632,10 +660,10 @@ export default function AnalyticsDashboard() {
                           "secondary"
                         }
                       >
-                        Données non disponibles
+                        {process.responses} réponses
                       </Badge>
                       <span className="text-sm font-medium">
-                        —
+                        {process.score}%
                       </span>
                     </div>
                   </CardContent>
@@ -645,23 +673,18 @@ export default function AnalyticsDashboard() {
           </TabsContent>
 
           <TabsContent value="referentials" className="space-y-6 mt-6">
+            {liveReferentials.length === 0 && (
+              <Card><CardContent className="py-8 text-sm text-muted-foreground">Aucune réponse exploitable par référentiel.</CardContent></Card>
+            )}
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-              {demoReferentials.map((referential) => (
+              {liveReferentials.map((referential) => (
                 <Card key={referential.id}>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-base">{referential.name}</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="text-2xl font-bold text-green-600">
-                      {Number(liveKPIs.frameworkScores[
-                        referential.name.toLowerCase().includes("13485")
-                          ? "iso-13485"
-                          : referential.name.toLowerCase().includes("745")
-                          ? "mdr"
-                          : referential.name.toLowerCase().includes("820")
-                          ? "fda-qmsr"
-                          : "iso-14971"
-                      ] ?? 0).toFixed(1)}%
+                      {Number(referential.score).toFixed(1)}%
                     </div>
                     <p className="text-sm text-muted-foreground">Conformité du référentiel</p>
                   </CardContent>
@@ -671,14 +694,18 @@ export default function AnalyticsDashboard() {
           </TabsContent>
 
           <TabsContent value="clauses" className="space-y-6 mt-6">
-            <ParetoChart data={demoParetoData} title="Analyse des clauses" />
+            {liveClauses.length > 0 ? (
+              <ParetoChart data={liveClauses} title="Non-conformités réelles par clause" />
+            ) : (
+              <Card><CardContent className="py-8 text-sm text-muted-foreground">Aucune clause non conforme n’est disponible.</CardContent></Card>
+            )}
           </TabsContent>
 
           <TabsContent value="requirements" className="space-y-6 mt-6">
             <Card>
               <CardHeader><CardTitle className="text-lg">Exigences à surveiller</CardTitle></CardHeader>
               <CardContent className="space-y-3">
-                {demoParetoData.slice(0, 6).map((item, index) => (
+                {liveClauses.slice(0, 6).map((item, index) => (
                   <div key={item.label} className="flex items-center justify-between rounded-lg border p-3">
                     <span>Exigence {item.label}</span>
                     <Badge variant={index < 2 ? "destructive" : "secondary"}>{item.value} constats</Badge>
